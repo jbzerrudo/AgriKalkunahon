@@ -34,6 +34,22 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
 
+## What changed in 0.2.0
+
+Every calculator now carries two notes above its inputs: which government agency's guidance takes
+precedence over it, and how and when the reading must be taken. PAGASA and its Frost Risk Observation
+and Support Tool (FROST-PH) are named as the authority on frost in Benguet.
+
+The frost card was reworked. A clear, calm night is never reported as unlikely, because the air keeps
+cooling all night and an evening reading cannot rule frost out; cloud and wind still can, but the card
+now names which one is holding frost off and warns that it can lift. The card reads the device clock and
+reports how far the reading sits from the coldest hour, which it computes from sunrise rather than
+assuming 4 to 5 a.m. The Benguet frost season is shown, from Marasigan (2017) and Launio et al. (2020).
+
+Rice temperature thresholds now follow Yoshida (1981) Table 2.4 directly rather than an FAO
+reproduction of it, which differed at two growth stages. Sources were re-checked against the primary
+texts where those could be obtained, and the unverified list names only what genuinely could not be.
+
 ## Accuracy
 
 The engine ships with 257 numerical assertions checked against published worked examples:
@@ -81,19 +97,20 @@ Archived on Zenodo, so it can be cited in a thesis or paper.
 **Concept DOI** [10.5281/zenodo.22726046](https://doi.org/10.5281/zenodo.22726046) always resolves to the latest
 version. Use it when you mean the tool in general.
 
-**Version DOI** [10.5281/zenodo.22726047](https://doi.org/10.5281/zenodo.22726047) points at v0.1.0
-specifically. Use it in a paper, so a reader gets the exact version you used.
+**Version DOI** every release gets its own. v0.1.0 is
+[10.5281/zenodo.22726047](https://doi.org/10.5281/zenodo.22726047); later versions are listed on the
+Zenodo record. Use the version DOI in a paper, so a reader gets the exact build you used.
 
 > Zerrudo, J. (2026). *AgriKalkunahon: an offline farm-decision calculator for the Philippines*
-> (version 0.1.0). Zenodo. https://doi.org/10.5281/zenodo.22726047
+> (version 0.2.0). Zenodo. https://doi.org/10.5281/zenodo.22726046
 
 ```bibtex
 @software{zerrudo_agrikalkunahon_2026,
   author  = {Zerrudo, Jef},
   title   = {AgriKalkunahon: an offline farm-decision calculator for the Philippines},
-  version = {0.1.0},
+  version = {0.2.0},
   year    = {2026},
-  doi     = {10.5281/zenodo.22726047},
+  doi     = {10.5281/zenodo.22726046},
   url     = {https://jbzerrudo.github.io/AgriKalkunahon/}
 }
 ```

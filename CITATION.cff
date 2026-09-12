@@ -23,7 +23,8 @@ abstract: >-
   procedures, safe alternate wetting and drying for lowland rice, spray-window
   checks, palay drying and storage moisture, heat and cold stress thresholds by
   crop stage, a frost indicator for highland areas, and harvest timing. Every
-  result names the published source it derives from.
+  result names the published source it derives from, and every calculator names
+  the government agency whose guidance takes precedence over it.
 keywords:
   - agricultural meteorology
   - irrigation scheduling
@@ -32,6 +33,6 @@ keywords:
   - Philippines
   - decision support
 license: PolyForm-Noncommercial-1.0.0
-version: 0.1.0
+version: 0.2.0
 date-released: "2026-09-12"
 doi: 10.5281/zenodo.22726046
