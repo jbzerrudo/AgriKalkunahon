@@ -511,7 +511,12 @@ function stressCheck(cropId, phase, days) {
 /* =====================================================================
    11. FROST INDICATOR (qualitative)  [FAO_FROST, MARASIGAN2017, BASQUIAL2021, LAUNIO2020]
    ===================================================================== */
-const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */, singleDigitC: 10,
+const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
+  /* Marasigan (2017): 70% of MODIS-detected frost occurrences at land surface temperature at or below
+     10 C, 57% at or below 9 C. A marker, not a threshold: 30% of her events were above it, her figure is
+     a surface temperature rather than a screen reading, and what decides frost is how far the surface can
+     radiate below the air. Comparison is 'at or below', matching the source. */
+  singleDigitC: 10,
   /* Benguet frost season. Marasigan (2017): January has the highest frequency of occurrences at every
      threshold, followed by February; November has the least. Her recorded events fall in December,
      January and February. Launio et al. (2020): "Frost is known to occur from December to February",
@@ -528,16 +533,21 @@ function frostSeason(month) {
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
 function frostIndicator(inp) {
   const td = tdewFromEa(es0(inp.T) * inp.RH / 100);
-  const conds = { clear: inp.sky === 'clear', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T < FROST.singleDigitC, hollow: !!inp.hollow };
-  let code;
-  // Cloud and wind suppress radiative cooling and do not change through the night, so they can rule
-  // frost out. Air temperature falls all night, so an evening reading cannot: a clear, calm night
-  // returns at least 'watch' however mild the thermometer reads when the farmer walks out.
-  if (inp.sky === 'overcast' || inp.wind === 'breezy') code = 'unlikely';
+  const conds = { clear: inp.sky === 'clear', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T <= FROST.singleDigitC, hollow: !!inp.hollow };
+  let code, ruledOutBy = null;
+  // Cloud and wind suppress radiative cooling, so they rule frost out, but only while they last: both
+  // can lift at any hour, and then cooling starts. The card reports which one is holding frost off so
+  // the farmer knows what would undo the answer. Air temperature is different again: it falls all
+  // night, so an evening reading can never rule frost out, and a clear calm night returns at least
+  // 'watch' however mild the thermometer reads.
+  if (inp.sky === 'overcast' || inp.wind === 'breezy') {
+    code = 'unlikely';
+    ruledOutBy = inp.sky === 'overcast' ? (inp.wind === 'breezy' ? 'sky_and_wind' : 'sky') : 'wind';
+  }
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
   else if (conds.clear && conds.calm) code = 'watch';
   else code = 'unlikely';
-  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
+  return { code: code, ruledOutBy: ruledOutBy, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }
 
 /* =====================================================================

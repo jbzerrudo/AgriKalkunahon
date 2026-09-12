@@ -196,6 +196,8 @@ console.log('\n== FROST INDICATOR ==');
 eq('clear calm 6 C RH 60: possible', A.frostIndicator({ T: 6, RH: 60, sky: 'clear', wind: 'calm' }).code, 'possible');
 eq('overcast: unlikely', A.frostIndicator({ T: 6, RH: 60, sky: 'overcast', wind: 'calm' }).code, 'unlikely');
 eq('clear calm 12 C RH 40 (Td low, not cold): watch', A.frostIndicator({ T: 12, RH: 40, sky: 'clear', wind: 'calm' }).code, 'watch');
+eq('frost 10.0 C counts as cold (source says at or below 10)', A.frostIndicator({ T: 10, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, true);
+eq('frost 10.1 C does not', A.frostIndicator({ T: 10.1, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, false);
 eq('frost season: January is peak', A.frostSeason(1), 'peak');
 eq('frost season: December and February are core', A.frostSeason(12) + '/' + A.frostSeason(2), 'core/core');
 eq('frost season: November and March are the edge', A.frostSeason(11) + '/' + A.frostSeason(3), 'edge/edge');
