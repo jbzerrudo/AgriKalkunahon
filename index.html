@@ -1337,7 +1337,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice.'));
   root.appendChild(el('p', null, bi(T.draftNote)));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build 10fef9eb. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build a58ddd7b. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
@@ -1359,7 +1359,7 @@ const AUTHORITY = {
 const READING = {
   water:   { en: 'Use the day\'s highest afternoon temperature and lowest morning temperature, not one reading taken now. A thermometer left in the shade, read in mid-afternoon and again at sunrise, gives both.', fil: 'Gamitin ang pinakamataas na temperatura sa hapon at pinakamababa sa umaga, hindi ang isang pagbasa ngayon. Ang termometro sa lilim, basahin sa tanghali-hapon at muli sa pagsikat ng araw.' },
   rice:    { en: 'Read the field water tube in the morning, before you add any water that day.', fil: 'Basahin ang tubo ng tubig sa bukid sa umaga, bago magdagdag ng tubig sa araw na iyon.' },
-  rain:    { en: 'Use the total your gauge collected over the whole month, not a single storm.', fil: 'Gamitin ang kabuuang naipon ng takalan sa buong buwan, hindi ang isang ulan lamang.' },
+  rain:    { en: 'Use the total your gauge collected over the whole month, not a single storm.', fil: 'Gamitin ang kabuuang naipon ng panukat ng ulan (ulansukod) sa buong buwan, hindi ang isang ulan lamang.' },
   spray:   { en: 'Take these readings where and when you intend to spray. Conditions change within the hour, so a reading from earlier in the morning does not describe the afternoon.', fil: 'Basahin ito sa lugar at oras na balak mong mag-spray. Nagbabago ang kondisyon kada oras, kaya hindi naglalarawan ng hapon ang pagbasa kaninang umaga.' },
   dry:     { en: 'Read the air at the drying area in the early afternoon, when it is hottest and driest. A morning reading understates what the day can dry.', fil: 'Basahin ang hangin sa patuyuan sa maagang hapon, kung kailan pinakamainit at pinakatuyo. Maliit ang ipinapakita ng pagbasa sa umaga.' },
   stress:  { en: 'Use each day\'s actual afternoon high and morning low, not one reading taken now.', fil: 'Gamitin ang tunay na pinakamainit sa hapon at pinakamalamig sa umaga bawat araw, hindi ang isang pagbasa ngayon.' },
@@ -1377,7 +1377,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 10fef9eb.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build a58ddd7b.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
