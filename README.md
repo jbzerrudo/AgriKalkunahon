@@ -1,5 +1,6 @@
 # AgriKalkunahon
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22726046.svg)](https://doi.org/10.5281/zenodo.22726046)
 [![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-34B233)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 **Live:** https://jbzerrudo.github.io/AgriKalkunahon/
@@ -72,6 +73,32 @@ build.js               node build.js rebuilds index.html and AgriKalkunahon.html
 uitest.js              headless check of every card at phone width (needs playwright)
 .nojekyll              stops GitHub Pages running Jekyll over the files
 ```
+
+## How to cite
+
+Archived on Zenodo, so it can be cited in a thesis or paper.
+
+**Concept DOI** [10.5281/zenodo.22726046](https://doi.org/10.5281/zenodo.22726046) always resolves to the latest
+version. Use it when you mean the tool in general.
+
+**Version DOI** [10.5281/zenodo.22726047](https://doi.org/10.5281/zenodo.22726047) points at v0.1.0
+specifically. Use it in a paper, so a reader gets the exact version you used.
+
+> Zerrudo, J. (2026). *AgriKalkunahon: an offline farm-decision calculator for the Philippines*
+> (version 0.1.0). Zenodo. https://doi.org/10.5281/zenodo.22726047
+
+```bibtex
+@software{zerrudo_agrikalkunahon_2026,
+  author  = {Zerrudo, Jef},
+  title   = {AgriKalkunahon: an offline farm-decision calculator for the Philippines},
+  version = {0.1.0},
+  year    = {2026},
+  doi     = {10.5281/zenodo.22726047},
+  url     = {https://jbzerrudo.github.io/AgriKalkunahon/}
+}
+```
+
+GitHub's "Cite this repository" button reads `CITATION.cff` and will offer APA and BibTeX directly.
 
 ## Language
 
