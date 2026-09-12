@@ -196,6 +196,11 @@ console.log('\n== FROST INDICATOR ==');
 eq('clear calm 6 C RH 60: possible', A.frostIndicator({ T: 6, RH: 60, sky: 'clear', wind: 'calm' }).code, 'possible');
 eq('overcast: unlikely', A.frostIndicator({ T: 6, RH: 60, sky: 'overcast', wind: 'calm' }).code, 'unlikely');
 eq('clear calm 12 C RH 40 (Td low, not cold): watch', A.frostIndicator({ T: 12, RH: 40, sky: 'clear', wind: 'calm' }).code, 'watch');
+eq('frost season: January is peak', A.frostSeason(1), 'peak');
+eq('frost season: December and February are core', A.frostSeason(12) + '/' + A.frostSeason(2), 'core/core');
+eq('frost season: November and March are the edge', A.frostSeason(11) + '/' + A.frostSeason(3), 'edge/edge');
+eq('frost season: June is outside', A.frostSeason(6), 'outside');
+eq('clear calm night is never ruled out by a mild evening reading', A.frostIndicator({ T: 16, RH: 45, sky: 'clear', wind: 'calm' }).code, 'watch');
 ok('dew point 6 C 60%', A.frostIndicator({ T: 6, RH: 60, sky: 'clear', wind: 'calm' }).dewPoint, A.tdewFromEa(A.es0(6) * 0.6), 1e-9, 'C');
 
 console.log('\n== DISEASE WEATHER ==');

@@ -81,7 +81,7 @@ const T = {
     cold_at_or_below_threshold: { en: 'At or below the published cold threshold.', fil: 'Nasa o mas mababa sa nailathalang hangganan ng lamig.' },
     within: { en: 'Within the published range for this stage.', fil: 'Nasa loob ng nailathalang saklaw para sa yugtong ito.' },
     possible: { en: 'Frost possible tonight. Protect if you can.', fil: 'Maaaring mag-andap ngayong gabi. Protektahan kung kaya.' },
-    watch: { en: 'Watch tonight. Check the field at 4 to 5 a.m.', fil: 'Bantayan ngayong gabi. Tingnan ang bukid ng alas-4 hanggang alas-5 ng umaga.' },
+    watch: { en: 'Watch tonight. Check the field in the hour before sunrise.', fil: 'Bantayan ngayong gabi. Tingnan ang bukid sa loob ng isang oras bago sumikat ang araw.' },
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
     dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C.' },
     dew_less_likely: { en: 'Dew less likely: cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: nababawasan ng ulap o hangin ang paglamig.' },
@@ -408,8 +408,8 @@ CARDS.stress = function (root) {
 CARDS.frost = function (root) {
   const prev = recall('frost');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
-  const Tn = numInput('fT', { en: 'Air temperature this evening (°C)', fil: 'Temperatura ngayong gabi (°C)' }, prev.T, 0.1);
-  const RH = numInput('fRH', { en: 'Humidity this evening (%)', fil: 'Halumigmig ngayong gabi (%)' }, prev.RH, 1);
+  const Tn = numInput('fT', { en: 'Air temperature at the time you read it (°C)', fil: 'Temperatura sa oras ng pagbasa (°C)' }, prev.T, 0.1);
+  const RH = numInput('fRH', { en: 'Humidity at the same time (%)', fil: 'Halumigmig sa parehong oras (%)' }, prev.RH, 1);
   const sky = selectInput('fSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear, stars visible', fil: 'Maaliwalas, kita ang bituin' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast or foggy', fil: 'Maulap o maambon' }]], prev.sky || 'clear');
   const wind = selectInput('fWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy or windy', fil: 'Mahangin' }]], prev.wind || 'calm');
   const hollow = checkInput('fHollow', { en: 'Field is in a valley bottom or hollow where cold air collects', fil: 'Nasa lambak o kubkob na lugar ang bukid kung saan naiipon ang malamig na hangin' }, prev.hollow);
@@ -421,10 +421,36 @@ CARDS.frost = function (root) {
     if (inp.T == null || inp.RH == null) return;
     const r = A.frostIndicator(inp);
     const c = r.conditions;
-    const lines = [[bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'already below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none'] ];
-    const why = ['Radiation frosts "are characterized by a clear sky, calm or very little wind, temperature inversion, low dew-point temperatures" (FAO frost manual, Snyder and de Melo-Abreu 2005).', 'When dew forms, the released latent heat "reduces the rate of temperature drop" (FAO), so a low dew point lets the surface keep cooling; a high dew point sets a brake near the dew point.', 'Benguet frost (andap) is radiative frost of the northeast monsoon season in Atok, Buguias, Kabayan, Kibungan and Mankayan: weak monsoon flow, cloudless nights, air above freezing while surfaces frost. Marasigan (2017) found 70% of satellite-detected occurrences at land-surface temperatures at or below 10 °C (57% at or below 9 °C), consistent with farmers\' reports of frost at or below 10 °C; Basquial et al. (2021) measured 1.5 to 3.9 °C air temperature on frost mornings.', 'Atok farmers name the same precursors: a very cold, still evening, thick dew and no wind after a long dry spell; wind at dawn prevents frost; frost settles on low ground; and 9 °C without frost against 13 °C with frost shows that temperature alone is not enough (Launio et al. 2020).'];
-    const assumptions = ['The 2 °C dew-point line is a design assumption of this app; the FAO manual supports the reasoning but prints no number.', 'Evening readings taken at about 6 to 8 p.m. in the open, at head height.', 'The 10 °C line comes from night-time values (Marasigan 2017: satellite passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.); this card applies it to the evening reading, so an evening already below 10 °C is the stricter test.'];
-    const limits = ['No minimum temperature is forecast: FAO\'s forecast method needs local regression coefficients that do not exist for Benguet.', 'Leaves cool below the air temperature on clear nights (FAO), so frost can occur with the thermometer above 0 °C.', 'Where PAGASA issues an official frost advisory for your area, prefer it over this indicator.'];
+    const season = A.frostSeason(new Date().getMonth() + 1);
+    const L = store.loc, st = A.sunTimes(L.lat, L.lon, todayJ(new Date(Date.now() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
+    const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
+    /* How far this reading sits from the coldest hour. The device clock supplies the reading time, so
+       the farmer is not asked for it. No cooling rate is applied: this weighs the reading, it does not
+       extrapolate it. */
+    const nowD = new Date(), nowH = nowD.getHours() + nowD.getMinutes() / 60;
+    const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
+    const weight = toMin > 10 ? 'early' : (toMin > 4.5 ? 'middle' : 'close');   // a Philippine night runs about 12 hours
+    const weightText = {
+      early: { en: 'This is an early reading, taken near dusk. Almost the whole night of cooling is still ahead, so treat this answer as provisional and read again before you sleep.', fil: 'Maagang pagbasa ito, malapit sa dapithapon. Halos buong gabi pa ang lalamig, kaya pansamantala muna ang sagot na ito; magbasa uli bago matulog.' },
+      middle: { en: 'An evening reading. The air will keep cooling for several more hours, so a later reading will tell you more.', fil: 'Pagbasa sa gabi. Lalamig pa ang hangin nang ilang oras, kaya mas marami ang masasabi ng pagbasa mamaya.' },
+      close: { en: 'Read close to the coldest hour, so this reading carries the most weight.', fil: 'Malapit na sa pinakamalamig na oras ang pagbasa, kaya ito ang pinakamabigat na batayan.' }
+    }[weight];
+    const seasonText = {
+      peak: { en: 'January, the month with the most recorded frost in Benguet', fil: 'Enero, ang buwan na may pinakamaraming naitalang andap sa Benguet' },
+      core: { en: 'Within the months when frost is recorded in Benguet (December to February)', fil: 'Nasa loob ng mga buwan na may naitalang andap sa Benguet (Disyembre hanggang Pebrero)' },
+      edge: { en: 'Edge of the Benguet frost season (November, least frequent; March, reported by farmers)', fil: 'Gilid ng panahon ng andap sa Benguet (Nobyembre, pinakabihira; Marso, iniuulat ng mga magsasaka)' },
+      outside: { en: 'Outside the months when frost has been recorded in Benguet', fil: 'Wala sa mga buwan na may naitalang andap sa Benguet' }
+    }[season];
+    const lines = [[bi({ en: 'You read this at', fil: 'Oras ng pagbasa' }), hhmm(nowH) + ', ' + fmt(toMin, 1) + ' hours before the coldest hour'],
+      [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')'],
+      [bi({ en: 'Time of year', fil: 'Panahon ng taon' }), bi(seasonText)], [bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'already below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none'] ];
+    const why = ['Radiation frosts "are characterized by a clear sky, calm or very little wind, temperature inversion, low dew-point temperatures" (FAO frost manual, Snyder and de Melo-Abreu 2005).', 'The air keeps losing heat to the sky all night, so the minimum comes just before sunrise, when the sun starts to put heat back (FAO frost manual). That is the hour to look at the crop.', 'When dew forms, the released latent heat "reduces the rate of temperature drop" (FAO), so a low dew point lets the surface keep cooling; a high dew point sets a brake near the dew point.', 'Benguet frost (andap) is radiative frost of the northeast monsoon season in Atok, Buguias, Kabayan, Kibungan and Mankayan: weak monsoon flow, cloudless nights, air above freezing while surfaces frost. Marasigan (2017) found 70% of satellite-detected occurrences at land-surface temperatures at or below 10 °C (57% at or below 9 °C), consistent with farmers\' reports of frost at or below 10 °C; Basquial et al. (2021) measured 1.5 to 3.9 °C air temperature on frost mornings.', 'Atok farmers name the same precursors: a very cold, still evening, thick dew and no wind after a long dry spell; wind at dawn prevents frost; frost settles on low ground; and 9 °C without frost against 13 °C with frost shows that temperature alone is not enough (Launio et al. 2020).'];
+    const assumptions = ['The reading time comes from this device\'s clock, and the card assumes Philippine time. If the clock is wrong, the hours before the coldest hour are wrong with it.', 'Sunrise from FAO-56 Eq. 25 and 31 to 33 for Philippine time (UTC+8), at the location saved on the water or spray card. The one-hour window before it is where the minimum usually falls, not a computed minimum: this card forecasts no temperature.', 'The 2 °C dew-point line is a design assumption of this app; the FAO manual supports the reasoning but prints no number.', 'Readings taken outdoors, away from walls, at about head height. The card does not know what time you read the thermometer: the later in the evening, the more the reading tells you about the night ahead.', 'The 10 °C line comes from night-time values (Marasigan 2017: satellite passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.). An evening reading is taken hours before the night minimum, so a reading above 10 °C does not mean the night will stay above 10 °C. That is why a clear, calm night is never reported as unlikely here.'];
+    const limits = ['The season note is Benguet only. This app holds no frost climatology for any other part of the Philippines, and the conditions themselves are general physics, not local to Benguet.', 'The answer depends on when you read the thermometer, and the card cannot tell. On one clear, calm night the same air can read 14 °C at 7 p.m. and 5 °C by 2 a.m. Cloud, wind and dew point barely change with the hour; air temperature does.', 'No minimum temperature is forecast: FAO\'s forecast method needs local regression coefficients that do not exist for Benguet.', 'Leaves cool below the air temperature on clear nights (FAO), so frost can occur with the thermometer above 0 °C.', 'Where PAGASA issues an official frost advisory for your area, prefer it over this indicator.'];
+    why.push(t(weightText).en + ' / ' + t(weightText).fil);
+    why.push(season === 'outside'
+      ? 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) records it in December, January and February, with January the most frequent and November the least; Launio et al. (2020) report December to February, now sometimes into March. Today falls outside those months, so check the readings before acting on this answer.'
+      : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
     if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
     show(out, result({ level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
   }
@@ -513,6 +539,34 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.1.0, build __BUILD__. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
+/* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
+   sees it before entering anything, not folded away under the answer. */
+const AUTHORITY = {
+  water:   { en: 'PAGASA issues the official weather data, and DA and NIA the official irrigation guidance. Where they differ from this card, follow them.', fil: 'Ang PAGASA ang naglalabas ng opisyal na datos ng panahon, at ang DA at NIA ng opisyal na patnubay sa patubig. Sundin sila kung iba sa card na ito.' },
+  rice:    { en: 'DA and PhilRice set the official alternate wetting and drying practice (DA AO 25-09, PalayCheck). Where they differ from this card, follow them.', fil: 'Ang DA at PhilRice ang nagtatakda ng opisyal na AWD (DA AO 25-09, PalayCheck). Sundin sila kung iba sa card na ito.' },
+  rain:    { en: 'PAGASA issues the official rainfall data and forecasts. Where they differ from this card, follow them.', fil: 'Ang PAGASA ang naglalabas ng opisyal na datos at taya ng ulan. Sundin sila kung iba sa card na ito.' },
+  spray:   { en: 'The product label and the Fertilizer and Pesticide Authority govern how a pesticide may be applied. The label takes precedence over this card, always.', fil: 'Ang label ng produkto at ang Fertilizer and Pesticide Authority ang namamahala sa paggamit ng pestisidyo. Ang label ang laging sinusunod, hindi ang card na ito.' },
+  dry:     { en: 'DA and PhilRice set the official drying and storage practice (PalayCheck). Where they differ from this card, follow them.', fil: 'Ang DA at PhilRice ang nagtatakda ng opisyal na pagpapatuyo at pag-iimbak (PalayCheck). Sundin sila kung iba sa card na ito.' },
+  stress:  { en: 'PAGASA issues the official temperature data and warnings, and DA the official crop advisories. Where they differ from this card, follow them.', fil: 'Ang PAGASA ang naglalabas ng opisyal na datos at babala sa temperatura, at ang DA ng opisyal na payo sa pananim. Sundin sila kung iba sa card na ito.' },
+  frost:   { en: 'PAGASA is the authority on frost in Benguet, through its Frost Risk Observation and Support Tool (FROST-PH) and its advisories. Where they differ from this card, follow them. This card is a farmer\'s checklist for one field on one night, not an advisory.', fil: 'Ang PAGASA ang awtoridad sa andap sa Benguet, sa pamamagitan ng Frost Risk Observation and Support Tool (FROST-PH) at ng mga abiso nito. Sundin sila kung iba sa card na ito. Isa lang itong checklist ng magsasaka para sa isang bukid sa isang gabi, hindi abiso.' },
+  disease: { en: 'DA and the Bureau of Plant Industry issue the official plant health guidance, and PAGASA the official weather data. Where they differ from this card, follow them.', fil: 'Ang DA at ang Bureau of Plant Industry ang naglalabas ng opisyal na patnubay sa kalusugan ng halaman, at ang PAGASA ng opisyal na datos ng panahon. Sundin sila kung iba sa card na ito.' },
+  timing:  { en: 'DA and PhilRice publish the official variety maturity data, and PAGASA the official seasonal outlook. Where they differ from this card, follow them.', fil: 'Ang DA at PhilRice ang naglalathala ng opisyal na datos sa pagkahinog ng barayti, at ang PAGASA ng opisyal na seasonal outlook. Sundin sila kung iba sa card na ito.' }
+};
+
+/* How and when each reading must be taken. Shown under the authority note, above the inputs, because
+   a caveat folded under the answer arrives after the farmer has already typed the wrong number. */
+const READING = {
+  water:   { en: 'Use the day\'s highest afternoon temperature and lowest morning temperature, not one reading taken now. A thermometer left in the shade, read in mid-afternoon and again at sunrise, gives both.', fil: 'Gamitin ang pinakamataas na temperatura sa hapon at pinakamababa sa umaga, hindi ang isang pagbasa ngayon. Ang termometro sa lilim, basahin sa tanghali-hapon at muli sa pagsikat ng araw.' },
+  rice:    { en: 'Read the field water tube in the morning, before you add any water that day.', fil: 'Basahin ang tubo ng tubig sa bukid sa umaga, bago magdagdag ng tubig sa araw na iyon.' },
+  rain:    { en: 'Use the total your gauge collected over the whole month, not a single storm.', fil: 'Gamitin ang kabuuang naipon ng takalan sa buong buwan, hindi ang isang ulan lamang.' },
+  spray:   { en: 'Take these readings where and when you intend to spray. Conditions change within the hour, so a reading from earlier in the morning does not describe the afternoon.', fil: 'Basahin ito sa lugar at oras na balak mong mag-spray. Nagbabago ang kondisyon kada oras, kaya hindi naglalarawan ng hapon ang pagbasa kaninang umaga.' },
+  dry:     { en: 'Read the air at the drying area in the early afternoon, when it is hottest and driest. A morning reading understates what the day can dry.', fil: 'Basahin ang hangin sa patuyuan sa maagang hapon, kung kailan pinakamainit at pinakatuyo. Maliit ang ipinapakita ng pagbasa sa umaga.' },
+  stress:  { en: 'Use each day\'s actual afternoon high and morning low, not one reading taken now.', fil: 'Gamitin ang tunay na pinakamainit sa hapon at pinakamalamig sa umaga bawat araw, hindi ang isang pagbasa ngayon.' },
+  frost:   { en: 'Read as late as you can before sleeping. The air keeps cooling all night, so a reading taken at 6 or 7 p.m. can understate the risk. Take it outdoors, away from walls, at about head height.', fil: 'Magbasa nang pinakahuli bago matulog. Patuloy na lumalamig ang hangin buong gabi, kaya maaaring maliitin ng pagbasa sa alas-6 o alas-7 ng gabi ang panganib. Sa labas, malayo sa pader, mga kasintaas ng ulo.' },
+  disease: { en: 'Count the hours across the whole day and night when the air stayed at or above 90% humidity, not the humidity at the moment you check.', fil: 'Bilangin ang mga oras sa buong araw at gabi na 90% pataas ang halumigmig, hindi ang halumigmig sa oras ng pagtingin.' },
+  timing:  { en: 'Use a typical afternoon high and morning low for the season so far, not today\'s weather alone.', fil: 'Gamitin ang karaniwang pinakamainit sa hapon at pinakamalamig sa umaga sa buong panahon, hindi ang panahon ngayon lamang.' }
+};
+
 /* ---------- router ---------- */
 const ORDER = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing', 'sources', 'about'];
 const ICON = { water: '💧', rice: '🌾', rain: '🌧', spray: '🧴', dry: '☀', stress: '🌡', frost: '❄', disease: '🍃', timing: '📅', sources: '📚', about: 'ℹ' };
@@ -528,6 +582,8 @@ function renderCard(main, id) {
   main.innerHTML = '';
   main.appendChild(el('a', { class: 'back', href: '#/' }, '← ', bi(T.ui.back)));
   main.appendChild(el('h2', null, bi(T.cards[id])));
+  if (AUTHORITY[id]) main.appendChild(el('p', { class: 'warn authority' }, bi(AUTHORITY[id])));
+  if (READING[id]) main.appendChild(el('p', { class: 'reading' }, bi(READING[id])));
   const body = el('div', { class: 'card-body' }); main.appendChild(body);
   CARDS[id](body);
 }

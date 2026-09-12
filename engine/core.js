@@ -511,17 +511,33 @@ function stressCheck(cropId, phase, days) {
 /* =====================================================================
    11. FROST INDICATOR (qualitative)  [FAO_FROST, MARASIGAN2017, BASQUIAL2021, LAUNIO2020]
    ===================================================================== */
-const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */, singleDigitC: 10 };
+const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */, singleDigitC: 10,
+  /* Benguet frost season. Marasigan (2017): January has the highest frequency of occurrences at every
+     threshold, followed by February; November has the least. Her recorded events fall in December,
+     January and February. Launio et al. (2020): "Frost is known to occur from December to February",
+     and farmers now expect episodes "until March". Marasigan et al. (2025) analyse November to March.
+     Months are 1 to 12. This is Benguet; the app carries no frost climatology for anywhere else. */
+  seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1 };
+/* month: 1 to 12. Returns 'peak', 'core', 'edge' or 'outside'. */
+function frostSeason(month) {
+  if (month === FROST.seasonPeak) return 'peak';
+  if (FROST.seasonCore.indexOf(month) >= 0) return 'core';
+  if (FROST.seasonEdge.indexOf(month) >= 0) return 'edge';
+  return 'outside';
+}
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
 function frostIndicator(inp) {
   const td = tdewFromEa(es0(inp.T) * inp.RH / 100);
   const conds = { clear: inp.sky === 'clear', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T < FROST.singleDigitC, hollow: !!inp.hollow };
   let code;
+  // Cloud and wind suppress radiative cooling and do not change through the night, so they can rule
+  // frost out. Air temperature falls all night, so an evening reading cannot: a clear, calm night
+  // returns at least 'watch' however mild the thermometer reads when the farmer walks out.
   if (inp.sky === 'overcast' || inp.wind === 'breezy') code = 'unlikely';
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
-  else if (conds.clear && conds.calm && (conds.lowDewPoint || conds.cold)) code = 'watch';
+  else if (conds.clear && conds.calm) code = 'watch';
   else code = 'unlikely';
-  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
+  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }
 
 /* =====================================================================
@@ -605,6 +621,7 @@ const REFS = {
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
   MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
+  FROSTPH: { cls: 'extension', cite: 'DOST-PAGASA and DOST-NRCP. Frost Risk Observation and Support Tool (FROST-PH), introduced to Benguet LGUs on 22 April 2026: near real-time monitoring of frost events, reporting, assessment of occurrences, and access to frost risk data. Part of the FrostRiskPH project (September 2024 to August 2026), project leader Dr. Joseph Q. Basconcillo. PAGASA is the authority on frost in Benguet; where FROST-PH and this app differ, follow FROST-PH.', url: 'https://nrcp.dost.gov.ph/benguet-lgus-farmers-join-dost-in-designing-a-frost-risk-tool-for-highland-crops/' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -640,7 +657,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, frostIndicator, frostSeason, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
