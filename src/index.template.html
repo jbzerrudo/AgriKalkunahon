@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="AgriKalkunahon: offline farm-decision calculator for the Philippines. Should I water today, is it safe to spray, can my palay dry, frost tonight. Every answer names its published source.">
+<meta name="theme-color" content="#34B233">
+<meta name="author" content="Jef Zerrudo">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AgriKalkunahon">
+<meta property="og:title" content="AgriKalkunahon: what should I do on the farm today?">
+<meta property="og:description" content="Offline farm-decision calculator for Philippine farmers, extension workers and students. Irrigation, rice AWD, spraying, palay drying, heat and cold stress, frost. Every answer cites its source.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>AgriKalkunahon</title>
+<!--
+  AgriKalkunahon - offline agricultural meteorology decision calculator
+  Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/AgriKalkunahon)
+  Licensed under the PolyForm Noncommercial License 1.0.0
+  https://polyformproject.org/licenses/noncommercial/1.0.0
+  Free for any noncommercial purpose, including use by educational institutions,
+  public research organisations and government institutions regardless of funding.
+  Commercial use is reserved to the copyright holder: jbzerrudo@pagasa.dost.gov.ph
+-->
+<style>
+:root{
+  --green:#34B233; --green-dark:#237023; --green-ink:#1B4D1B; --green-soft:#E6F4E4;
+  --earth:#8C6A3D; --ochre:#C8A96A; --earth-soft:#F1E9DC; --paper:#F7F4EE; --card:#FFFFFF;
+  --ink:#2B2B2B; --muted:#6B6257; --line:#DDD5C6;
+  --go:#237023; --caution:#B8730A; --stop:#A93226; --info:#3B5B8C;
+}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:0 16px 32px}
+header{background:var(--green);color:#fff;margin:0 -16px;padding:14px 16px;box-shadow:0 2px 0 var(--green-dark)}
+header h1{margin:0;font-size:22px;letter-spacing:.3px}
+header h1 small{display:block;font-size:12px;font-weight:400;opacity:.9}
+main{max-width:720px;margin:0 auto}
+.lead{margin:18px 0 10px;font-size:18px}
+.bi .en{display:block}
+.bi .fil{display:block;font-size:.86em;color:var(--muted);font-style:italic}
+.tile .bi .fil{color:#5A6B5A}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.grid{grid-template-columns:1fr}}
+.tile{display:block;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--green);border-radius:10px;padding:12px 12px 12px 14px;text-decoration:none;color:var(--ink);min-height:84px}
+.tile:active{background:var(--green-soft)}
+.tile .ico{font-size:22px;display:block;margin-bottom:4px}
+.tile:nth-child(10),.tile:nth-child(11){border-left-color:var(--earth)}
+.foot{color:var(--muted);font-size:13px;margin-top:18px}
+.back{display:inline-block;margin:12px 0 4px;color:var(--green-dark);text-decoration:none;font-weight:600}
+h2{margin:6px 0 12px;font-size:20px;color:var(--green-ink)}
+h3{font-size:16px;color:var(--green-ink);margin:18px 0 6px}
+h4{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--earth)}
+.card-form{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px 16px}
+fieldset.loc{border:1px dashed var(--ochre);border-radius:8px;padding:8px 10px 10px;margin:0 0 8px;background:var(--earth-soft)}
+fieldset.loc legend{font-size:13px;color:var(--earth);padding:0 6px}
+label.row{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:14px}
+label.row input,label.row select{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:42px}
+label.row input:focus,label.row select:focus{outline:2px solid var(--green);border-color:var(--green)}
+label.row.check{flex-direction:row;align-items:center;gap:10px}
+label.row.check input{width:22px;height:22px;min-height:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.btn{font:inherit;border:1px solid var(--green-dark);background:var(--green-soft);color:var(--green-ink);border-radius:8px;padding:8px 12px;cursor:pointer}
+.btn.small{font-size:13px;padding:6px 10px;margin:4px 0 6px}
+.btn.primary{display:block;width:100%;margin-top:14px;background:var(--green);color:#fff;font-weight:700;font-size:17px;padding:12px;border-color:var(--green-dark)}
+.btn.primary .bi .fil{color:#E8F5E5}
+.result{margin:14px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;border-left-width:8px}
+.result.go{border-left-color:var(--go)} .result.caution{border-left-color:var(--caution)} .result.stop{border-left-color:var(--stop)} .result.info{border-left-color:var(--info)}
+.verdict{margin:0 0 8px;font-size:20px;line-height:1.3}
+.verdict .en{display:block}
+.verdict .fil{display:block;font-size:16px;font-weight:500;color:var(--muted);font-style:italic}
+.result.go .verdict .en{color:var(--go)} .result.caution .verdict .en{color:var(--caution)} .result.stop .verdict .en{color:var(--stop)} .result.info .verdict .en{color:var(--info)}
+dl.nums{margin:8px 0;display:grid;grid-template-columns:1fr;gap:4px}
+dl.nums dt{font-size:13px;color:var(--muted);margin-top:6px}
+dl.nums dd{margin:0;font-weight:600}
+details{margin:8px 0 0;border-top:1px solid var(--line);padding-top:6px}
+summary{cursor:pointer;font-weight:600;color:var(--green-ink);font-size:14px}
+details.flags summary{color:var(--caution)}
+details ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+details li{margin:4px 0}
+.cls{font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:1px 6px;border-radius:4px;background:var(--earth-soft);color:var(--earth)}
+.cls.primary{background:var(--green-soft);color:var(--green-ink)}
+.refs{padding-left:18px;font-size:14px} .refs li{margin:6px 0}
+code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px}
+.warn{background:var(--earth-soft);border-left:4px solid var(--ochre);padding:8px 10px;border-radius:6px}
+a{color:var(--green-dark)}
+</style>
+</head>
+<body>
+<header><h1>AgriKalkunahon <small>Offline farm-weather decisions for the Philippines · Mga desisyon sa bukid batay sa panahon</small></h1></header>
+<main id="main"></main>
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__APP__*/
+</script>
+</body>
+</html>
