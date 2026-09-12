@@ -36,6 +36,11 @@ body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 system-ui,
 header{background:var(--green);color:#fff;margin:0 -16px;padding:14px 16px;box-shadow:0 2px 0 var(--green-dark)}
 header h1{margin:0;font-size:22px;letter-spacing:.3px}
 header h1 small{display:block;font-size:12px;font-weight:400;opacity:.9}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+header h1{flex:1;min-width:0}
+.tbtn{font:inherit;font-size:13px;font-weight:600;color:#fff;background:transparent;border:1.5px solid rgba(255,255,255,.85);border-radius:8px;padding:7px 11px;cursor:pointer;white-space:nowrap;flex:none}
+.tbtn:hover,.tbtn:focus{background:rgba(255,255,255,.15);outline:none}
+.tbtn[hidden]{display:none}
 main{max-width:720px;margin:0 auto}
 .lead{margin:18px 0 10px;font-size:18px}
 .bi .en{display:block}
@@ -90,7 +95,10 @@ a{color:var(--green-dark)}
 </style>
 </head>
 <body>
-<header><h1>AgriKalkunahon <small>Offline farm-weather decisions for the Philippines · Mga desisyon sa bukid batay sa panahon</small></h1></header>
+<header>
+  <h1>AgriKalkunahon <small>Offline farm-weather decisions for the Philippines · Mga desisyon sa bukid batay sa panahon</small></h1>
+  <button class="tbtn" id="installBtn" type="button" hidden>Install app</button>
+</header>
 <main id="main"></main>
 <script>
 /* =====================================================================
@@ -1293,6 +1301,28 @@ try {
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
   }
 } catch (e) {}
+
+/* Install prompt, same pattern as Kalkunahon. Chrome and Edge fire beforeinstallprompt
+   when the app is installable and not yet installed; the event is stashed and the
+   header button is shown. Browsers that never fire it (Safari, Firefox, embedded
+   webviews) keep the button hidden; on iOS use Share > Add to Home Screen. */
+let deferredInstall = null;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  if (installBtn) installBtn.hidden = false;
+});
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstall) return;
+    installBtn.hidden = true;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+  });
+}
+window.addEventListener('appinstalled', () => { deferredInstall = null; if (installBtn) installBtn.hidden = true; });
 })();
 
 </script>

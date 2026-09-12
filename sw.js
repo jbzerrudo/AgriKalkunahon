@@ -2,7 +2,7 @@
    Bump VERSION whenever you ship a new build, so old caches are discarded.
    Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/AgriKalkunahon)
    PolyForm Noncommercial License 1.0.0 */
-const VERSION = 'agrikalkunahon-v2';
+const VERSION = 'agrikalkunahon-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {

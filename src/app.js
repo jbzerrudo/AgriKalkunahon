@@ -545,4 +545,26 @@ try {
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
   }
 } catch (e) {}
+
+/* Install prompt, same pattern as Kalkunahon. Chrome and Edge fire beforeinstallprompt
+   when the app is installable and not yet installed; the event is stashed and the
+   header button is shown. Browsers that never fire it (Safari, Firefox, embedded
+   webviews) keep the button hidden; on iOS use Share > Add to Home Screen. */
+let deferredInstall = null;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  if (installBtn) installBtn.hidden = false;
+});
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstall) return;
+    installBtn.hidden = true;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+  });
+}
+window.addEventListener('appinstalled', () => { deferredInstall = null; if (installBtn) installBtn.hidden = true; });
 })();
