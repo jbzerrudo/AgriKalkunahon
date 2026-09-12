@@ -1,15 +1,24 @@
 /* AgriKalkunahon service worker.
-   Bump VERSION whenever you ship a new build, so old caches are discarded.
+   VERSION is rewritten by build.js from a hash of the sources, so every build gets a new cache name.
    Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/AgriKalkunahon)
    PolyForm Noncommercial License 1.0.0 */
-const VERSION = 'agrikalkunahon-v5';
+const VERSION = 'agrikalkunahon-b5487f85';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  // Delete old caches and take over open pages. If an older cache existed this is an update, not a first
+  // install, so reload the open pages: an installed copy then shows the new build at once. The reload is
+  // started after activation finishes (not awaited inside waitUntil), otherwise activation would wait on
+  // a navigation that itself waits on activation.
+  e.waitUntil(caches.keys().then(keys => {
+    const old = keys.filter(k => k !== VERSION);
+    return Promise.all(old.map(k => caches.delete(k))).then(() => self.clients.claim()).then(() => {
+      if (old.length) self.clients.matchAll({ type: 'window' }).then(cs => cs.forEach(c => c.navigate(c.url).catch(() => {})));
+    });
+  }));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
@@ -17,7 +26,7 @@ self.addEventListener('fetch', e => {
   // The page itself: network first so an online user always gets the newest build; cache is the fallback.
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      try { const res = await fetch(req); const c = await caches.open(VERSION); c.put(req, res.clone()); return res; }
+      try { const res = await fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }); const c = await caches.open(VERSION); c.put(req, res.clone()); return res; }
       catch (err) { return (await caches.match(req)) || (await caches.match('./index.html')); }
     })());
     return;

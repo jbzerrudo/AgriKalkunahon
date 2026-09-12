@@ -1270,7 +1270,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice.'));
   root.appendChild(el('p', null, bi(T.draftNote)));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.1.0. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.1.0, build b5487f85. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* ---------- router ---------- */
@@ -1282,7 +1282,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build b5487f85.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
@@ -1302,7 +1302,12 @@ route();
 /* PWA registration only in a secure context served over http(s) */
 try {
   if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        // An installed copy can stay open for days; re-check for a new build whenever it comes back to the foreground.
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      }).catch(() => {});
+    });
   }
 } catch (e) {}
 
