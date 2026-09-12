@@ -26,7 +26,6 @@ store.inputs = store.inputs || {};
 const T = {
   app: { en: 'AgriKalkunahon', fil: 'AgriKalkunahon' },
   tagline: { en: 'What should I do on the farm today?', fil: 'Ano ang gagawin ko ngayon sa bukid?' },
-  draftNote: { en: 'Filipino text is a draft for review.', fil: 'Ang tekstong Filipino ay burador na susuriin pa.' },
   cards: {
     water: { en: 'Should I water today?', fil: 'Kailangan ko bang magpatubig ngayon?' },
     rice: { en: 'Rice field: re-flood now?', fil: 'Sa palayan: magpatubig na ba?' },
@@ -542,7 +541,6 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice.'));
-  root.appendChild(el('p', null, bi(T.draftNote)));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
   root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build __BUILD__. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
