@@ -712,7 +712,7 @@ const REFS = {
   BJORKMAN1998: { cls: 'primary', cite: 'Bjorkman, T., Pearson, K.J. (1998). High temperature arrest of inflorescence development in broccoli. J. Exp. Bot. 49:101-106.', url: 'https://academic.oup.com/jxb/article-abstract/49/318/101/555642' },
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
-  MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. Not publicly available; consult the IESM library.', url: '' },
+  MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -1272,7 +1272,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice.'));
   root.appendChild(el('p', null, bi(T.draftNote)));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.1.0, build a5dcffa7. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.1.0, build 72d82501. Licence: PolyForm Noncommercial 1.0.0. Not affiliated with or endorsed by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* ---------- router ---------- */
@@ -1284,7 +1284,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build a5dcffa7.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 72d82501.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
