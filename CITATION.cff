@@ -12,6 +12,9 @@ identifiers:
     value: 10.5281/zenodo.22726046
     description: Concept DOI, always resolves to the latest version
   - type: doi
+    value: 10.5281/zenodo.22728972
+    description: DOI for version 0.2.0
+  - type: doi
     value: 10.5281/zenodo.22726047
     description: DOI for version 0.1.0
 repository-code: "https://github.com/jbzerrudo/AgriKalkunahon"
