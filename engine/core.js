@@ -508,7 +508,7 @@ function stressCheck(cropId, phase, days) {
 }
 
 /* =====================================================================
-   11. FROST INDICATOR (qualitative)  [FAO_FROST, BASQUIAL2021, PIA2025]
+   11. FROST INDICATOR (qualitative)  [FAO_FROST, BASQUIAL2021]
    ===================================================================== */
 const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */, singleDigitC: 10 };
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
@@ -520,7 +520,7 @@ function frostIndicator(inp) {
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
   else if (conds.clear && conds.calm && (conds.lowDewPoint || conds.cold)) code = 'watch';
   else code = 'unlikely';
-  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', sources: ['FAO_FROST', 'BASQUIAL2021', 'PIA2025'] };
+  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', sources: ['FAO_FROST', 'BASQUIAL2021'] };
 }
 
 /* =====================================================================
@@ -603,7 +603,6 @@ const REFS = {
   BJORKMAN1998: { cls: 'primary', cite: 'Bjorkman, T., Pearson, K.J. (1998). High temperature arrest of inflorescence development in broccoli. J. Exp. Bot. 49:101-106.', url: 'https://academic.oup.com/jxb/article-abstract/49/318/101/555642' },
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
-  PIA2025: { cls: 'extension', cite: 'Philippine Information Agency (2 February 2025). Benguet farmers counter frost in vegetables; PAGASA FrostRiskPH project (2024-2026).', url: 'https://pia.gov.ph/news/benguet-farmers-counter-frost-in-vegetables/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
@@ -612,10 +611,10 @@ const REFS = {
 };
 /* Items the app could not verify against a primary source (shown in the Sources module) */
 const UNVERIFIED = [
-  { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 not reached; rough-rice constants taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
-  { id: 'YOSHIDA1981', text: 'Yoshida (1981) not reached; the rice temperature table is the FAO reproduction adapted from Yoshida (1978). Reproductions differ on germination and ripening values.' },
-  { id: 'SMITH1992', text: 'CROPWAT effective rainfall formulas (USDA-SCS and FAO/AGLW) seen only in secondary sources and therefore not implemented.' },
-  { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number.' },
+  { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
+  { id: 'YOSHIDA1981', text: 'Yoshida (1981) Table 2.4 has now been checked. The rice values here follow the FAO reproduction; two differ from Yoshida: germination low (16 here, 10 in Yoshida) and panicle differentiation high (30 here, 38 in Yoshida). Yoshida gives daily mean temperatures except for germination; this app compares the afternoon high and the morning low, which flags stress earlier.' },
+  { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
+  { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number, and none of the sources consulted gives a Benguet dew-point value.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none.' }
 ];
 
