@@ -186,7 +186,7 @@ console.log('\n== HEAT AND COLD STRESS ==');
 { const r = A.stressCheck('rice', 'anthesis', [{ Tmax: 36, Tmin: 25 }]); eq('rice anthesis 36 C: heat above threshold', r.perDay[0].includes('heat_above_threshold'), true); }
 { const r = A.stressCheck('rice', 'anthesis', [{ Tmax: 33.5, Tmin: 25 }]); eq('rice anthesis 33.5 C: watch', r.perDay[0].join(','), 'heat_watch'); }
 { const r = A.stressCheck('rice', 'anthesis', [{ Tmax: 30, Tmin: 21 }]); eq('rice anthesis Tmin 21: cold', r.perDay[0].join(','), 'cold_at_or_below_threshold'); }
-eq('rice panicle differentiation hi 30', A.STRESS.rice.phases.panicle_differentiation.hi, 30);
+eq('rice germination lo / panicle differentiation hi per Yoshida 1981 Table 2.4', A.STRESS.rice.phases.germination.lo + '/' + A.STRESS.rice.phases.panicle_differentiation.hi, '10/38');
 eq('maize flowering hi 35', A.STRESS.maize.phases.flowering.hi, 35);
 { const r = A.stressCheck('tomato', 'flowering', [{ Tmax: 30, Tmin: 20 }, { Tmax: 29, Tmin: 20 }, { Tmax: 29.5, Tmin: 21 }]); eq('tomato 29 C three days', r.threeConsecutiveHeat, true); }
 { const r = A.stressCheck('cabbage', 'head_formation', [{ Tmax: 25, Tmin: 15 }]); eq('cabbage head formation 25 C: watch (above 24)', r.perDay[0].join(','), 'heat_watch'); }
@@ -220,7 +220,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list present', A.UNVERIFIED.length >= 5, true); }
+  eq('UNVERIFIED list names the four items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,HARVEST_PM7'); }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;

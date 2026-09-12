@@ -469,13 +469,14 @@ function dryingDecision(inp) {
 }
 
 /* =====================================================================
-   10. HEAT AND COLD STRESS  [FAO_RICE_TEMP, LUO2011, SATAKE1978, JAGADISH2007, HATFIELD2011, HATFIELD2015, QDAF_CTT]
+   10. HEAT AND COLD STRESS  [YOSHIDA1981, LUO2011, SATAKE1978, JAGADISH2007, HATFIELD2011, HATFIELD2015, QDAF_CTT]
    Each phase: lo = critical low (Tmin at or below -> cold), hi = critical high (Tmax at or above -> heat), watch = optional early warning.
    ===================================================================== */
 const STRESS = {
-  rice: { src: ['FAO_RICE_TEMP', 'LUO2011', 'SATAKE1978', 'JAGADISH2007', 'HATFIELD2011'], phases: {
-    germination:            { lo: 16, hi: 45 }, seedling: { lo: 12, hi: 35 }, rooting: { lo: 16, hi: 35 }, tillering: { lo: 9, hi: 33 },
-    panicle_initiation:     { lo: 15, hi: null }, panicle_differentiation: { lo: 15, hi: 30 },
+  rice: { src: ['YOSHIDA1981', 'LUO2011', 'SATAKE1978', 'JAGADISH2007', 'HATFIELD2011'], phases: {
+    /* Yoshida (1981) Table 2.4; where Yoshida gives a range the lower value is the cold line. */
+    germination:            { lo: 10, hi: 45 }, seedling: { lo: 12, hi: 35 }, rooting: { lo: 16, hi: 35 }, tillering: { lo: 9, hi: 33 },
+    panicle_initiation:     { lo: 15, hi: null }, panicle_differentiation: { lo: 15, hi: 38 },
     anthesis:               { lo: 22, hi: 35, watch: 33 }, ripening: { lo: 12, hi: 30 } } },
   maize: { src: ['HATFIELD2011', 'HATFIELD2015', 'QDAF_CTT'], phases: {
     germination: { lo: 12, hi: 35 }, vegetative: { lo: 10, hi: 35 }, flowering: { lo: 13, hi: 35, watch: 33 }, grain_fill: { lo: 13, hi: 33, watch: 30 } } },
@@ -508,7 +509,7 @@ function stressCheck(cropId, phase, days) {
 }
 
 /* =====================================================================
-   11. FROST INDICATOR (qualitative)  [FAO_FROST, BASQUIAL2021]
+   11. FROST INDICATOR (qualitative)  [FAO_FROST, MARASIGAN2017, BASQUIAL2021, LAUNIO2020]
    ===================================================================== */
 const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */, singleDigitC: 10 };
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
@@ -520,7 +521,7 @@ function frostIndicator(inp) {
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
   else if (conds.clear && conds.calm && (conds.lowDewPoint || conds.cold)) code = 'watch';
   else code = 'unlikely';
-  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', sources: ['FAO_FROST', 'BASQUIAL2021'] };
+  return { code: code, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }
 
 /* =====================================================================
@@ -581,7 +582,7 @@ const REFS = {
   FAO_TM3: { cls: 'primary', cite: 'Brouwer, C., Heibloem, M. (1986). Irrigation Water Needs. FAO Irrigation Water Management Training Manual 3, Part II Ch. 4.2.', url: 'https://www.fao.org/4/s2022e/s2022e08.htm' },
   FAO_TM4: { cls: 'primary', cite: 'Brouwer, C., Prins, K., Heibloem, M. (1989). Irrigation Scheduling. FAO Irrigation Water Management Training Manual 4, Annex I.', url: 'https://www.fao.org/4/t7202e/t7202e08.htm' },
   FAO_FROST: { cls: 'primary', cite: 'Snyder, R.L., de Melo-Abreu, J.P. (2005). Frost Protection: fundamentals, practice and economics, Vol. 1. FAO Environment and Natural Resources Series 10.', url: 'https://www.fao.org/4/y7223e/y7223e00.htm' },
-  FAO_RICE_TEMP: { cls: 'primary', cite: 'FAO. Wetland characterization and classification for sustainable agricultural development, Table 2: Critical temperatures at different growth stages of the rice plant (adapted from Yoshida 1978).', url: 'https://www.fao.org/4/x6611e/x6611e03c.htm' },
+  YOSHIDA1981: { cls: 'primary', cite: 'Yoshida, S. (1981). Fundamentals of Rice Crop Science. International Rice Research Institute, Los Baños. Table 2.4, critical temperatures by growth stage (adapted from Yoshida 1977a), and section 2.3.6, spikelet sterility when temperature exceeds 35 °C at anthesis for more than 1 hour.', url: 'http://books.irri.org/9711040522_content.pdf' },
   BOUMAN2007: { cls: 'primary', cite: 'Bouman, B.A.M., Lampayan, R.M., Tuong, T.P. (2007). Water Management in Irrigated Rice: Coping with Water Scarcity. IRRI.', url: 'http://books.irri.org/9789712202193_content.pdf' },
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
   DA_AO25: { cls: 'regulatory', cite: 'Department of Agriculture (2009). Administrative Order No. 25 s. 2009, Guidelines for the adoption of water saving technologies in irrigated rice production systems in the Philippines, Section 5.', url: 'https://legaldex.com/laws/guidelines-for-the-adoption-of-water-saving-technologies-wst-in' },
@@ -603,6 +604,8 @@ const REFS = {
   BJORKMAN1998: { cls: 'primary', cite: 'Bjorkman, T., Pearson, K.J. (1998). High temperature arrest of inflorescence development in broccoli. J. Exp. Bot. 49:101-106.', url: 'https://academic.oup.com/jxb/article-abstract/49/318/101/555642' },
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
+  MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. Not publicly available; consult the IESM library.', url: '' },
+  LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
@@ -612,9 +615,8 @@ const REFS = {
 /* Items the app could not verify against a primary source (shown in the Sources module) */
 const UNVERIFIED = [
   { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
-  { id: 'YOSHIDA1981', text: 'Yoshida (1981) Table 2.4 has now been checked. The rice values here follow the FAO reproduction; two differ from Yoshida: germination low (16 here, 10 in Yoshida) and panicle differentiation high (30 here, 38 in Yoshida). Yoshida gives daily mean temperatures except for germination; this app compares the afternoon high and the morning low, which flags stress earlier.' },
   { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
-  { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number, and none of the sources consulted gives a Benguet dew-point value.' },
+  { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number, and none of the Benguet sources consulted (Marasigan 2017; Launio et al. 2020) gives a dew-point value.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none.' }
 ];
 
