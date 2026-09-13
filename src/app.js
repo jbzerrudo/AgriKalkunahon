@@ -85,8 +85,10 @@ const T = {
     good: { en: 'Good conditions to spray now.', fil: 'Maganda ang kondisyon para mag-spray ngayon.' },
     caution: { en: 'Spray with caution.', fil: 'Mag-ingat kung mag-i-spray.' },
     do_not_spray: { en: 'Do not spray now.', fil: 'Huwag mag-spray ngayon.' },
-    can_reach_14: { en: 'Yes. Today\'s air can dry palay to about {x}%.', fil: 'Oo. Kayang patuyuin ng hangin ngayon ang palay hanggang mga {x}%.' },
-    not_assured_14: { en: 'Not assured. Today\'s air alone dries palay only to about {x}%.', fil: 'Hindi tiyak. Hanggang mga {x}% lang ang matutuyo ng palay sa hangin ngayon.' },
+    can_reach_target: { en: 'Yes. Today\'s air can dry palay to about {x}%.', fil: 'Oo. Kayang patuyuin ng hangin ngayon ang palay hanggang mga {x}%.' },
+    already_dry_enough: { en: 'Already dry enough. Stop drying and store it.', fil: 'Sapat na ang tuyo. Itigil ang pagpapatuyo at itago na.' },
+    moisture_out_of_range: { en: 'Check the moisture reading. It must be between 1 and 99%.', fil: 'Suriin ang basa ng palay. Dapat nasa 1 hanggang 99%.' },
+    not_assured_target: { en: 'Not assured. Today\'s air alone dries palay only to about {x}%.', fil: 'Hindi tiyak. Hanggang mga {x}% lang ang matutuyo ng palay sa hangin ngayon.' },
     heat_above_threshold: { en: 'Above the published heat threshold for this stage.', fil: 'Lampas sa nailathalang hangganan ng init para sa yugtong ito.' },
     heat_watch: { en: 'Near the heat threshold. Watch the crop.', fil: 'Malapit sa hangganan ng init. Bantayan ang pananim.' },
     cold_at_or_below_threshold: { en: 'At or below the published cold threshold.', fil: 'Nasa o mas mababa sa nailathalang hangganan ng lamig.' },
@@ -399,7 +401,7 @@ CARDS.dry = function (root) {
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
     const limits = ['The reachable moisture is computed at air temperature. Sun-warmed grain can dry lower, so "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
-    show(out, result({ level: r.code === 'can_reach_14' ? 'go' : 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
+    show(out, result({ level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
   }
 };
 
@@ -563,6 +565,7 @@ CARDS.timing = function (root) {
   function run() {
     const inp = { variety: variety.input.value, method: method.input.value, sow: sow.input.value, plant: plant.input.value, tx: num(tx.input), tn: num(tn.input) };
     remember('timing', inp); out.innerHTML = '';
+    if (inp.tx != null && inp.tn != null && inp.tx < inp.tn) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const L = store.loc, now = new Date(), J = todayJ(now);
     const h = A.harvestWindow(inp.variety, inp.method, new Date(inp.sow + 'T00:00:00Z'));
     const lines = [[bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'], [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];

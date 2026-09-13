@@ -501,7 +501,14 @@ function rhForMoisture(T, targetWb) {
   return 0.5 * (lo + hi);
 }
 /* IRRI mass balance: weight after drying (wet basis percentages) */
-function weightAfterDrying(w1, mc1, mc2) { return w1 * (100 - mc1) / (100 - mc2); }
+/* Mass balance on the dry matter. Only meaningful when drying, mc1 > mc2, and for real moisture
+   contents: at mc 100 the whole mass is water and the answer degenerates to zero. */
+function weightAfterDrying(w1, mc1, mc2) {
+  if (!isNum(w1) || w1 <= 0 || !isNum(mc1) || !isNum(mc2)) return null;
+  if (mc1 <= 0 || mc1 >= 100 || mc2 <= 0 || mc2 >= 100) return null;
+  if (mc1 <= mc2) return null;                 // not drying; this formula would report a weight gain
+  return w1 * (100 - mc1) / (100 - mc2);
+}
 const CAVAN_KG = 50;   // PhilRice PalayCheck 2022: "cav - cavan (usually 50kg)"
 const STORAGE_MC = { weeks_to_months: 14, months_8_12: 13, seed: 12, over_1_year: 9 };   // IRRI RKB
 const SUN_DRYING = { layerCm: [2, 4], stirMinutes: 30, coverAboveGrainC: 50, coverAboveGrainSeedC: 42, seedAirMaxC: 43 };   // IRRI RKB
@@ -512,14 +519,19 @@ function dryingDecision(inp) {
   if (inp.T < 10 || inp.T > 50) flags.push('temp_outside_corroborated_range');
   const emc = emcWetBasis(inp.T, inp.RH);
   const target = STORAGE_MC[inp.storage || 'weeks_to_months'];
-  const rhNeeded = rhForMoisture(inp.T, 14);
-  const code = emc <= 14 ? 'can_reach_14' : 'not_assured_14';
+  const rhNeeded = rhForMoisture(inp.T, target);
+  /* Palay off the field runs roughly 20-26% moisture; anything above 40 or at or below the target is
+     either a typo or a crop that needs no drying, and the card says so rather than computing from it. */
+  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc > 40) flags.push('moisture_above_normal_harvest');
+  const code = emc <= target ? 'can_reach_target' : 'not_assured_target';
   let w2 = null, cavans = null;
   if (isNum(inp.weightKg) && isNum(inp.mc)) {
-    w2 = weightAfterDrying(inp.weightKg, inp.mc, 14);
-    cavans = w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
+    w2 = weightAfterDrying(inp.weightKg, inp.mc, target);
+    cavans = w2 == null ? null : w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
   }
-  return { code: code, emcWb: emc, rhFor14: rhNeeded, storageTarget: target, weightAt14: w2, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
+  return { code: code, emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: w2, weightAt14: w2, cavansAtTarget: cavans, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
 }
 
 /* =====================================================================

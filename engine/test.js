@@ -198,9 +198,15 @@ ok('PalayCheck yield example 4867 kg/ha', 673.4 / 1250 * 10000 * (100 - 22.3) / 
 ok('PalayCheck /86 equals (100-14)', A.weightAfterDrying(673.4 / 1250 * 10000, 22.3, 14), 4867.34, 0.5, 'kg/ha');
 eq('cavan default 50 kg', A.CAVAN_KG, 50);
 { const d = A.dryingDecision({ T: 33, RH: 60, weightKg: 2500, mc: 24 });
-  eq('33 C 60%: can reach 14', d.code, 'can_reach_14'); ok('cavans at 14%', d.cavansAt14, 2500 * 76 / 86 / 50, 1e-9);
+  eq('33 C 60%: can reach the target', d.code, 'can_reach_target'); ok('cavans at 14%', d.cavansAt14, 2500 * 76 / 86 / 50, 1e-9);
   eq('storage target weeks to months 14%', d.storageTarget, 14); }
-eq('30 C 85%: not assured', A.dryingDecision({ T: 30, RH: 85 }).code, 'not_assured_14');
+eq('30 C 85%: not assured', A.dryingDecision({ T: 30, RH: 85 }).code, 'not_assured_target');
+eq('palay already at or below target: stop drying', A.dryingDecision({ T: 33, RH: 60, mc: 12, weightKg: 100 }).code, 'already_dry_enough');
+eq('impossible moisture is refused', A.dryingDecision({ T: 33, RH: 60, mc: 120 }).code, 'moisture_out_of_range');
+eq('drying to a drier target needs drier air', A.dryingDecision({ T: 33, RH: 60, mc: 24, storage: 'over_1_year' }).code, 'not_assured_target');
+eq('weightAfterDrying refuses a weight gain', A.weightAfterDrying(100, 10, 14), null);
+eq('weightAfterDrying refuses 100% moisture', A.weightAfterDrying(100, 100, 14), null);
+eq('weightAfterDrying refuses a negative weight', A.weightAfterDrying(-100, 24, 14), null);
 eq('RH 95% flagged outside table', A.dryingDecision({ T: 30, RH: 95 }).flags.includes('rh_outside_corroborated_table'), true);
 
 console.log('\n== HEAT AND COLD STRESS ==');

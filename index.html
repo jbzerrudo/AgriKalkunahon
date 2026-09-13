@@ -614,7 +614,14 @@ function rhForMoisture(T, targetWb) {
   return 0.5 * (lo + hi);
 }
 /* IRRI mass balance: weight after drying (wet basis percentages) */
-function weightAfterDrying(w1, mc1, mc2) { return w1 * (100 - mc1) / (100 - mc2); }
+/* Mass balance on the dry matter. Only meaningful when drying, mc1 > mc2, and for real moisture
+   contents: at mc 100 the whole mass is water and the answer degenerates to zero. */
+function weightAfterDrying(w1, mc1, mc2) {
+  if (!isNum(w1) || w1 <= 0 || !isNum(mc1) || !isNum(mc2)) return null;
+  if (mc1 <= 0 || mc1 >= 100 || mc2 <= 0 || mc2 >= 100) return null;
+  if (mc1 <= mc2) return null;                 // not drying; this formula would report a weight gain
+  return w1 * (100 - mc1) / (100 - mc2);
+}
 const CAVAN_KG = 50;   // PhilRice PalayCheck 2022: "cav - cavan (usually 50kg)"
 const STORAGE_MC = { weeks_to_months: 14, months_8_12: 13, seed: 12, over_1_year: 9 };   // IRRI RKB
 const SUN_DRYING = { layerCm: [2, 4], stirMinutes: 30, coverAboveGrainC: 50, coverAboveGrainSeedC: 42, seedAirMaxC: 43 };   // IRRI RKB
@@ -625,14 +632,19 @@ function dryingDecision(inp) {
   if (inp.T < 10 || inp.T > 50) flags.push('temp_outside_corroborated_range');
   const emc = emcWetBasis(inp.T, inp.RH);
   const target = STORAGE_MC[inp.storage || 'weeks_to_months'];
-  const rhNeeded = rhForMoisture(inp.T, 14);
-  const code = emc <= 14 ? 'can_reach_14' : 'not_assured_14';
+  const rhNeeded = rhForMoisture(inp.T, target);
+  /* Palay off the field runs roughly 20-26% moisture; anything above 40 or at or below the target is
+     either a typo or a crop that needs no drying, and the card says so rather than computing from it. */
+  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc > 40) flags.push('moisture_above_normal_harvest');
+  const code = emc <= target ? 'can_reach_target' : 'not_assured_target';
   let w2 = null, cavans = null;
   if (isNum(inp.weightKg) && isNum(inp.mc)) {
-    w2 = weightAfterDrying(inp.weightKg, inp.mc, 14);
-    cavans = w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
+    w2 = weightAfterDrying(inp.weightKg, inp.mc, target);
+    cavans = w2 == null ? null : w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
   }
-  return { code: code, emcWb: emc, rhFor14: rhNeeded, storageTarget: target, weightAt14: w2, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
+  return { code: code, emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: w2, weightAt14: w2, cavansAtTarget: cavans, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
 }
 
 /* =====================================================================
@@ -943,8 +955,10 @@ const T = {
     good: { en: 'Good conditions to spray now.', fil: 'Maganda ang kondisyon para mag-spray ngayon.' },
     caution: { en: 'Spray with caution.', fil: 'Mag-ingat kung mag-i-spray.' },
     do_not_spray: { en: 'Do not spray now.', fil: 'Huwag mag-spray ngayon.' },
-    can_reach_14: { en: 'Yes. Today\'s air can dry palay to about {x}%.', fil: 'Oo. Kayang patuyuin ng hangin ngayon ang palay hanggang mga {x}%.' },
-    not_assured_14: { en: 'Not assured. Today\'s air alone dries palay only to about {x}%.', fil: 'Hindi tiyak. Hanggang mga {x}% lang ang matutuyo ng palay sa hangin ngayon.' },
+    can_reach_target: { en: 'Yes. Today\'s air can dry palay to about {x}%.', fil: 'Oo. Kayang patuyuin ng hangin ngayon ang palay hanggang mga {x}%.' },
+    already_dry_enough: { en: 'Already dry enough. Stop drying and store it.', fil: 'Sapat na ang tuyo. Itigil ang pagpapatuyo at itago na.' },
+    moisture_out_of_range: { en: 'Check the moisture reading. It must be between 1 and 99%.', fil: 'Suriin ang basa ng palay. Dapat nasa 1 hanggang 99%.' },
+    not_assured_target: { en: 'Not assured. Today\'s air alone dries palay only to about {x}%.', fil: 'Hindi tiyak. Hanggang mga {x}% lang ang matutuyo ng palay sa hangin ngayon.' },
     heat_above_threshold: { en: 'Above the published heat threshold for this stage.', fil: 'Lampas sa nailathalang hangganan ng init para sa yugtong ito.' },
     heat_watch: { en: 'Near the heat threshold. Watch the crop.', fil: 'Malapit sa hangganan ng init. Bantayan ang pananim.' },
     cold_at_or_below_threshold: { en: 'At or below the published cold threshold.', fil: 'Nasa o mas mababa sa nailathalang hangganan ng lamig.' },
@@ -1257,7 +1271,7 @@ CARDS.dry = function (root) {
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
     const limits = ['The reachable moisture is computed at air temperature. Sun-warmed grain can dry lower, so "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
-    show(out, result({ level: r.code === 'can_reach_14' ? 'go' : 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
+    show(out, result({ level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
   }
 };
 
@@ -1421,6 +1435,7 @@ CARDS.timing = function (root) {
   function run() {
     const inp = { variety: variety.input.value, method: method.input.value, sow: sow.input.value, plant: plant.input.value, tx: num(tx.input), tn: num(tn.input) };
     remember('timing', inp); out.innerHTML = '';
+    if (inp.tx != null && inp.tn != null && inp.tx < inp.tn) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const L = store.loc, now = new Date(), J = todayJ(now);
     const h = A.harvestWindow(inp.variety, inp.method, new Date(inp.sow + 'T00:00:00Z'));
     const lines = [[bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'], [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
@@ -1456,7 +1471,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build 1b62ab90. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build 49bd143e. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
@@ -1489,7 +1504,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 1b62ab90)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 49bd143e)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa telepono mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1519,7 +1534,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 1b62ab90.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 49bd143e.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
