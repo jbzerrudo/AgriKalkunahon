@@ -109,6 +109,7 @@ code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px
 .reading .fil{color:var(--green-ink)}
 .authority .fil{color:var(--earth)}
 .locnote{font-size:13px;margin:6px 0;color:var(--earth);font-weight:600}
+.lochint{font-size:12px;margin:4px 0 8px;color:var(--muted)}
 .locwarn{font-size:13px;margin:8px 0 0}
 dl.nums dt.alert{color:#8a4b00;font-weight:700}
 dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px solid #d98324;background:#fdf3e6;border-radius:6px}
@@ -1053,6 +1054,7 @@ function locationBlock(onchange) {
   const wrap = el('fieldset', { class: 'loc' }, el('legend', null, bi(T.ui.location)));
   const lat = numInput('lat', T.ui.lat, L.lat, 0.01), lon = numInput('lon', T.ui.lon, L.lon, 0.01), elev = numInput('elev', T.ui.elev, L.elev, 1);
   const site = selectInput('site', T.ui.site, [['coastal', T.ui.siteCoastal], ['interior', T.ui.siteInterior], ['island', T.ui.siteIsland]], L.site);
+  const hint = el('p', { class: 'lochint' }, bi({ en: 'Give latitude and longitude to two decimal places, no more. A hundredth of a degree is about 1 km, which is as fine as any of these calculations can tell apart, and more digits only look precise.', fil: 'Dalawang decimal lamang ang ilagay sa latitud at longhitud. Ang isang sandaan ng digri ay mga 1 km, at iyon na ang pinakamaliit na pagkakaibang kayang tukuyin ng mga kalkulasyong ito; ang dagdag na numero ay mukhang tumpak lamang.' }));
   const note = el('p', { class: 'locnote' });
   /* A silent failure here is how a farmer ends up with someone else's sunrise: the button appears to
      do nothing and the default quietly stays. Say what happened and what to do instead. */
@@ -1060,7 +1062,7 @@ function locationBlock(onchange) {
   const gps = el('button', { type: 'button', class: 'btn small', onclick: () => {
     if (!navigator.geolocation) return gpsFailed({ en: 'This browser cannot read your location. Type the numbers in below.', fil: 'Hindi kayang basahin ng browser na ito ang lokasyon ninyo. I-type ang mga numero sa ibaba.' });
     navigator.geolocation.getCurrentPosition(
-      p => { lat.input.value = p.coords.latitude.toFixed(3); lon.input.value = p.coords.longitude.toFixed(3); if (isFinite(p.coords.altitude)) elev.input.value = Math.round(p.coords.altitude); sync(); },
+      p => { lat.input.value = p.coords.latitude.toFixed(2); lon.input.value = p.coords.longitude.toFixed(2); if (isFinite(p.coords.altitude)) elev.input.value = Math.round(p.coords.altitude); sync(); },
       err => gpsFailed(err && err.code === 1
         ? { en: 'Your device refused to share its location, so the app is still using the location shown below. Type your own in.', fil: 'Tumanggi ang device ninyo na ibigay ang lokasyon, kaya ang nasa ibaba pa rin ang ginagamit ng app. I-type ang sarili ninyo.' }
         : { en: 'Could not read your location. Type the numbers in below.', fil: 'Hindi nakuha ang lokasyon ninyo. I-type ang mga numero sa ibaba.' }),
@@ -1070,7 +1072,7 @@ function locationBlock(onchange) {
   function redraw() { warn.innerHTML = ''; const w = locationWarnings(); w.forEach(x => warn.appendChild(el('p', { class: 'warn locwarn' }, bi(x)))); }
   const warn = el('div');
   [lat, lon, elev, site].forEach(x => x.input.addEventListener('change', sync));
-  wrap.append(gps, note, lat.row, lon.row, elev.row, site.row, warn);
+  wrap.append(gps, note, hint, lat.row, lon.row, elev.row, site.row, warn);
   redraw();
   return wrap;
 }
@@ -1080,13 +1082,14 @@ function locationBlock(onchange) {
 /* The reading window compares the device clock against sun times computed for UTC+8. On a device set
    to any other zone the two are not on the same footing, so the window cannot be tested; the card then
    answers anyway and says the window went unchecked, rather than refusing for a reason that is false. */
-const phTime = () => -new Date().getTimezoneOffset() / 60 === 8;
+const tzHours = () => -new Date().getTimezoneOffset() / 60;
+const inPH = () => { const L = store.loc; return isFinite(L.lat) && isFinite(L.lon) && L.lat >= 4 && L.lat <= 22 && L.lon >= 116 && L.lon <= 127; };
 function locationWarnings() {
   const L = store.loc, out = [];
   if (!L.set) out.push({ en: 'This is the app\'s starting location (Metro Manila), not your field. Nothing you see that depends on location, including sunrise, sunset and the frost reading window, is about your place until you set it.', fil: 'Ito ang panimulang lokasyon ng app (Metro Manila), hindi ang bukid ninyo. Lahat ng nakadepende sa lokasyon, kasama ang pagsikat at paglubog ng araw at ang oras ng pagbasa para sa andap, ay hindi tungkol sa lugar ninyo hangga\'t hindi ninyo ito itinatakda.' });
-  if (isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127)) out.push({ en: 'This location is outside the Philippines. Every threshold in this app comes from Philippine or FAO sources chosen for Philippine conditions, and the frost card is built on Benguet records. Treat the answers as illustrations, not advice for this place.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Lahat ng hangganan sa app na ito ay mula sa Pilipinas o FAO na piniling angkop sa kondisyon ng Pilipinas, at ang card ng andap ay nakabatay sa talaan ng Benguet. Ituring na halimbawa lamang ang mga sagot, hindi payo para sa lugar na ito.' });
-  const tz = -new Date().getTimezoneOffset() / 60;
-  if (tz !== 8) out.push({ en: 'Your device clock is set to UTC' + (tz >= 0 ? '+' : '') + tz + ', not Philippine time (UTC+8). Sunrise, sunset, the spray inversion window and the frost reading window all assume UTC+8, so every hour this app shows you will be out by ' + Math.abs(8 - tz) + ' hours.', fil: 'Nakatakda ang orasan ng device ninyo sa UTC' + (tz >= 0 ? '+' : '') + tz + ', hindi sa oras ng Pilipinas (UTC+8). Ang pagsikat at paglubog ng araw, ang oras ng inversion sa pag-spray, at ang oras ng pagbasa para sa andap ay lahat nakabatay sa UTC+8, kaya mali nang ' + Math.abs(8 - tz) + ' oras ang bawat oras na ipinapakita ng app.' });
+  if (isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127)) out.push({ en: 'This location is outside the Philippines. The physics still holds anywhere: evapotranspiration, dew point, drying and day length are FAO-56 and general, and the clock times are computed for your own time zone. The thresholds are another matter. The rice water depths and harvest checks are Philippine, the spray bands Australian, the vegetable thresholds Queensland, the late blight model Scottish and untested outside the UK, and the frost card is built on Benguet records. Every result names its source, so check whether that source suits your country.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Nananatiling tama ang pisika kahit saan: ang evapotranspiration, dew point, pagpapatuyo at haba ng araw ay FAO-56 at pangkalahatan, at ang mga oras ay batay sa sariling time zone ninyo. Iba naman ang mga hangganan. Ang lalim ng tubig sa palayan at ang pagsusuri sa pag-ani ay Pilipino, ang spray bands ay Australyano, ang hangganan sa gulay ay Queensland, ang modelo sa late blight ay Scottish at hindi pa nasusubok sa labas ng UK, at ang card ng andap ay nakabatay sa talaan ng Benguet. Bawat sagot ay may nakasaad na sanggunian, kaya suriin kung angkop ito sa bansa ninyo.' });
+  const tz = tzHours(), tzs = 'UTC' + (tz >= 0 ? '+' : '') + tz;
+  if (tz !== 8 && inPH()) out.push({ en: 'Your field is in the Philippines but this device clock is set to ' + tzs + '. Every hour the app shows you, sunrise, sunset, the spray inversion window and the frost reading window, is in this device\'s time, so it will not match the clocks around your field.', fil: 'Nasa Pilipinas ang bukid ninyo ngunit nakatakda sa ' + tzs + ' ang orasan ng device na ito. Lahat ng oras na ipinapakita ng app, ang pagsikat at paglubog ng araw, ang oras ng inversion sa pag-spray, at ang oras ng pagbasa para sa andap, ay nasa oras ng device na ito, kaya hindi ito tutugma sa mga orasan sa paligid ng bukid ninyo.' });
   return out;
 }
 function numInput(id, label, value, step, opts) {
@@ -1319,7 +1322,7 @@ CARDS.spray = function (root) {
     remember('spray', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
-    const L = store.loc, J = todayJ(new Date()), st = A.sunTimes(L.lat, L.lon, J, 8);
+    const L = store.loc, J = todayJ(new Date()), st = A.sunTimes(L.lat, L.lon, J, tzHours());
     const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel ? parseFloat(inp.wsel) : null);
     const hoursToSunset = st.sunset - inp.hour, hoursAfterSunrise = inp.hour - st.sunrise;
     const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: inp.mist, smokeHanging: inp.smoke, labelMaxWindKmh: inp.label });
@@ -1329,7 +1332,7 @@ CARDS.spray = function (root) {
     const why = r.reasons.map(c => CODES[c]).filter(Boolean);
     if (!why.length) why.push('Delta T 2 to 8, wind 3 to 15 km/h, outside the inversion window, no inversion signs, air at or below 30 °C (GRDC, BOM, Agriculture Victoria, APVMA label).');
     why.push('Rainfastness is product-specific: check the label. BASF Philippine labels say do not spray within 24 h of heavy rain and do not apply when windy.');
-    show(out, result({ level, verdict: t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33 for Philippine time (UTC+8).', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
+    show(out, result({ level, verdict: t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone.', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
       limits: ['Thresholds come from Australian grain-industry guidance for boom spraying; they describe the weather, not knapsack equipment.', 'Wind is at 2 m over the field; a 10 m station wind can be twice the field wind (GRDC).'], sources: r.sources }));
   }
 };
@@ -1425,22 +1428,22 @@ CARDS.frost = function (root) {
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
     const L = store.loc, now0 = new Date();
-    const st = A.sunTimes(L.lat, L.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
-    const stToday = A.sunTimes(L.lat, L.lon, todayJ(now0), 8);                            // tonight's sunset
+    const st = A.sunTimes(L.lat, L.lon, todayJ(new Date(now0.getTime() + 86400000)), tzHours());  // tomorrow's sunrise: the card is about tonight
+    const stToday = A.sunTimes(L.lat, L.lon, todayJ(now0), tzHours());                            // tonight's sunset
     const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     /* How far this reading sits from the coldest hour. The device clock supplies the reading time, so
        the farmer is not asked for it. No cooling rate is applied: this weighs the reading, it does not
        extrapolate it. */
     const nowD = now0, nowH = nowD.getHours() + nowD.getMinutes() / 60;
     /* Refuse a daytime reading rather than judging tonight from air that is still warming. */
-    if (phTime() && !A.frostReadingUsable(nowH, stToday.sunset, st.sunrise)) {
+    if (!A.frostReadingUsable(nowH, stToday.sunset, st.sunrise)) {
       const opens = ((stToday.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24;
       show(out, result({ level: 'info',
         verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa upang hatulan kung magkaka-andap.' },
         lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm(opens) + ' (sunset ' + hhmm(stToday.sunset) + ')'],
                 [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')']],
         why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
-        limits: ['The time comes from this device\'s clock, and the card assumes Philippine time.'],
+        limits: ['The time comes from this device\'s clock, and sun times are computed for this device\'s time zone.'],
         sources: ['FAO_FROST'] }));
       return;
     }
@@ -1484,7 +1487,7 @@ CARDS.frost = function (root) {
       [bi({ en: 'Your location', fil: 'Lokasyon ninyo' }), fmt(L.lat, 2) + ' \u00b0N, ' + fmt(L.lon, 2) + ' \u00b0E' + (isFinite(L.elev) ? ' at ' + fmt(L.elev, 0) + ' m' : '') + ', ' + fmt(benguetKm, 0) + ' km from ' + A.BENGUET.place],
       [bi({ en: 'Time of year', fil: 'Panahon ng taon' }), bi(seasonText)], [bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'at or below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none']);
     const why = ['Radiation frosts "are characterized by a clear sky, calm or very little wind, temperature inversion, low dew-point temperatures" (FAO frost manual, Snyder and de Melo-Abreu 2005).', 'The air keeps losing heat to the sky all night, so the minimum comes just before sunrise, when the sun starts to put heat back (FAO frost manual). That is the hour to look at the crop.', 'When dew forms, the released latent heat "reduces the rate of temperature drop" (FAO), so a low dew point lets the surface keep cooling; a high dew point sets a brake near the dew point.', 'Benguet frost (andap) is radiative frost of the northeast monsoon season in Atok, Buguias, Kabayan, Kibungan and Mankayan: weak monsoon flow, cloudless nights, air above freezing while surfaces frost. Marasigan (2017) found 70% of satellite-detected occurrences at land-surface temperatures at or below 10 °C (57% at or below 9 °C), consistent with farmers\' reports of frost at or below 10 °C; Basquial et al. (2021) measured 1.5 to 3.9 °C air temperature on frost mornings.', 'Atok farmers name the same precursors: a very cold, still evening, thick dew and no wind after a long dry spell; wind at dawn prevents frost; frost settles on low ground; and 9 °C without frost against 13 °C with frost shows that temperature alone is not enough (Launio et al. 2020).'];
-    const assumptions = ['The reading time comes from this device\'s clock, and the card assumes Philippine time. If the clock is wrong, the hours before the coldest hour are wrong with it. On a device not set to UTC+8 the card stops refusing daytime readings altogether, because it cannot tell your hour from a Philippine one; it answers and leaves the judgement to you.', 'Sunrise from FAO-56 Eq. 25 and 31 to 33 for Philippine time (UTC+8), at the location saved on the water or spray card. The one-hour window before it is where the minimum usually falls, not a computed minimum: this card forecasts no temperature.', 'The 2 °C dew-point line is a design assumption of this app. FAO prints no threshold; its method is a regression whose coefficients must be fitted from local records, and none exist for Benguet. The line tests how dry the air is, not how cold it is: the dew point is always at or below the air temperature, so 2 °C is reached on an ordinary dry night with the air near 10 °C.', 'Readings taken outdoors, away from walls, at about head height. The card does not know what time you read the thermometer: the later in the evening, the more the reading tells you about the night ahead.', 'The 10 °C line comes from Marasigan (2017), where it is a land surface temperature measured by satellite (passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.), not an air temperature. At night the surface runs colder than the air at head height, so holding your air reading to 10 °C is stricter than her finding requires. The reading is also taken hours before the night minimum, so a reading above 10 °C does not mean the night will stay above 10 °C. That is why a clear, calm night is never reported as unlikely here.'];
+    const assumptions = ['The reading time comes from this device\'s clock, and sunrise and sunset are computed for the same time zone, so the two agree wherever you are. If the device clock or zone is wrong, the hours before the coldest hour are wrong with it.', 'Sunrise from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone, at the location saved above. The one-hour window before it is where the minimum usually falls, not a computed minimum: this card forecasts no temperature.', 'The 2 °C dew-point line is a design assumption of this app. FAO prints no threshold; its method is a regression whose coefficients must be fitted from local records, and none exist for Benguet. The line tests how dry the air is, not how cold it is: the dew point is always at or below the air temperature, so 2 °C is reached on an ordinary dry night with the air near 10 °C.', 'Readings taken outdoors, away from walls, at about head height. The card does not know what time you read the thermometer: the later in the evening, the more the reading tells you about the night ahead.', 'The 10 °C line comes from Marasigan (2017), where it is a land surface temperature measured by satellite (passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.), not an air temperature. At night the surface runs colder than the air at head height, so holding your air reading to 10 °C is stricter than her finding requires. The reading is also taken hours before the night minimum, so a reading above 10 °C does not mean the night will stay above 10 °C. That is why a clear, calm night is never reported as unlikely here.'];
     const limits = ['The season note is Benguet only. This app holds no frost climatology for any other part of the Philippines, and the conditions themselves are general physics, not local to Benguet.', 'The answer depends on when you read the thermometer, and the card cannot tell. On one clear, calm night the same air can read 14 °C at 7 p.m. and 5 °C by 2 a.m. Cloud, wind and dew point barely change with the hour; air temperature does.', 'No minimum temperature is forecast: FAO\'s forecast method needs local regression coefficients that do not exist for Benguet.', 'Leaves cool below the air temperature on clear nights (FAO), so frost can occur with the thermometer above 0 °C.', 'Where PAGASA issues an official frost advisory for your area, prefer it over this indicator.'];
     if (revocable) why.push('This answer rests on ' + t(revoke).en + ', and that can change tonight. Cloud thins and wind drops without warning, and once the sky opens the ground begins losing heat to it straight away. With about ' + fmt(toMin, 1) + ' hours still to run before the coldest hour, look outside again before you sleep: if the stars come out and the air goes still, run this card again.');
     why.push('The 10 °C line is a marker, not a threshold. Marasigan (2017) found 70% of frost occurrences at or below it, which means three in ten happened above it, and her figure is a surface temperature, not a reading at head height. Frost can form at 13 °C on the thermometer if the air is dry, and fail to form at 9 °C if it is humid, which is what Atok farmers reported to Launio et al. (2020). That is why this card asks for humidity and not temperature alone.');
@@ -1522,11 +1525,11 @@ CARDS.disease = function (root) {
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L0 = store.loc, now0 = new Date();
-    const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), 8), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);
+    const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), tzHours()), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), tzHours());
     const nowH0 = now0.getHours() + now0.getMinutes() / 60;
     const hhmm0 = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     /* Dew is a night question, so a reading taken while the air is still warming says nothing about it. */
-    if (phTime() && inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
+    if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
       show(out, result({ level: 'info',
         verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
         lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
@@ -1607,7 +1610,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build f5e6a03b. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 4a794c36. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1648,7 +1651,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build f5e6a03b)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 4a794c36)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1692,7 +1695,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build f5e6a03b.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 4a794c36.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
