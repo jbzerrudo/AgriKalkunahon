@@ -26,13 +26,40 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 | How much of the rain counts? | Monthly effective rainfall | FAO Training Manual 3 |
 | Is it safe to spray now? | Good, caution, or do not spray | Delta T bands and wind limits from GRDC (2022, 2025), BOM, Agriculture Victoria and an APVMA label; inversion window from sunrise and sunset computed with FAO-56 Eq. 25 and 31 to 33 |
 | Can my palay dry enough today? | Reachable moisture, weight and cavans after drying | Modified Henderson equation with ASABE D245.6 long-grain rough rice constants (as reproduced by Zhong 2015 and corroborated against the University of Arkansas EMC table); IRRI mass balance and storage targets; PhilRice PalayCheck |
-| Too hot or too cold for my crop? | Above or within published thresholds by stage | FAO table adapted from Yoshida (1978); Satake and Yoshida (1978); Jagadish et al. (2007); Luo (2011); Hatfield et al. (2011, 2015); Queensland DAF critical temperature thresholds for vegetables and sweet corn |
-| Frost (andap) tonight? | Possible, watch, or unlikely | Radiation-frost conditions from the FAO frost manual (Snyder and de Melo-Abreu 2005); Benguet reports (Basquial et al. 2021; PIA, PNA, DA-CAR) |
-| Wet leaves and disease weather | Dew tonight; potato late blight by the Hutton Criteria when hourly humidity is available | FAO-56 dew point; Sentelhas et al. (2008); James Hutton Institute |
+| Too hot or too cold for my crop? | Above or within published thresholds by stage | Yoshida (1981) *Fundamentals of Rice Crop Science*, Table 2.4, critical temperatures by growth stage; Satake and Yoshida (1978); Jagadish et al. (2007); Luo (2011); Hatfield et al. (2011, 2015); Queensland DAF critical temperature thresholds for vegetables and sweet corn |
+| Frost (andap) tonight? | Possible, watch, or unlikely | Radiation-frost conditions from the FAO frost manual (Snyder and de Melo-Abreu 2005); Benguet evidence from Marasigan (2017), Launio et al. (2020) and Basquial et al. (2021). The card names DOST-PAGASA as the authority on frost warnings and FROST-PH as its Benguet tool |
+| Will the leaves be wet tonight? | Dew tonight; potato late blight by the Hutton Criteria when a data logger supplies hourly humidity | FAO-56 dew point; Sentelhas et al. (2008); James Hutton Institute; IRRI Rice Knowledge Bank for rice blast, which is described in words rather than scored |
 | When is harvest? | Harvest window by variety; corn heat units; day length | PhilRice variety pages; McMaster and Wilhelm (1997); IRRI ORYZA2000; FAO-56 Eq. 34 |
 
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
+
+## What changed in 0.4.0
+
+Every calculator now opens with a **What you need** line naming the instruments it assumes, and says
+whether a smartphone weather app can stand in for them. The answer differs by card, and the reason is
+given each time. A weather app is acceptable for harvest timing, which wants a seasonal typical value.
+It is a rough stand-in for the water and stress cards, with the warning that it is a forecast for
+another place and the error grows with a difference in elevation. It is a weaker fallback than PAGASA's
+published station totals on the rain card. On the spray card it is refused outright, because drift is
+decided by the wind in your own field at boom height and the label holds you to the conditions where
+you spray. On the frost and wet-leaves cards it may be used as a last resort, but the card states which
+way it is wrong: cold air drains downhill and pools, so a field in a hollow runs colder than the town
+and the app reads too warm.
+
+The wet-leaves card was rebuilt. It is now titled **Will the leaves be wet tonight?**, and its verdict
+weighs how far the air must cool to reach its dew point rather than looking only at cloud and wind. The
+Hutton Criteria inputs are hidden behind a checkbox, because they need a data logger and were otherwise
+an unusable field on the screen. Readings taken during the day are refused on both this card and the
+frost card, since air that is still warming carries no information about the night. Rice blast is named
+with IRRI's own description of the weather that favours it and IRRI's management advice, and is
+deliberately not scored, because IRRI publishes no threshold.
+
+Drying instruments are now specified as shaded from direct sun but standing in the air beside the
+drying floor, with the reason given. The rain card offers PAGASA's published monthly station rainfall
+for farmers with no gauge, with the caveat that rainfall differs a great deal over short distances.
+
+A comments and suggestions card carries the author's PAGASA address with the build stamp prefilled.
 
 ## What changed in 0.3.1
 
