@@ -34,6 +34,27 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
 
+## What changed in 0.3.0
+
+The rice card now asks how you manage the water before anything else, and answers differently for each:
+continuous flooding, safe AWD with a field water tube, or letting the field dry without one. Continuous
+flooding follows the IRRI Rice Knowledge Bank depths. The third option returns no dry-down threshold,
+because none is published for a field without a tube, and offers IRRI's instructions for making one
+instead.
+
+An input-validation pass across every calculator. The spray card refuses to answer at all when the wind
+is unknown, rather than reporting good conditions it has no basis for. Humidity outside 1 to 100%, a
+daily high below the daily low, and impossible grain moisture are all rejected. Sunshine hours outside
+the possible range are still clamped, but now say so, as every other FAO-56 clamp already did.
+
+The drying card honours the storage target you pick. It previously computed the target from your choice
+and then used 14% regardless, so choosing seed or long-term storage changed nothing. It now also tells
+you to stop when the grain is already dry enough, and refuses to compute a weight gain.
+
+A comments and suggestions card carries the author's address and a prefilled message including the build
+stamp. The frost card refuses readings taken during the day, when the air is still warming and tells you
+nothing about the coming night.
+
 ## What changed in 0.2.0
 
 Every calculator now carries two notes above its inputs: which government agency's guidance takes
