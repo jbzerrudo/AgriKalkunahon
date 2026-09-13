@@ -629,10 +629,21 @@ function frostIndicator(inp) {
 /* =====================================================================
    12. DISEASE WEATHER (minimal)  [SENTELHAS2008, HUTTON]
    ===================================================================== */
+/* Two things decide dew: how far the surface must cool to reach the dew point, and how fast it can.
+   Cloud and wind slow the cooling, but they cannot stop a degree of it, so air already near saturation
+   dews whatever the sky. The 2 C depression below which dew is called likely regardless of cloud is a
+   design assumption of this app, stated on the card: FAO defines dew by the surface reaching the dew
+   point and prints no such number. */
+const DEW = { nearSaturationC: 2.0 };
 function dewTonight(T, RH, sky, wind) {
   const td = tdewFromEa(es0(T) * RH / 100);
+  const depression = T - td;
   const clearCalm = (sky === 'clear') && (wind === 'calm' || wind === 'light');
-  return { dewPoint: td, code: clearCalm ? 'dew_likely_if_cools_to_dewpoint' : 'dew_less_likely', sources: ['FAO56', 'FAO_FROST'] };
+  let code;
+  if (depression <= DEW.nearSaturationC) code = 'dew_very_likely_near_saturation';
+  else if (clearCalm) code = 'dew_likely_if_cools_to_dewpoint';
+  else code = 'dew_less_likely';
+  return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
 /* days: [{Tmin, hoursRH90}] last two days */
 function huttonCriteria(days) {
@@ -720,6 +731,7 @@ const UNVERIFIED = [
   { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
   { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
   { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number, and none of the Benguet sources consulted (Marasigan 2017; Launio et al. 2020) gives a dew-point value.' },
+  { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none.' }
 ];
 
@@ -743,7 +755,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

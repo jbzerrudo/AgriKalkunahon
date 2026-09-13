@@ -223,6 +223,10 @@ console.log('\n== FROST INDICATOR ==');
 eq('clear calm 6 C RH 60: possible', A.frostIndicator({ T: 6, RH: 60, sky: 'clear', wind: 'calm' }).code, 'possible');
 eq('overcast: unlikely', A.frostIndicator({ T: 6, RH: 60, sky: 'overcast', wind: 'calm' }).code, 'unlikely');
 eq('clear calm 12 C RH 40 (Td low, not cold): watch', A.frostIndicator({ T: 12, RH: 40, sky: 'clear', wind: 'calm' }).code, 'watch');
+eq('dew: near-saturated air dews even under cloud', A.dewTonight(18, 94, 'overcast', 'calm').code, 'dew_very_likely_near_saturation');
+eq('dew: dry air under cloud does not', A.dewTonight(18, 40, 'overcast', 'calm').code, 'dew_less_likely');
+eq('dew: dry air on a clear calm night may', A.dewTonight(18, 40, 'clear', 'calm').code, 'dew_likely_if_cools_to_dewpoint');
+ok('dew: depression is reported', A.dewTonight(18, 94, 'overcast', 'calm').depression, 18 - A.tdewFromEa(A.es0(18) * 0.94), 1e-9, 'C');
 eq('frost 10.0 C counts as cold (source says at or below 10)', A.frostIndicator({ T: 10, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, true);
 eq('frost 10.1 C does not', A.frostIndicator({ T: 10.1, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, false);
 eq('frost reading 09:08 is refused', A.frostReadingUsable(9.13, 17.8, 5.8), false);
@@ -260,7 +264,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the four items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,HARVEST_PM7'); }
+  eq('UNVERIFIED list names the four items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,HARVEST_PM7'); }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;

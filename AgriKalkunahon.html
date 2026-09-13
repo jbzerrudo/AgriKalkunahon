@@ -745,10 +745,21 @@ function frostIndicator(inp) {
 /* =====================================================================
    12. DISEASE WEATHER (minimal)  [SENTELHAS2008, HUTTON]
    ===================================================================== */
+/* Two things decide dew: how far the surface must cool to reach the dew point, and how fast it can.
+   Cloud and wind slow the cooling, but they cannot stop a degree of it, so air already near saturation
+   dews whatever the sky. The 2 C depression below which dew is called likely regardless of cloud is a
+   design assumption of this app, stated on the card: FAO defines dew by the surface reaching the dew
+   point and prints no such number. */
+const DEW = { nearSaturationC: 2.0 };
 function dewTonight(T, RH, sky, wind) {
   const td = tdewFromEa(es0(T) * RH / 100);
+  const depression = T - td;
   const clearCalm = (sky === 'clear') && (wind === 'calm' || wind === 'light');
-  return { dewPoint: td, code: clearCalm ? 'dew_likely_if_cools_to_dewpoint' : 'dew_less_likely', sources: ['FAO56', 'FAO_FROST'] };
+  let code;
+  if (depression <= DEW.nearSaturationC) code = 'dew_very_likely_near_saturation';
+  else if (clearCalm) code = 'dew_likely_if_cools_to_dewpoint';
+  else code = 'dew_less_likely';
+  return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
 /* days: [{Tmin, hoursRH90}] last two days */
 function huttonCriteria(days) {
@@ -836,6 +847,7 @@ const UNVERIFIED = [
   { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
   { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
   { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption; the FAO frost manual supports the physics but prints no number, and none of the Benguet sources consulted (Marasigan 2017; Launio et al. 2020) gives a dew-point value.' },
+  { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none.' }
 ];
 
@@ -859,7 +871,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -969,8 +981,9 @@ const T = {
     possible: { en: 'Frost possible tonight. Protect if you can.', fil: 'Maaaring mag-andap ngayong gabi. Protektahan kung kaya.' },
     watch: { en: 'Watch tonight. Check the field in the hour before sunrise.', fil: 'Bantayan ngayong gabi. Tingnan ang bukid sa loob ng isang oras bago sumikat ang araw.' },
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
-    dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C.' },
-    dew_less_likely: { en: 'Dew less likely: cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: nababawasan ng ulap o hangin ang paglamig.' },
+    dew_very_likely_near_saturation: { en: 'Dew very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak ang hamog. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
+    dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
+    dew_less_likely: { en: 'Dew less likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
     harvest: { en: 'Expected harvest around {date} (about a week either way).', fil: 'Inaasahang ani sa bandang {date} (mga isang linggo bago o pagkatapos).' }
@@ -1417,9 +1430,22 @@ CARDS.disease = function (root) {
     const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
+    const L0 = store.loc, now0 = new Date();
+    const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), 8), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);
+    const nowH0 = now0.getHours() + now0.getMinutes() / 60;
+    const hhmm0 = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
+    /* Dew is a night question, so a reading taken while the air is still warming says nothing about it. */
+    if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
+      show(out, result({ level: 'info',
+        verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
+        lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
+        why: ['Dew forms as the surface cools through the night. Until the air has begun cooling, a reading carries no information about tonight: the air will warm further, peak, and only then start falling.'],
+        sources: ['FAO56', 'FAO_FROST'] }));
+      return;
+    }
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
-      show(out, result({ level: d.code === 'dew_likely_if_cools_to_dewpoint' ? 'caution' : 'go', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1) }), lines: [[bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
+      show(out, result({ level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: [[bi({ en: 'The air must cool', fil: 'Kailangang lumamig ang hangin ng' }), fmt(d.depression, 1) + ' °C to reach the dew point'], [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
         why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.',
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not estimated: the RH ≥ 90% method needs hourly humidity and local calibration (Sentelhas et al. 2008).'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008'] }));
@@ -1483,7 +1509,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.3.1, build fee8e260. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.3.1, build a4e0ae2f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
@@ -1516,7 +1542,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build fee8e260)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build a4e0ae2f)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa telepono mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1560,7 +1586,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build fee8e260.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build a4e0ae2f.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

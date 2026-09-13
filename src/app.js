@@ -96,8 +96,9 @@ const T = {
     possible: { en: 'Frost possible tonight. Protect if you can.', fil: 'Maaaring mag-andap ngayong gabi. Protektahan kung kaya.' },
     watch: { en: 'Watch tonight. Check the field in the hour before sunrise.', fil: 'Bantayan ngayong gabi. Tingnan ang bukid sa loob ng isang oras bago sumikat ang araw.' },
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
-    dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C.' },
-    dew_less_likely: { en: 'Dew less likely: cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: nababawasan ng ulap o hangin ang paglamig.' },
+    dew_very_likely_near_saturation: { en: 'Dew very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak ang hamog. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
+    dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
+    dew_less_likely: { en: 'Dew less likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
     harvest: { en: 'Expected harvest around {date} (about a week either way).', fil: 'Inaasahang ani sa bandang {date} (mga isang linggo bago o pagkatapos).' }
@@ -544,9 +545,22 @@ CARDS.disease = function (root) {
     const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
+    const L0 = store.loc, now0 = new Date();
+    const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), 8), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);
+    const nowH0 = now0.getHours() + now0.getMinutes() / 60;
+    const hhmm0 = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
+    /* Dew is a night question, so a reading taken while the air is still warming says nothing about it. */
+    if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
+      show(out, result({ level: 'info',
+        verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
+        lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
+        why: ['Dew forms as the surface cools through the night. Until the air has begun cooling, a reading carries no information about tonight: the air will warm further, peak, and only then start falling.'],
+        sources: ['FAO56', 'FAO_FROST'] }));
+      return;
+    }
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
-      show(out, result({ level: d.code === 'dew_likely_if_cools_to_dewpoint' ? 'caution' : 'go', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1) }), lines: [[bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
+      show(out, result({ level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: [[bi({ en: 'The air must cool', fil: 'Kailangang lumamig ang hangin ng' }), fmt(d.depression, 1) + ' °C to reach the dew point'], [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
         why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.',
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not estimated: the RH ≥ 90% method needs hourly humidity and local calibration (Sentelhas et al. 2008).'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008'] }));
