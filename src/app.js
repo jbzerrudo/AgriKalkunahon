@@ -61,6 +61,9 @@ const T = {
   windClass: { unknown: { en: 'Not known (2 m/s assumed)', fil: 'Hindi alam (ipagpapalagay na 2 m/s)' }, light: { en: 'Light (leaves barely move)', fil: 'Mahina (halos di gumagalaw ang dahon)' }, lightmoderate: { en: 'Light to moderate (leaves rustle)', fil: 'Mahina hanggang katamtaman (kumakaluskos ang dahon)' }, moderatestrong: { en: 'Moderate to strong (branches move)', fil: 'Katamtaman hanggang malakas (gumagalaw ang sanga)' }, strong: { en: 'Strong (small trees sway)', fil: 'Malakas (umuuga ang maliliit na puno)' } },
   methods: { surface: { en: 'Flooding, furrow or basin (60%)', fil: 'Pagbaha, kanal o basin (60%)' }, sprinkler: { en: 'Sprinkler (75%)', fil: 'Sprinkler (75%)' }, drip: { en: 'Drip (90%)', fil: 'Drip (90%)' } },
   verdicts: {
+    need_wind: { en: 'Enter the wind first. Without it this card cannot say whether spraying is safe.', fil: 'Ilagay muna ang hangin. Kung wala ito, hindi masasabi ng card na ito kung ligtas mag-spray.' },
+    bad_rh: { en: 'Humidity must be between 1 and 100%.', fil: 'Ang halumigmig ay dapat nasa 1 hanggang 100%.' },
+    bad_minmax: { en: 'The afternoon high must be above the morning low.', fil: 'Dapat mas mataas ang pinakamainit sa hapon kaysa pinakamalamig sa umaga.' },
     cf_ok: { en: 'Water level is right. Keep it there.', fil: 'Tama ang lalim ng tubig. Panatilihin ito.' },
     cf_top_up: { en: 'Top up. Bring the water to {lo} to {hi} cm.', fil: 'Dagdagan ang tubig. Iangat sa {lo} hanggang {hi} cm.' },
     cf_too_deep: { en: 'Too deep. Let it down to {lo} to {hi} cm.', fil: 'Masyadong malalim. Pababain sa {lo} hanggang {hi} cm.' },
@@ -106,6 +109,9 @@ const t = (obj, ph) => {
 const bi = (obj, ph, cls) => { const s = t(obj, ph); return el('span', { class: 'bi ' + (cls || '') }, el('span', { class: 'en' }, s.en), el('span', { class: 'fil' }, s.fil)); };
 
 /* explanations of engine method and flag codes */
+/* Humidity outside 1 to 100% puts the dew point above the air temperature, which is impossible and
+   silently poisons every card that derives one. Checked wherever a humidity reading is taken. */
+const badRH = (...v) => v.some(x => x != null && (x < 1 || x > 100));
 const CODES = {
   no_tube_no_published_threshold: 'Letting the field dry without a field water tube is not safe AWD. Safe AWD is defined by reading the water table in the tube, and the IRRI fact sheet gives no re-flood depth for a farmer without one. This app will not invent a number for it, so the answer below covers only what holds whatever method you use.',
   ea_given: 'Humidity from the vapour pressure you entered.', eq14_tdew: 'Humidity from the dew point (FAO-56 Eq. 14).', eq15_wetbulb: 'Humidity from the wet bulb (FAO-56 Eq. 15).',
@@ -118,6 +124,7 @@ const CODES = {
   eq19_less_desirable: 'FAO-56 prefers RHmax and RHmin over mean RH.', ea_capped_at_es: 'Humidity was above saturation and was capped.', rs_capped_at_rso: 'Estimated sunlight exceeded the clear-sky value and was capped (FAO-56 Eq. 50 rule).',
   eq50_average_over_days: 'Daily result from temperature-estimated sunlight: treat as a several-day average, not a true daily value (FAO-56).', eq51_monthly_only: 'The island relation is for monthly means; today\'s number carries a wide uncertainty (FAO-56).', eq51_altitude_limit: 'The island relation is stated for 0 to 100 m elevation only.',
   u2_floor_0_5: 'Wind below 0.5 m/s raised to 0.5 m/s (FAO-56 rule).', kc_ini_is_group_value: 'The initial-stage crop coefficient is a group value that FAO-56 calls a planning approximation (Table 12, footnote 1).', rhmin_default_45: 'Afternoon humidity assumed 45% (FAO-56 Table 12 standard) because no temperatures were given.',
+  sunshine_clamped_0_N: 'Sunshine hours were outside the possible range and have been limited to between zero and the daylight hours for your latitude and date. Check what you entered: the field wants hours of bright sunshine for the whole day, not minutes.',
   u2_clamped_1_6: 'Wind clamped to the 1 to 6 m/s range of FAO-56 Eq. 62.', rhmin_clamped_20_80: 'Afternoon humidity clamped to the 20 to 80% range of FAO-56 Eq. 62.', h_clamped_10: 'Crop height clamped to 10 m (FAO-56 Eq. 62).', kc_end_below_0_45_no_adjust: 'End-season coefficient below 0.45 is not climate-adjusted (FAO-56 Eq. 65 rule).', h_below_0_1_no_adjust: 'Crop shorter than 0.1 m: no climate adjustment (FAO-56).',
   postpone_awd_weeds: 'Weeds not yet managed: IRRI and PhilRice say postpone AWD 2 to 3 weeks.', rh_outside_corroborated_table: 'Humidity outside the 25 to 90% range of the corroborating EMC table.', temp_outside_corroborated_range: 'Temperature outside the 10 to 50 °C range covered by the corroborating data.',
   deltaT_below_2: 'Delta T below 2: very moist air, droplets survive and drift further; inversion risk (GRDC).', deltaT_8_10: 'Delta T 8 to 10: fast droplet evaporation, spray with caution (GRDC 2025).', deltaT_10_12: 'Delta T 10 to 12: only very coarse droplets (GRDC 2025).', deltaT_above_12: 'Delta T above 12: avoid spraying (GRDC 2025).',
@@ -233,6 +240,7 @@ CARDS.water = function (root) {
     out.innerHTML = '';
     if (inp.tmax == null || inp.tmin == null) { show(out, result({ level: 'info', verdict: { en: 'Enter the afternoon high and the morning low.', fil: 'Ilagay ang pinakamainit sa hapon at pinakamalamig sa umaga.' } })); return; }
     if (inp.tmax < inp.tmin) { show(out, result({ level: 'info', verdict: { en: 'The high must be above the low.', fil: 'Dapat mas mataas ang pinakamainit kaysa pinakamalamig.' } })); return; }
+    if (badRH(inp.rhmax, inp.rhmin)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L = store.loc, d = new Date(inp.date + 'T00:00:00'), J = todayJ(d);
     const u2 = inp.wind === 'unknown' ? null : A.WIND_CLASS_MS[inp.wind];
     const e = A.eto({ Tmax: inp.tmax, Tmin: inp.tmin, RHmax: inp.rhmax, RHmin: inp.rhmin, u2: u2, n: inp.sun, lat: L.lat, elev: L.elev, J: J, site: L.site });
@@ -349,11 +357,12 @@ CARDS.spray = function (root) {
     const inp = { T: num(Tn.input), RH: num(RH.input), wsel: wsel.input.value, wkmh: num(wkmh.input), label: num(label.input), mist: mist.input.checked, smoke: smoke.input.checked, hour: num(timeRow.input) };
     remember('spray', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
+    if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L = store.loc, J = todayJ(new Date()), st = A.sunTimes(L.lat, L.lon, J, 8);
     const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel ? parseFloat(inp.wsel) : null);
     const hoursToSunset = st.sunset - inp.hour, hoursAfterSunrise = inp.hour - st.sunrise;
     const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: inp.mist, smokeHanging: inp.smoke, labelMaxWindKmh: inp.label });
-    const level = { good: 'go', caution: 'caution', do_not_spray: 'stop' }[r.code];
+    const level = { good: 'go', caution: 'caution', do_not_spray: 'stop', need_wind: 'info' }[r.code];
     const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     const lines = [[bi({ en: 'Delta T (dry bulb minus wet bulb)', fil: 'Delta T' }), fmt(r.deltaT, 1) + ' °C (wet bulb ' + fmt(r.wetBulb, 1) + ' °C); good range 2 to 8'], [bi({ en: 'Wind', fil: 'Hangin' }), wind == null ? 'not entered' : fmt(wind, 0) + ' km/h; good range 3 to 15'], [bi({ en: 'Sunrise and sunset here today', fil: 'Sikat at lubog ng araw dito ngayon' }), hhmm(st.sunrise) + ' and ' + hhmm(st.sunset) + '; avoid from ' + hhmm(st.sunset - 2) + ' to ' + hhmm(st.sunrise + 2)]];
     const why = r.reasons.map(c => CODES[c]).filter(Boolean);
@@ -381,6 +390,7 @@ CARDS.dry = function (root) {
     const inp = { T: num(Tn.input), RH: num(RH.input), w: num(w.input), cav: num(cav.input), cavkg: num(cavkg.input) || A.CAVAN_KG, mc: num(mc.input), storage: storage.input.value };
     remember('dry', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
+    if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const weight = inp.w != null ? inp.w : (inp.cav != null ? inp.cav * inp.cavkg : null);
     const r = A.dryingDecision({ T: inp.T, RH: inp.RH, weightKg: weight, mc: inp.mc, cavanKg: inp.cavkg, storage: inp.storage });
     const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach 14% at this temperature', fil: 'Halumigmig na kailangan para umabot sa 14%' }), 'below ' + fmt(r.rhFor14, 0) + '%']];
@@ -413,6 +423,9 @@ CARDS.stress = function (root) {
     const inp = { crop: crop.input.value, phase: phase.value, d0x: num(d0x.input), d0n: num(d0n.input), d1x: num(d1x.input), d1n: num(d1n.input), d2x: num(d2x.input), d2n: num(d2n.input) };
     remember('stress', inp); out.innerHTML = '';
     if (inp.d0x == null || inp.d0n == null) return;
+    /* A swapped high and low silently produces a nonsense verdict, so refuse it as the water card does. */
+    const swapped = [[inp.d0x, inp.d0n], [inp.d1x, inp.d1n], [inp.d2x, inp.d2n]].some(([x, n]) => x != null && n != null && x < n);
+    if (swapped) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const days = [];
     if (inp.d2x != null && inp.d2n != null) days.push({ Tmax: inp.d2x, Tmin: inp.d2n });
     if (inp.d1x != null && inp.d1n != null) days.push({ Tmax: inp.d1x, Tmin: inp.d1n });
@@ -445,6 +458,7 @@ CARDS.frost = function (root) {
     const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, hollow: hollow.input.checked };
     remember('frost', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
+    if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const r = A.frostIndicator(inp);
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
@@ -520,6 +534,7 @@ CARDS.disease = function (root) {
   function run() {
     const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
+    if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
       show(out, result({ level: d.code === 'dew_likely_if_cools_to_dewpoint' ? 'caution' : 'go', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1) }), lines: [[bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],

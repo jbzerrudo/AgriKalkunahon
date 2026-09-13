@@ -155,7 +155,13 @@ function eto(inp) {
   let rs, rsMethod;
   const rso = Rso(z, ra);
   if (isNum(inp.Rs)) { rs = inp.Rs; rsMethod = 'rs_measured'; }
-  else if (isNum(inp.n)) { rs = RsAngstrom(clamp(inp.n, 0, N), N, ra); rsMethod = 'eq35_sunshine'; }
+  else if (isNum(inp.n)) {
+    // Sunshine cannot be negative, nor exceed the daylight hours N. Clamping is right, but say so:
+    // every other clamp in this function reports itself, and a farmer who typed minutes instead of
+    // hours should not get an answer quietly computed from a different number.
+    if (inp.n < 0 || inp.n > N) flags.push('sunshine_clamped_0_N');
+    rs = RsAngstrom(clamp(inp.n, 0, N), N, ra); rsMethod = 'eq35_sunshine';
+  }
   else if (inp.site === 'island') {
     rs = RsIsland(ra); rsMethod = 'eq51_island'; f.push('radiation_island_monthly');
     if (!inp.monthly) flags.push('eq51_monthly_only');
@@ -459,6 +465,9 @@ function sprayWindow(inp) {
     else if (w < SPRAY.windKmh.variableBelow) { level = Math.max(level, 1); reasons.push('wind_3_5_variable'); }
     if (w > maxW) { level = 2; reasons.push('wind_above_max'); }
   } else reasons.push('wind_unknown');
+  // Wind is the primary drift criterion in every label and in the GRDC bands. Without it the card
+  // reports that it cannot answer, rather than showing a green light it has no basis for.
+  const windUnknown = !isNum(w);
   // inversion window and indicators
   const night = (isNum(inp.hoursToSunset) && inp.hoursToSunset <= SPRAY.inversionBeforeSunsetH) || (isNum(inp.hoursAfterSunrise) && inp.hoursAfterSunrise <= SPRAY.inversionAfterSunriseH) || inp.isNight === true;
   if (night) {
@@ -468,7 +477,8 @@ function sprayWindow(inp) {
   if (inp.mistFogDew || inp.smokeHanging) { level = 2; reasons.push('inversion_indicators'); }
   // temperature
   if (inp.T > SPRAY.maxAirTempC) { level = Math.max(level, 1); reasons.push('temp_above_30'); }
-  return { code: ['good', 'caution', 'do_not_spray'][level], deltaT: dT, deltaTBand: dtBand, wetBulb: inp.T - dT, reasons: reasons, sources: src };
+  const code = (windUnknown && level < 2) ? 'need_wind' : ['good', 'caution', 'do_not_spray'][level];
+  return { code: code, deltaT: dT, deltaTBand: dtBand, wetBulb: inp.T - dT, reasons: reasons, sources: src };
 }
 
 /* =====================================================================

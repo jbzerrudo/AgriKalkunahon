@@ -140,6 +140,14 @@ eq('FAO TM4 efficiencies 60/75/90 encoded in UI (engine takes a number)', typeof
 
 console.log('\n== RICE AWD RULES (IRRI, DA AO 25-09, PhilRice) ==');
 eq('trigger dry season 15 cm', A.AWD.triggerCm.dry, 15); eq('trigger wet season 20 cm', A.AWD.triggerCm.wet, 20);
+{ const b = { Tmax: 33, Tmin: 24, RHmax: 90, RHmin: 55, u2: 2, lat: 15.5, elev: 40, J: 250, site: 'interior' };
+  eq('sunshine within daylight raises no flag', A.eto(Object.assign({}, b, { n: 6 })).flags.length, 0);
+  eq('sunshine above daylight is clamped and reported', A.eto(Object.assign({}, b, { n: 24 })).flags.indexOf('sunshine_clamped_0_N') >= 0, true);
+  eq('negative sunshine is clamped and reported', A.eto(Object.assign({}, b, { n: -5 })).flags.indexOf('sunshine_clamped_0_N') >= 0, true); }
+eq('spray refuses to say good without wind', A.sprayWindow({ T: 25, RH: 60, P: 101.3, hoursToSunset: 5, hoursAfterSunrise: 5 }).code, 'need_wind');
+eq('spray still says do-not-spray without wind when conditions are bad', A.sprayWindow({ T: 25, RH: 10, P: 101.3, hoursToSunset: 5, hoursAfterSunrise: 5 }).code, 'do_not_spray');
+eq('spray is good once wind is given', A.sprayWindow({ T: 25, RH: 60, P: 101.3, windKmh: 8, hoursToSunset: 5, hoursAfterSunrise: 5 }).code, 'good');
+
 /* three water-management methods */
 eq('CF early, shallow: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 10, pondedCm: 1 }).code, 'cf_top_up');
 eq('CF mid season, 7 cm: fine', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, pondedCm: 7 }).code, 'cf_ok');
