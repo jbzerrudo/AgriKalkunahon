@@ -843,7 +843,7 @@ const REFS = {
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
   MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
-  FROSTPH: { cls: 'extension', cite: 'DOST-PAGASA and DOST-NRCP. Frost Risk Observation and Support Tool (FROST-PH), introduced to Benguet LGUs on 22 April 2026: near real-time monitoring of frost events, reporting, assessment of occurrences, and access to frost risk data. Part of the FrostRiskPH project (September 2024 to August 2026), project leader Dr. Joseph Q. Basconcillo. PAGASA is the authority on frost in Benguet; where FROST-PH and this app differ, follow FROST-PH.', url: 'https://egallery.nrcp.dost.gov.ph/cluster/frost-ph-frost-risk-observation-and-support-tool-in-the-philippines/' },
+  FROSTPH: { cls: 'extension', cite: 'DOST-PAGASA and DOST-NRCP. Frost Risk Observation and Support Tool (FROST-PH), introduced to Benguet LGUs on 22 April 2026: near real-time monitoring of frost events, reporting, assessment of occurrences, and access to frost risk data. Part of the FrostRiskPH project (September 2024 to August 2026), project leader Dr. Joseph Q. Basconcillo. PAGASA is the authority on frost in Benguet; where FROST-PH and this app differ, follow FROST-PH.', url: 'https://egallery.nrcp.dost.gov.ph/cluster/frost-ph-frost-risk-observation-and-support-tool-in-the-philippines/', urllabel: 'project abstract', url2: 'https://nrcp.dost.gov.ph/benguet-lgus-farmers-join-dost-in-designing-a-frost-risk-tool-for-highland-crops/', url2label: 'NRCP news' },
   CAUBA2025: { cls: 'primary', cite: 'Cauba, A.G. Jr., Darvishzadeh, R., Schlund, M., Nelson, A., Laborte, A. (2025). Estimation of transplanting and harvest dates of rice crops in the Philippines using Sentinel-1 data. Remote Sensing Applications: Society and Environment 37:101435. Harvest-date root mean squared differences against farmer-reported dates across 99 fields in Agusan del Sur, Cagayan and Leyte: 16 to 17.5 days in the dry season, 8 to 22 days in the wet.', url: 'https://doi.org/10.1016/j.rsase.2024.101435' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
@@ -1074,6 +1074,14 @@ function show(out, node) { out.appendChild(node); try { node.scrollIntoView({ be
 const recall = (card) => store.inputs[card] || {};
 
 /* ---------- result rendering ---------- */
+/* A reference may carry a second URL (url2), for instance a project's own abstract alongside the
+   news item that reports it. Each link is labelled, so the reader knows which is which. */
+function refLinks(r) {
+  if (!r || !r.url) return null;
+  const frag = el('span', { class: 'reflinks' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.urllabel || 'link'));
+  if (r.url2) { frag.appendChild(document.createTextNode(' ')); frag.appendChild(el('a', { href: r.url2, target: '_blank', rel: 'noopener' }, r.url2label || 'link')); }
+  return frag;
+}
 function result(spec) {
   // spec: {level:'go'|'caution'|'stop'|'info', verdict:{en,fil}, lines:[[label, value]], why:[str], flags:[str], assumptions:[str], limits:[str], sources:[id]}
   const box = el('section', { class: 'result ' + spec.level });
@@ -1087,7 +1095,7 @@ function result(spec) {
   if (spec.sources && spec.sources.length) {
     const d = el('details', null, el('summary', null, bi(T.ui.sources)));
     const ul = el('ul');
-    spec.sources.forEach(id => { const r = A.REFS[id]; if (r) ul.appendChild(el('li', null, el('span', { class: 'cls ' + r.cls }, r.cls), ' ', r.cite, ' ', r.url ? el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'link') : null)); });
+    spec.sources.forEach(id => { const r = A.REFS[id]; if (r) ul.appendChild(el('li', null, el('span', { class: 'cls ' + r.cls }, r.cls), ' ', r.cite, ' ', refLinks(r))); });
     d.appendChild(ul); box.appendChild(d);
   }
   return box;
@@ -1524,7 +1532,7 @@ CARDS.sources = function (root) {
     if (!items.length) return;
     root.appendChild(el('h3', null, groups[cls]));
     const ul = el('ul', { class: 'refs' });
-    items.forEach(k => { const r = A.REFS[k]; ul.appendChild(el('li', null, el('code', null, k), ' ', r.cite, ' ', r.url ? el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'link') : null)); });
+    items.forEach(k => { const r = A.REFS[k]; ul.appendChild(el('li', null, el('code', null, k), ' ', r.cite, ' ', refLinks(k && r))); });
     root.appendChild(ul);
   });
   root.appendChild(el('h3', null, bi({ en: 'Cannot be verified against a primary source', fil: 'Hindi mabeberipika sa pangunahing sanggunian' })));
@@ -1538,7 +1546,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 57c4962b. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 4817f9c9. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1579,7 +1587,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 57c4962b)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 4817f9c9)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1623,7 +1631,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 57c4962b.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 4817f9c9.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

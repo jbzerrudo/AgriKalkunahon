@@ -179,6 +179,14 @@ function show(out, node) { out.appendChild(node); try { node.scrollIntoView({ be
 const recall = (card) => store.inputs[card] || {};
 
 /* ---------- result rendering ---------- */
+/* A reference may carry a second URL (url2), for instance a project's own abstract alongside the
+   news item that reports it. Each link is labelled, so the reader knows which is which. */
+function refLinks(r) {
+  if (!r || !r.url) return null;
+  const frag = el('span', { class: 'reflinks' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.urllabel || 'link'));
+  if (r.url2) { frag.appendChild(document.createTextNode(' ')); frag.appendChild(el('a', { href: r.url2, target: '_blank', rel: 'noopener' }, r.url2label || 'link')); }
+  return frag;
+}
 function result(spec) {
   // spec: {level:'go'|'caution'|'stop'|'info', verdict:{en,fil}, lines:[[label, value]], why:[str], flags:[str], assumptions:[str], limits:[str], sources:[id]}
   const box = el('section', { class: 'result ' + spec.level });
@@ -192,7 +200,7 @@ function result(spec) {
   if (spec.sources && spec.sources.length) {
     const d = el('details', null, el('summary', null, bi(T.ui.sources)));
     const ul = el('ul');
-    spec.sources.forEach(id => { const r = A.REFS[id]; if (r) ul.appendChild(el('li', null, el('span', { class: 'cls ' + r.cls }, r.cls), ' ', r.cite, ' ', r.url ? el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'link') : null)); });
+    spec.sources.forEach(id => { const r = A.REFS[id]; if (r) ul.appendChild(el('li', null, el('span', { class: 'cls ' + r.cls }, r.cls), ' ', r.cite, ' ', refLinks(r))); });
     d.appendChild(ul); box.appendChild(d);
   }
   return box;
@@ -629,7 +637,7 @@ CARDS.sources = function (root) {
     if (!items.length) return;
     root.appendChild(el('h3', null, groups[cls]));
     const ul = el('ul', { class: 'refs' });
-    items.forEach(k => { const r = A.REFS[k]; ul.appendChild(el('li', null, el('code', null, k), ' ', r.cite, ' ', r.url ? el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'link') : null)); });
+    items.forEach(k => { const r = A.REFS[k]; ul.appendChild(el('li', null, el('code', null, k), ' ', r.cite, ' ', refLinks(k && r))); });
     root.appendChild(ul);
   });
   root.appendChild(el('h3', null, bi({ en: 'Cannot be verified against a primary source', fil: 'Hindi mabeberipika sa pangunahing sanggunian' })));
