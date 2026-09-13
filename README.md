@@ -150,7 +150,8 @@ Archived on Zenodo, so it can be cited in a thesis or paper.
 **Concept DOI** [10.5281/zenodo.22726046](https://doi.org/10.5281/zenodo.22726046) always resolves to the latest
 version. Use it when you mean the tool in general.
 
-**Version DOI** every release gets its own: v0.3.1 is
+**Version DOI** every release gets its own: v0.4.0 is
+[10.5281/zenodo.22735323](https://doi.org/10.5281/zenodo.22735323), v0.3.1 is
 [10.5281/zenodo.22734515](https://doi.org/10.5281/zenodo.22734515), v0.2.0 is
 [10.5281/zenodo.22728972](https://doi.org/10.5281/zenodo.22728972) and v0.1.0 is
 [10.5281/zenodo.22726047](https://doi.org/10.5281/zenodo.22726047). Use the version DOI in a paper, so
@@ -158,15 +159,15 @@ a reader gets the exact build you used. (v0.3.0 was published while Zenodo was d
 v0.3.1 is the same app.)
 
 > Zerrudo, J. (2026). *AgriKalkunahon: an offline farm-decision calculator for the Philippines*
-> (version 0.3.1). Zenodo. https://doi.org/10.5281/zenodo.22734515
+> (version 0.4.0). Zenodo. https://doi.org/10.5281/zenodo.22735323
 
 ```bibtex
 @software{zerrudo_agrikalkunahon_2026,
   author  = {Zerrudo, Jef},
   title   = {AgriKalkunahon: an offline farm-decision calculator for the Philippines},
-  version = {0.3.1},
+  version = {0.4.0},
   year    = {2026},
-  doi     = {10.5281/zenodo.22734515},
+  doi     = {10.5281/zenodo.22735323},
   url     = {https://jbzerrudo.github.io/AgriKalkunahon/}
 }
 ```
