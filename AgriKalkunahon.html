@@ -1216,14 +1216,24 @@ CARDS.rain = function (root) {
   const prev = recall('rain');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
   const P = numInput('P', { en: 'Rain this month (mm)', fil: 'Ulan ngayong buwan (mm)' }, prev.P, 1);
-  form.append(P.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  const area = numInput('rArea', { en: 'Your field (hectares), if you want the volume', fil: 'Lawak ng bukid (ektarya), kung gusto ninyo ang dami' }, prev.area, 0.01);
+  form.append(P.row, area.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { P: num(P.input) }; remember('rain', inp); out.innerHTML = '';
+    const inp = { P: num(P.input), area: num(area.input) }; remember('rain', inp); out.innerHTML = '';
     if (inp.P == null) return;
+    if (inp.area != null && inp.area <= 0) { show(out, result({ level: 'info', verdict: { en: 'Field area must be greater than zero.', fil: 'Dapat mas malaki sa sero ang lawak ng bukid.' } })); return; }
     const pe = A.effectiveRainMonthly(inp.P);
+    /* Millimetres mean nothing to most farmers until they are shown as a depth of standing water and as
+       a volume per hectare. Both are exact conversions, not estimates: 1 mm is 1 litre per square metre. */
+    const ha = inp.area != null ? inp.area : 1;
+    const cm = v => fmt(v / 10, 1), m3 = v => fmt(A.mmToM3PerHa(v) * ha, 0), litres = v => fmt(A.mmToM3PerHa(v) * ha, 0);
+    const onArea = { en: inp.area != null ? 'on your ' + fmt(ha, 2) + ' ha' : 'on one hectare', fil: inp.area != null ? 'sa ' + fmt(ha, 2) + ' ektarya ninyo' : 'sa isang ektarya' };
     show(out, result({ level: 'info', verdict: { en: 'Of ' + fmt(inp.P, 0) + ' mm, about ' + fmt(pe, 0) + ' mm counts for the crop this month.', fil: 'Sa ' + fmt(inp.P, 0) + ' mm, mga ' + fmt(pe, 0) + ' mm ang napakinabangan ng pananim ngayong buwan.' },
-      lines: [[bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm']],
+      lines: [[bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm'],
+              [bi({ en: 'What a millimetre is', fil: 'Ano ang isang milimetro' }), bi({ en: '1 mm of rain is 1 litre on every square metre. The depth is the same whatever the size of your field; only the volume changes.', fil: 'Ang 1 mm na ulan ay 1 litro sa bawat metro kuwadrado. Pareho ang lalim gaano man kalaki ang bukid ninyo; ang dami lang ang nagbabago.' })],
+              [bi({ en: 'All ' + fmt(inp.P, 0) + ' mm, as water', fil: 'Lahat ng ' + fmt(inp.P, 0) + ' mm, bilang tubig' }), bi({ en: cm(inp.P) + ' cm deep standing on the field, if none ran off or soaked away: ' + m3(inp.P) + ' m\u00b3 (' + litres(inp.P) + ' thousand litres) ' + onArea.en + '.', fil: cm(inp.P) + ' cm ang lalim ng tubig sa bukid, kung walang umagos o sumipsip pailalim: ' + m3(inp.P) + ' m\u00b3 (' + litres(inp.P) + ' libong litro) ' + onArea.fil + '.' })],
+              [bi({ en: 'The ' + fmt(pe, 0) + ' mm that counts, as water', fil: 'Ang ' + fmt(pe, 0) + ' mm na napakinabangan, bilang tubig' }), bi({ en: cm(pe) + ' cm deep: ' + m3(pe) + ' m\u00b3 (' + litres(pe) + ' thousand litres) ' + onArea.en + '.', fil: cm(pe) + ' cm ang lalim: ' + m3(pe) + ' m\u00b3 (' + litres(pe) + ' libong litro) ' + onArea.fil + '.' })]],
       why: ['FAO Training Manual 3: Pe = 0.8 P − 25 for P above 75 mm/month, Pe = 0.6 P − 10 below, never negative.'],
       limits: ['A monthly planning number for rain spread over the month on slopes up to 4 to 5% (FAO). Not for a single storm: 400 mm in three days is mostly runoff although the formula still returns 295 mm.', 'For today\'s watering decision the water card takes your gauge rainfall directly (FAO-56 water balance).'],
       sources: ['FAO_TM3'] }));
@@ -1514,7 +1524,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 03775e15. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 77bd5e60. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1555,7 +1565,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 03775e15)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 77bd5e60)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1599,7 +1609,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 03775e15.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 77bd5e60.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

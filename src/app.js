@@ -326,14 +326,24 @@ CARDS.rain = function (root) {
   const prev = recall('rain');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
   const P = numInput('P', { en: 'Rain this month (mm)', fil: 'Ulan ngayong buwan (mm)' }, prev.P, 1);
-  form.append(P.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  const area = numInput('rArea', { en: 'Your field (hectares), if you want the volume', fil: 'Lawak ng bukid (ektarya), kung gusto ninyo ang dami' }, prev.area, 0.01);
+  form.append(P.row, area.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { P: num(P.input) }; remember('rain', inp); out.innerHTML = '';
+    const inp = { P: num(P.input), area: num(area.input) }; remember('rain', inp); out.innerHTML = '';
     if (inp.P == null) return;
+    if (inp.area != null && inp.area <= 0) { show(out, result({ level: 'info', verdict: { en: 'Field area must be greater than zero.', fil: 'Dapat mas malaki sa sero ang lawak ng bukid.' } })); return; }
     const pe = A.effectiveRainMonthly(inp.P);
+    /* Millimetres mean nothing to most farmers until they are shown as a depth of standing water and as
+       a volume per hectare. Both are exact conversions, not estimates: 1 mm is 1 litre per square metre. */
+    const ha = inp.area != null ? inp.area : 1;
+    const cm = v => fmt(v / 10, 1), m3 = v => fmt(A.mmToM3PerHa(v) * ha, 0), litres = v => fmt(A.mmToM3PerHa(v) * ha, 0);
+    const onArea = { en: inp.area != null ? 'on your ' + fmt(ha, 2) + ' ha' : 'on one hectare', fil: inp.area != null ? 'sa ' + fmt(ha, 2) + ' ektarya ninyo' : 'sa isang ektarya' };
     show(out, result({ level: 'info', verdict: { en: 'Of ' + fmt(inp.P, 0) + ' mm, about ' + fmt(pe, 0) + ' mm counts for the crop this month.', fil: 'Sa ' + fmt(inp.P, 0) + ' mm, mga ' + fmt(pe, 0) + ' mm ang napakinabangan ng pananim ngayong buwan.' },
-      lines: [[bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm']],
+      lines: [[bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm'],
+              [bi({ en: 'What a millimetre is', fil: 'Ano ang isang milimetro' }), bi({ en: '1 mm of rain is 1 litre on every square metre. The depth is the same whatever the size of your field; only the volume changes.', fil: 'Ang 1 mm na ulan ay 1 litro sa bawat metro kuwadrado. Pareho ang lalim gaano man kalaki ang bukid ninyo; ang dami lang ang nagbabago.' })],
+              [bi({ en: 'All ' + fmt(inp.P, 0) + ' mm, as water', fil: 'Lahat ng ' + fmt(inp.P, 0) + ' mm, bilang tubig' }), bi({ en: cm(inp.P) + ' cm deep standing on the field, if none ran off or soaked away: ' + m3(inp.P) + ' m\u00b3 (' + litres(inp.P) + ' thousand litres) ' + onArea.en + '.', fil: cm(inp.P) + ' cm ang lalim ng tubig sa bukid, kung walang umagos o sumipsip pailalim: ' + m3(inp.P) + ' m\u00b3 (' + litres(inp.P) + ' libong litro) ' + onArea.fil + '.' })],
+              [bi({ en: 'The ' + fmt(pe, 0) + ' mm that counts, as water', fil: 'Ang ' + fmt(pe, 0) + ' mm na napakinabangan, bilang tubig' }), bi({ en: cm(pe) + ' cm deep: ' + m3(pe) + ' m\u00b3 (' + litres(pe) + ' thousand litres) ' + onArea.en + '.', fil: cm(pe) + ' cm ang lalim: ' + m3(pe) + ' m\u00b3 (' + litres(pe) + ' libong litro) ' + onArea.fil + '.' })]],
       why: ['FAO Training Manual 3: Pe = 0.8 P − 25 for P above 75 mm/month, Pe = 0.6 P − 10 below, never negative.'],
       limits: ['A monthly planning number for rain spread over the month on slopes up to 4 to 5% (FAO). Not for a single storm: 400 mm in three days is mostly runoff although the formula still returns 295 mm.', 'For today\'s watering decision the water card takes your gauge rainfall directly (FAO-56 water balance).'],
       sources: ['FAO_TM3'] }));
