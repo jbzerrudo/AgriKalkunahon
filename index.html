@@ -634,7 +634,17 @@ const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
      January and February. Launio et al. (2020): "Frost is known to occur from December to February",
      and farmers now expect episodes "until March". Marasigan et al. (2025) analyse November to March.
      Months are 1 to 12. This is Benguet; the app carries no frost climatology for anywhere else. */
-  seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1 };
+  seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1,
+  /* A reading only speaks to the coming night once the air has started cooling. Through the morning and
+     the middle of the day it is still warming or at its daily peak, so the card refuses those readings
+     instead of dressing them up as a verdict. Window: from this many hours before sunset, to sunrise. */
+  readingBeforeSunsetH: 2 };
+/* All hours are local decimal hours, 0 to 24. Handles the window wrapping past midnight. */
+function frostReadingUsable(nowH, sunsetH, sunriseH) {
+  const start = ((sunsetH - FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+  const end = ((sunriseH % 24) + 24) % 24;
+  return start > end ? (nowH >= start || nowH <= end) : (nowH >= start && nowH <= end);
+}
 /* month: 1 to 12. Returns 'peak', 'core', 'edge' or 'outside'. */
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
@@ -779,7 +789,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -1214,12 +1224,26 @@ CARDS.frost = function (root) {
     const r = A.frostIndicator(inp);
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
-    const L = store.loc, st = A.sunTimes(L.lat, L.lon, todayJ(new Date(Date.now() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
+    const L = store.loc, now0 = new Date();
+    const st = A.sunTimes(L.lat, L.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
+    const stToday = A.sunTimes(L.lat, L.lon, todayJ(now0), 8);                            // tonight's sunset
     const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     /* How far this reading sits from the coldest hour. The device clock supplies the reading time, so
        the farmer is not asked for it. No cooling rate is applied: this weighs the reading, it does not
        extrapolate it. */
-    const nowD = new Date(), nowH = nowD.getHours() + nowD.getMinutes() / 60;
+    const nowD = now0, nowH = nowD.getHours() + nowD.getMinutes() / 60;
+    /* Refuse a daytime reading rather than judging tonight from air that is still warming. */
+    if (!A.frostReadingUsable(nowH, stToday.sunset, st.sunrise)) {
+      const opens = ((stToday.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+      show(out, result({ level: 'info',
+        verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
+        lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm(opens) + ' (sunset ' + hhmm(stToday.sunset) + ')'],
+                [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')']],
+        why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
+        limits: ['The time comes from this device\'s clock, and the card assumes Philippine time.'],
+        sources: ['FAO_FROST'] }));
+      return;
+    }
     const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
     const weight = toMin > 10 ? 'early' : (toMin > 4.5 ? 'middle' : 'close');   // a Philippine night runs about 12 hours
     const weightText = {
@@ -1335,7 +1359,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build 1f97d09c. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.2.0, build d6638231. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
@@ -1375,7 +1399,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 1f97d09c.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build d6638231.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

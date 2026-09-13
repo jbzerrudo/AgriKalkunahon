@@ -421,12 +421,26 @@ CARDS.frost = function (root) {
     const r = A.frostIndicator(inp);
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
-    const L = store.loc, st = A.sunTimes(L.lat, L.lon, todayJ(new Date(Date.now() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
+    const L = store.loc, now0 = new Date();
+    const st = A.sunTimes(L.lat, L.lon, todayJ(new Date(now0.getTime() + 86400000)), 8);  // tomorrow's sunrise: the card is about tonight
+    const stToday = A.sunTimes(L.lat, L.lon, todayJ(now0), 8);                            // tonight's sunset
     const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     /* How far this reading sits from the coldest hour. The device clock supplies the reading time, so
        the farmer is not asked for it. No cooling rate is applied: this weighs the reading, it does not
        extrapolate it. */
-    const nowD = new Date(), nowH = nowD.getHours() + nowD.getMinutes() / 60;
+    const nowD = now0, nowH = nowD.getHours() + nowD.getMinutes() / 60;
+    /* Refuse a daytime reading rather than judging tonight from air that is still warming. */
+    if (!A.frostReadingUsable(nowH, stToday.sunset, st.sunrise)) {
+      const opens = ((stToday.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+      show(out, result({ level: 'info',
+        verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
+        lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm(opens) + ' (sunset ' + hhmm(stToday.sunset) + ')'],
+                [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')']],
+        why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
+        limits: ['The time comes from this device\'s clock, and the card assumes Philippine time.'],
+        sources: ['FAO_FROST'] }));
+      return;
+    }
     const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
     const weight = toMin > 10 ? 'early' : (toMin > 4.5 ? 'middle' : 'close');   // a Philippine night runs about 12 hours
     const weightText = {

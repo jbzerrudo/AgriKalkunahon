@@ -522,7 +522,17 @@ const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
      January and February. Launio et al. (2020): "Frost is known to occur from December to February",
      and farmers now expect episodes "until March". Marasigan et al. (2025) analyse November to March.
      Months are 1 to 12. This is Benguet; the app carries no frost climatology for anywhere else. */
-  seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1 };
+  seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1,
+  /* A reading only speaks to the coming night once the air has started cooling. Through the morning and
+     the middle of the day it is still warming or at its daily peak, so the card refuses those readings
+     instead of dressing them up as a verdict. Window: from this many hours before sunset, to sunrise. */
+  readingBeforeSunsetH: 2 };
+/* All hours are local decimal hours, 0 to 24. Handles the window wrapping past midnight. */
+function frostReadingUsable(nowH, sunsetH, sunriseH) {
+  const start = ((sunsetH - FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+  const end = ((sunriseH % 24) + 24) % 24;
+  return start > end ? (nowH >= start || nowH <= end) : (nowH >= start && nowH <= end);
+}
 /* month: 1 to 12. Returns 'peak', 'core', 'edge' or 'outside'. */
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
@@ -667,7 +677,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
