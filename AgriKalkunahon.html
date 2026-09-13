@@ -825,7 +825,7 @@ const REFS = {
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
   DA_AO25: { cls: 'regulatory', cite: 'Department of Agriculture (2009). Administrative Order No. 25 s. 2009, Guidelines for the adoption of water saving technologies in irrigated rice production systems in the Philippines, Section 5.', url: 'https://legaldex.com/laws/guidelines-for-the-adoption-of-water-saving-technologies-wst-in' },
   PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD); Saludez (2022) in PhilRice news.', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
-  PALAYCHECK: { cls: 'extension', cite: 'PhilRice (2022). PalayCheck System, 2022 Revised Edition (Key Checks 6 and 9; cavan 50 kg).', url: 'https://www.philrice.gov.ph/wp-content/uploads/2023/02/PalayCheck-System-2022-Revised-Edition.pdf' },
+  PALAYCHECK: { cls: 'extension', cite: 'PhilRice (2022). PalayCheck System, 2022 Revised Edition (Key Check 6; Key Check 8, harvesting at the right time: 85 to 90 per cent golden-yellow grains for manual harvest and 90 to 95 per cent by combine, 18 to 21 per cent moisture in the dry season and 20 to 25 per cent in the wet, field drained 1 to 2 weeks before harvest; Key Check 9; cavan 50 kg).', url: 'https://www.philrice.gov.ph/wp-content/uploads/2023/02/PalayCheck-System-2022-Revised-Edition.pdf' },
   GRDC2025: { cls: 'extension', cite: 'GRDC (2025). Practical tips for spraying, revised January 2025.', url: 'https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf' },
   GRDC2022: { cls: 'extension', cite: 'GRDC (2022). Weather essentials for pesticide application, grower edition.', url: 'https://grdc.com.au/__data/assets/pdf_file/0033/579525/GRDC_WeatherEssen2205_Grower_Final.pdf' },
   GRDC_MANUAL: { cls: 'extension', cite: 'GRDC. Spray Application Manual for Grain Growers, Module 10 (10.2, 10.3, 10.4).', url: 'https://grdc.com.au/resources-and-publications/grownotes/technical-manuals/spray-application-manual' },
@@ -844,6 +844,7 @@ const REFS = {
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, R.T. et al. (2021). Protected cultivation improves growth of Lollo Rossa lettuce under chilling conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
   MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
   FROSTPH: { cls: 'extension', cite: 'DOST-PAGASA and DOST-NRCP. Frost Risk Observation and Support Tool (FROST-PH), introduced to Benguet LGUs on 22 April 2026: near real-time monitoring of frost events, reporting, assessment of occurrences, and access to frost risk data. Part of the FrostRiskPH project (September 2024 to August 2026), project leader Dr. Joseph Q. Basconcillo. PAGASA is the authority on frost in Benguet; where FROST-PH and this app differ, follow FROST-PH.', url: 'https://nrcp.dost.gov.ph/benguet-lgus-farmers-join-dost-in-designing-a-frost-risk-tool-for-highland-crops/' },
+  CAUBA2024: { cls: 'secondary', cite: 'Cauba, A.G. Jr., Darvishzadeh, R., Schlund, M., Nelson, A., Laborte, A. Estimation of Transplanting and Harvest Dates of Rice Crops in the Philippines Using Sentinel-1 Data. SSRN preprint 4939576, not peer reviewed. Harvest-date root mean squared differences against farmer-reported dates across 99 fields in Agusan del Sur, Cagayan and Leyte: 16 to 17.5 days in the dry season, 8 to 22 days in the wet.', url: 'https://ssrn.com/abstract=4939576' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -857,7 +858,7 @@ const UNVERIFIED = [
   { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
   { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption. The FAO frost manual prints no threshold: its recommended method is a regression, Tmin = a T + b Td + c, from the temperature and dew point two hours after sunset on radiative frost nights, whose coefficients must be fitted locally from historical records. No such fit exists for Benguet, and neither Marasigan (2017) nor Launio et al. (2020) gives a dew-point value.' },
   { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
-  { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none.' }
+  { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2024), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, and a preprint rather than a peer-reviewed paper, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' }
 ];
 
 const API = {
@@ -995,7 +996,7 @@ const T = {
     dew_less_likely: { en: 'Dew less likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
-    harvest: { en: 'Expected harvest around {date} (about a week either way).', fil: 'Inaasahang ani sa bandang {date} (mga isang linggo bago o pagkatapos).' }
+    harvest: { en: 'Expected harvest around {date}. Judge by the grain, not by the date.', fil: 'Inaasahang ani sa bandang {date}. Ang butil ang basehan, hindi ang petsa.' }
   }
 };
 const t = (obj, ph) => {
@@ -1497,14 +1498,21 @@ CARDS.timing = function (root) {
     if (inp.tx != null && inp.tn != null && inp.tx < inp.tn) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const L = store.loc, now = new Date(), J = todayJ(now);
     const h = A.harvestWindow(inp.variety, inp.method, new Date(inp.sow + 'T00:00:00Z'));
-    const lines = [[bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'], [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
+    /* The date is the weakest thing on this card, so it leads with what the farmer can see instead.
+       PalayCheck Key Check 8 gives criteria in the field; the date only says when to start looking. */
+    const lines = [
+      [bi({ en: 'When to cut (PhilRice PalayCheck, Key Check 8)', fil: 'Kailan gapasin (PhilRice PalayCheck, Key Check 8)' }), bi({ en: '85 to 90% of the grains golden yellow for manual harvest, 90 to 95% with a combine.', fil: '85 hanggang 90% ng butil ay dilaw-ginto kung manu-manong gapas, 90 hanggang 95% kung combine harvester.' }), 'key'],
+      [bi({ en: 'Grain moisture at harvest', fil: 'Halumigmig ng butil sa pag-ani' }), bi({ en: '18 to 21% in the dry season, 20 to 25% in the wet season.', fil: '18 hanggang 21% sa tag-araw, 20 hanggang 25% sa tag-ulan.' })],
+      [bi({ en: 'Before harvest', fil: 'Bago umani' }), bi({ en: 'Drain the field 1 to 2 weeks before the expected date.', fil: 'Patuyuin ang bukid 1 hanggang 2 linggo bago ang inaasahang petsa.' })],
+      [bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'],
+      [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
     const flags = h.flag ? [CODES[h.flag]] : [];
     if (inp.plant && inp.tx != null && inp.tn != null) {
       const days = Math.max(0, Math.round((now - new Date(inp.plant + 'T00:00:00')) / 86400000));
       const g = A.gdd(inp.tx, inp.tn, 10, 30, 2) * days;
       lines.push([bi({ en: 'Corn heat units since planting', fil: 'Init na naipon ng mais mula nang itanim' }), fmt(g, 0) + ' °C·day over ' + days + ' days (base 10 °C, cap 30 °C, McMaster and Wilhelm method 2); no stage target is published for Philippine hybrids, so this is a tracker only']);
     }
-    show(out, result({ level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['Plus or minus one week on the harvest date is a design assumption; PhilRice gives none.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['MCMASTER1997', 'FAO56']) }));
+    show(out, result({ level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['The harvest date is an orientation, not a promise: it says when to start looking at the crop. Judge the cut by PalayCheck Key Check 8 above.', 'Any window of about a week around this date would be a design assumption; PhilRice publishes none, and a week is probably too narrow. Cauba et al. (2024) estimated harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates and report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, and a preprint, but it is the closest published measure and it is wider than a week.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['PALAYCHECK', 'CAUBA2024', 'MCMASTER1997', 'FAO56']) }));
   }
 };
 
@@ -1530,7 +1538,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 5ac23ae6. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 281c9abc. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1571,7 +1579,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 5ac23ae6)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 281c9abc)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1615,7 +1623,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 5ac23ae6.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 281c9abc.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

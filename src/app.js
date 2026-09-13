@@ -101,7 +101,7 @@ const T = {
     dew_less_likely: { en: 'Dew less likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
-    harvest: { en: 'Expected harvest around {date} (about a week either way).', fil: 'Inaasahang ani sa bandang {date} (mga isang linggo bago o pagkatapos).' }
+    harvest: { en: 'Expected harvest around {date}. Judge by the grain, not by the date.', fil: 'Inaasahang ani sa bandang {date}. Ang butil ang basehan, hindi ang petsa.' }
   }
 };
 const t = (obj, ph) => {
@@ -603,14 +603,21 @@ CARDS.timing = function (root) {
     if (inp.tx != null && inp.tn != null && inp.tx < inp.tn) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const L = store.loc, now = new Date(), J = todayJ(now);
     const h = A.harvestWindow(inp.variety, inp.method, new Date(inp.sow + 'T00:00:00Z'));
-    const lines = [[bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'], [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
+    /* The date is the weakest thing on this card, so it leads with what the farmer can see instead.
+       PalayCheck Key Check 8 gives criteria in the field; the date only says when to start looking. */
+    const lines = [
+      [bi({ en: 'When to cut (PhilRice PalayCheck, Key Check 8)', fil: 'Kailan gapasin (PhilRice PalayCheck, Key Check 8)' }), bi({ en: '85 to 90% of the grains golden yellow for manual harvest, 90 to 95% with a combine.', fil: '85 hanggang 90% ng butil ay dilaw-ginto kung manu-manong gapas, 90 hanggang 95% kung combine harvester.' }), 'key'],
+      [bi({ en: 'Grain moisture at harvest', fil: 'Halumigmig ng butil sa pag-ani' }), bi({ en: '18 to 21% in the dry season, 20 to 25% in the wet season.', fil: '18 hanggang 21% sa tag-araw, 20 hanggang 25% sa tag-ulan.' })],
+      [bi({ en: 'Before harvest', fil: 'Bago umani' }), bi({ en: 'Drain the field 1 to 2 weeks before the expected date.', fil: 'Patuyuin ang bukid 1 hanggang 2 linggo bago ang inaasahang petsa.' })],
+      [bi({ en: 'Maturity for this variety (PhilRice)', fil: 'Gulang ng uring ito (PhilRice)' }), h.days + ' days'],
+      [bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
     const flags = h.flag ? [CODES[h.flag]] : [];
     if (inp.plant && inp.tx != null && inp.tn != null) {
       const days = Math.max(0, Math.round((now - new Date(inp.plant + 'T00:00:00')) / 86400000));
       const g = A.gdd(inp.tx, inp.tn, 10, 30, 2) * days;
       lines.push([bi({ en: 'Corn heat units since planting', fil: 'Init na naipon ng mais mula nang itanim' }), fmt(g, 0) + ' °C·day over ' + days + ' days (base 10 °C, cap 30 °C, McMaster and Wilhelm method 2); no stage target is published for Philippine hybrids, so this is a tracker only']);
     }
-    show(out, result({ level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['Plus or minus one week on the harvest date is a design assumption; PhilRice gives none.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['MCMASTER1997', 'FAO56']) }));
+    show(out, result({ level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['The harvest date is an orientation, not a promise: it says when to start looking at the crop. Judge the cut by PalayCheck Key Check 8 above.', 'Any window of about a week around this date would be a design assumption; PhilRice publishes none, and a week is probably too narrow. Cauba et al. (2024) estimated harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates and report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, and a preprint, but it is the closest published measure and it is wider than a week.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['PALAYCHECK', 'CAUBA2024', 'MCMASTER1997', 'FAO56']) }));
   }
 };
 
