@@ -34,7 +34,7 @@ const T = {
     dry: { en: 'Can my palay be dried enough today?', fil: 'Matutuyo ba nang sapat ang palay ngayon?' },
     stress: { en: 'Too hot or too cold for my crop?', fil: 'Masyado bang mainit o malamig para sa pananim?' },
     frost: { en: 'Frost (andap) tonight?', fil: 'Mag-aandap (frost) ba ngayong gabi?' },
-    disease: { en: 'Wet leaves and disease weather', fil: 'Basang dahon at panahon ng sakit' },
+    disease: { en: 'Will the leaves be wet tonight?', fil: 'Mababasa ba ang dahon ngayong gabi?' },
     timing: { en: 'When is harvest? Heat units, day length', fil: 'Kailan ang ani? Init na naipon, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
     feedback: { en: 'Comments and suggestions', fil: 'Puna at mungkahi' },
@@ -528,21 +528,30 @@ CARDS.disease = function (root) {
   const RH = numInput('zRH', { en: 'Humidity this evening (%)', fil: 'Halumigmig ngayong gabi (%)' }, prev.RH, 1);
   const sky = selectInput('zSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear', fil: 'Maaliwalas' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast', fil: 'Maulap' }]], prev.sky || 'clear');
   const wind = selectInput('zWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy', fil: 'Mahangin' }]], prev.wind || 'calm');
-  const h = el('h4', null, bi({ en: 'Potato late blight (optional, needs a hygrometer read through the day)', fil: 'Late blight ng patatas (opsyonal, kailangan ng hygrometer buong araw)' }));
+  const h = el('h4', null, bi({ en: 'Potato late blight, only with a data logger', fil: 'Late blight ng patatas, kung may data logger lamang' }));
+  const hNote = el('p', { class: 'hint' }, bi({
+    en: 'The Hutton Criteria count hours at or above 90% humidity across a whole day and night, twice over. That needs an automatic weather station or a data logger; a hand-held hygrometer cannot do it, and this app will not guess the hours for you. Without one, what the criteria describe is two days running of cool nights, no colder than 10 °C, with long damp spells. Watch for that pattern and ask your DA or BPI technician.',
+    fil: 'Binibilang ng Hutton Criteria ang mga oras na 90% pataas ang halumigmig sa buong araw at gabi, nang dalawang beses. Kailangan nito ng automatic weather station o data logger; hindi kaya ng hawak-kamay na hygrometer, at hindi huhulaan ng app na ito ang mga oras. Kung wala kayo nito, ang inilalarawan ng pamantayan ay dalawang magkasunod na araw ng malamig na gabi, hindi bababa sa 10 °C, na may mahabang panahong mahalumigmig. Bantayan ang ganitong pattern at magtanong sa inyong tekniko ng DA o BPI.'
+  }));
+  const hOn = checkInput('zLogger', { en: 'I have a data logger or weather station', fil: 'May data logger o weather station ako' }, prev.logger);
   const a1 = numInput('zA1', { en: 'Yesterday: lowest temperature (°C)', fil: 'Kahapon: pinakamababang temperatura (°C)' }, prev.a1, 0.1), a2 = numInput('zA2', { en: 'Yesterday: hours at or above 90% humidity', fil: 'Kahapon: oras na 90% pataas ang halumigmig' }, prev.a2, 0.5);
   const b1 = numInput('zB1', { en: 'Day before: lowest temperature (°C)', fil: 'Noong isang araw: pinakamababang temperatura (°C)' }, prev.b1, 0.1), b2 = numInput('zB2', { en: 'Day before: hours at or above 90% humidity', fil: 'Noong isang araw: oras na 90% pataas ang halumigmig' }, prev.b2, 0.5);
-  form.append(Tn.row, RH.row, sky.row, wind.row, h, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(Tn.row, RH.row, sky.row, wind.row, h, hNote, hOn.row, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  const syncLogger = () => { const on = hOn.input.checked; [a1, a2, b1, b2].forEach(x => { x.row.hidden = !on; }); };
+  hOn.input.addEventListener('change', syncLogger); syncLogger();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
+    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
       show(out, result({ level: d.code === 'dew_likely_if_cools_to_dewpoint' ? 'caution' : 'go', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1) }), lines: [[bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
-        why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.'], limits: ['Hours of leaf wetness are not estimated: the RH ≥ 90% method needs hourly humidity and local calibration (Sentelhas et al. 2008).'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008'] }));
+        why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.',
+          'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
+          'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not estimated: the RH ≥ 90% method needs hourly humidity and local calibration (Sentelhas et al. 2008).'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008'] }));
     }
-    if (inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
+    if (inp.logger && inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
       const hcr = A.huttonCriteria([{ Tmin: inp.b1, hoursRH90: inp.b2 }, { Tmin: inp.a1, hoursRH90: inp.a2 }]);
       show(out, result({ level: hcr.code === 'hutton_high_risk' ? 'stop' : 'go', verdict: t(T.verdicts[hcr.code]), why: ['Hutton Criteria: "two consecutive days have a minimum temperature of 10°C, and at least six hours of relative humidity at or above 90%" (James Hutton Institute, via the IPM Decisions factsheet).'], limits: ['Developed and tested in the UK; "not tested yet in other countries" (IPM Decisions).'], sources: ['HUTTON'] }));
     }
@@ -628,7 +637,7 @@ const READING = {
   dry:     { en: 'Read the air at the drying area in the early afternoon, when it is hottest and driest. A morning reading understates what the day can dry.', fil: 'Basahin ang hangin sa patuyuan sa maagang hapon, kung kailan pinakamainit at pinakatuyo. Maliit ang ipinapakita ng pagbasa sa umaga.' },
   stress:  { en: 'Use each day\'s actual afternoon high and morning low, not one reading taken now.', fil: 'Gamitin ang tunay na pinakamainit sa hapon at pinakamalamig sa umaga bawat araw, hindi ang isang pagbasa ngayon.' },
   frost:   { en: 'Read as late as you can before sleeping. The air keeps cooling all night, so a reading taken at 6 or 7 p.m. can understate the risk. Take it outdoors, away from walls, at about head height.', fil: 'Magbasa nang pinakahuli bago matulog. Patuloy na lumalamig ang hangin buong gabi, kaya maaaring maliitin ng pagbasa sa alas-6 o alas-7 ng gabi ang panganib. Sa labas, malayo sa pader, mga kasintaas ng ulo.' },
-  disease: { en: 'Count the hours across the whole day and night when the air stayed at or above 90% humidity, not the humidity at the moment you check.', fil: 'Bilangin ang mga oras sa buong araw at gabi na 90% pataas ang halumigmig, hindi ang halumigmig sa oras ng pagtingin.' },
+  disease: { en: 'Take the temperature and humidity outdoors in the evening, near the crop. The late blight section below is separate and needs a data logger; leave it blank if you do not have one.', fil: 'Sukatin ang temperatura at halumigmig sa labas kinagabihan, malapit sa pananim. Hiwalay ang late blight sa ibaba at kailangan nito ng data logger; huwag punan kung wala kayo nito.' },
   timing:  { en: 'Use a typical afternoon high and morning low for the season so far, not today\'s weather alone.', fil: 'Gamitin ang karaniwang pinakamainit sa hapon at pinakamalamig sa umaga sa buong panahon, hindi ang panahon ngayon lamang.' }
 };
 
@@ -655,6 +664,20 @@ CARDS.feedback = function (root) {
   })));
 };
 
+/* What the farmer physically needs before starting. Shown above the inputs, because the commonest
+   confusion reported is not knowing what to go and fetch. */
+const NEEDS = {
+  water:   { en: 'A thermometer in the shade, ideally one that keeps the day\'s highest and lowest. A rain gauge. Your location, which the phone can fill in.', fil: 'Termometro sa lilim, mas mabuti kung may tanda ng pinakamataas at pinakamababa sa araw. Panukat ng ulan. Ang lokasyon ninyo, na kayang kunin ng telepono.' },
+  rice:    { en: 'A stick or ruler to measure the water. A field water tube as well, if you use safe AWD.', fil: 'Patpat o ruler na pansukat ng tubig. Tubo rin sa bukid, kung safe AWD ang ginagamit ninyo.' },
+  rain:    { en: 'A rain gauge, read at the same hour each day and added up for the whole month.', fil: 'Panukat ng ulan, basahin sa parehong oras araw-araw at ipunin sa buong buwan.' },
+  spray:   { en: 'A thermometer and a hygrometer, taken at the spot you will spray. A watch, and some way to judge the wind.', fil: 'Termometro at hygrometer, sa mismong lugar na sisprayan. Relo, at paraan ng pagtantiya ng hangin.' },
+  dry:     { en: 'A thermometer and a hygrometer at the drying area. A weighing scale. A moisture meter if you have one; otherwise your usual way of judging the grain.', fil: 'Termometro at hygrometer sa patuyuan. Timbangan. Moisture meter kung meron; kung wala, ang nakasanayan ninyong paraan ng pagtingin sa butil.' },
+  stress:  { en: 'A thermometer in the shade that keeps the day\'s highest and lowest.', fil: 'Termometro sa lilim na may tanda ng pinakamataas at pinakamababa sa araw.' },
+  frost:   { en: 'A thermometer and a hygrometer, read outdoors away from walls, at about head height.', fil: 'Termometro at hygrometer, basahin sa labas, malayo sa pader, mga kasintaas ng ulo.' },
+  disease: { en: 'A thermometer and a hygrometer, read outdoors near the crop in the evening.', fil: 'Termometro at hygrometer, basahin sa labas malapit sa pananim kinagabihan.' },
+  timing:  { en: 'Your planting or sowing dates, and a thermometer for a typical high and low.', fil: 'Ang petsa ng pagtatanim o pagpupunla, at termometro para sa karaniwang mataas at mababa.' }
+};
+
 /* ---------- router ---------- */
 const ORDER = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing', 'sources', 'about', 'feedback'];
 const ICON = { water: '💧', rice: '🌾', rain: '🌧', spray: '🧴', dry: '☀', stress: '🌡', frost: '❄', disease: '🍃', timing: '📅', sources: '📚', about: 'ℹ', feedback: '✉' };
@@ -671,6 +694,7 @@ function renderCard(main, id) {
   main.appendChild(el('a', { class: 'back', href: '#/' }, '← ', bi(T.ui.back)));
   main.appendChild(el('h2', null, bi(T.cards[id])));
   if (AUTHORITY[id]) main.appendChild(el('p', { class: 'warn authority' }, bi(AUTHORITY[id])));
+  if (NEEDS[id]) main.appendChild(el('p', { class: 'needs' }, el('strong', null, 'What you need / Ano ang kailangan: '), bi(NEEDS[id])));
   if (READING[id]) main.appendChild(el('p', { class: 'reading' }, bi(READING[id])));
   const body = el('div', { class: 'card-body' }); main.appendChild(body);
   CARDS[id](body);

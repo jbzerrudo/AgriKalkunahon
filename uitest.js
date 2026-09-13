@@ -67,7 +67,7 @@ const server = http.createServer((req, res) => {
   const frostText = await page.textContent('.result .verdict .en');
   // DISEASE
   await page.goto('http://localhost:8765/index.html#/disease'); await page.waitForTimeout(200);
-  await fill('#zT', 22); await fill('#zRH', 88); await fill('#zA1', 12); await fill('#zA2', 7); await fill('#zB1', 11); await fill('#zB2', 8);
+  await fill('#zT', 22); await fill('#zRH', 88); await page.check('#zLogger'); await fill('#zA1', 12); await fill('#zA2', 7); await fill('#zB1', 11); await fill('#zB2', 8);
   await page.click('button.primary'); await page.waitForTimeout(200);
   await page.screenshot({ path: shots + '/08-disease.png', fullPage: true });
   // TIMING
