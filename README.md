@@ -7,8 +7,8 @@
 **Download:** grab `AgriKalkunahon.html` from [Releases](https://github.com/jbzerrudo/AgriKalkunahon/releases)
 and keep it on a phone or a USB stick.
 
-An offline farm-decision calculator for the Philippines. The published build is a single HTML
-file: no install, no server, no network. It answers "what should I do" from readings a farmer
+An offline farm-decision calculator, built for the Philippines and usable anywhere. The published
+build is a single HTML file: no install, no server, no network. It answers "what should I do" from readings a farmer
 can take (afternoon high, morning low, a rain gauge, sometimes a hygrometer), leads with the
 decision, shows the number second, and names the published source of every result. Values
 outside a formula's published range are flagged rather than silently returned.
@@ -29,10 +29,55 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 | Too hot or too cold for my crop? | Above or within published thresholds by stage | Yoshida (1981) *Fundamentals of Rice Crop Science*, Table 2.4, critical temperatures by growth stage; Satake and Yoshida (1978); Jagadish et al. (2007); Luo (2011); Hatfield et al. (2011, 2015); Queensland DAF critical temperature thresholds for vegetables and sweet corn |
 | Frost (andap) tonight? | Possible, watch, or unlikely | Radiation-frost conditions from the FAO frost manual (Snyder and de Melo-Abreu 2005); Benguet evidence from Marasigan (2017), Launio et al. (2020) and Basquial et al. (2021). The card names DOST-PAGASA as the authority on frost warnings and FROST-PH as its Benguet tool |
 | Will the leaves be wet tonight? | Dew tonight; potato late blight by the Hutton Criteria when a data logger supplies hourly humidity | FAO-56 dew point; Sentelhas et al. (2008); James Hutton Institute; IRRI Rice Knowledge Bank for rice blast, which is described in words rather than scored |
-| When is harvest? | Harvest window by variety; corn heat units; day length | PhilRice variety pages; McMaster and Wilhelm (1997); IRRI ORYZA2000; FAO-56 Eq. 34 |
+| When is harvest? | When to cut, judged on the grain rather than the date; corn heat units; day length | PhilRice PalayCheck Key Check 8 (golden-yellow grains, harvest moisture, drain 1 to 2 weeks before); PhilRice variety pages; Cauba et al. (2025) for how tightly a Philippine harvest date can be pinned; McMaster and Wilhelm (1997); IRRI ORYZA2000; FAO-56 Eq. 34 |
 
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
+
+## What changed in 0.5.0
+
+**The app now works anywhere on Earth.** Sun times were computed with UTC+8 hardcoded at every call
+site, so sunrise, sunset, the spray inversion window and the frost reading window were wrong outside
+the Philippines. They are now computed in the device's own time zone. Nothing changes for a Philippine
+user, whose device reports UTC+8.
+
+Because the app can now be opened anywhere, it says plainly where it does and does not apply. Outside
+the Philippines it separates what travels from what does not: the FAO-56 evapotranspiration, dew point,
+drying and day-length calculations are general, while the rice water depths and harvest checks are
+Philippine, the spray bands Australian, the vegetable thresholds Queensland, and the late blight model
+Scottish and untested outside the UK. Every result already names its source, so a reader can judge.
+
+**The app now tells you which location it is using.** The frost card had no location input and silently
+borrowed one saved elsewhere, defaulting to Metro Manila; the GPS button failed silently when a browser
+refused permission. The button now reports what happened, the default is labelled as a starting point
+rather than your field, and a mismatch between a Philippine field and a non-Philippine device clock is
+flagged. The frost card names the location in use, gives its distance from the PAGASA Benguet
+agrometeorological station at La Trinidad, and says so when no frost has ever been recorded there.
+Nothing is blocked: inputs are accepted and caveats are shown beside the answer.
+
+**The harvest card leads with the crop, not the calendar.** PhilRice PalayCheck Key Check 8 now heads
+the result: 85 to 90 per cent golden-yellow grains for manual harvest and 90 to 95 by combine, 18 to 21
+per cent moisture in the dry season and 20 to 25 in the wet, with the field drained 1 to 2 weeks
+before. The predicted date is demoted to orientation. The plus-or-minus week it used to claim is
+probably too narrow: Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from
+Sentinel-1, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 in
+the wet.
+
+**The rain card explains what a millimetre is.** The amount that counts now leads, in a highlighted
+line, as a depth of standing water and as litres for the farmer's own field area, which is optional.
+Because farmers read a depth and think of a volume, the card states that the depth is the same on a
+field of any size and only the volume changes.
+
+**Two source corrections.** The frost card said the FAO manual "prints no number" for a dew-point
+threshold. FAO prints no threshold but does publish a method: a regression from the temperature and dew
+point two hours after sunset whose coefficients must be fitted locally, and no such fit exists for
+Benguet. And Marasigan's 10 °C is a land surface temperature from satellite, not an air temperature,
+which the card now says. No threshold changed.
+
+Smaller: the frost season line names the current month; the FROST-PH reference points at the project's
+own NRCP e-Gallery abstract as well as the news item; a reference can now carry two labelled links;
+coordinates are asked for to two decimal places, since a hundredth of a degree is about 1 km; and the
+About card closes with a haiku from the author's collection.
 
 ## What changed in 0.4.0
 
