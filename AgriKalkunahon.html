@@ -1286,7 +1286,7 @@ CARDS.dry = function (root) {
     lines.push([bi({ en: 'Sun-drying practice (IRRI)', fil: 'Tamang pagbibilad (IRRI)' }), 'Layer 2 to 4 cm; stir every 30 minutes; cover when the grain is hotter than 50 °C (42 °C for seed); cover at rain and at night.']);
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
-    const limits = ['The reachable moisture is computed at air temperature. Sun-warmed grain can dry lower, so "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
+    const limits = ['The reachable moisture is computed from the air, so the reading must be shaded air temperature and humidity, not a thermometer sitting in the sun. Grain lying in the sun is warmer than that air and can dry lower, which is why "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
     show(out, result({ level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
   }
 };
@@ -1509,7 +1509,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 257 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.3.1, build a4e0ae2f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.3.1, build 5f6f0309. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
 };
 
 /* Which agency holds the mandate for each calculator. Shown at the top of every card, so the farmer
@@ -1533,7 +1533,7 @@ const READING = {
   rice:    { en: 'Read the field water tube in the morning, before you add any water that day.', fil: 'Basahin ang tubo ng tubig sa bukid sa umaga, bago magdagdag ng tubig sa araw na iyon.' },
   rain:    { en: 'Use the total your gauge collected over the whole month, not a single storm.', fil: 'Gamitin ang kabuuang naipon ng panukat ng ulan (ulansukod) sa buong buwan, hindi ang isang ulan lamang.' },
   spray:   { en: 'Take these readings where and when you intend to spray. Conditions change within the hour, so a reading from earlier in the morning does not describe the afternoon.', fil: 'Basahin ito sa lugar at oras na balak mong mag-spray. Nagbabago ang kondisyon kada oras, kaya hindi naglalarawan ng hapon ang pagbasa kaninang umaga.' },
-  dry:     { en: 'Read the air at the drying area in the early afternoon, when it is hottest and driest. A morning reading understates what the day can dry.', fil: 'Basahin ang hangin sa patuyuan sa maagang hapon, kung kailan pinakamainit at pinakatuyo. Maliit ang ipinapakita ng pagbasa sa umaga.' },
+  dry:     { en: 'Read the air beside the drying area in the early afternoon, when it is hottest and driest. Keep the instruments out of direct sun: in the sun a thermometer reads its own heated bulb, not the air, and the answer comes out too hopeful. A morning reading understates what the day can dry.', fil: 'Basahin ang hangin sa tabi ng patuyuan sa maagang hapon, kung kailan pinakamainit at pinakatuyo. Huwag ilagay sa tuwirang araw ang mga kagamitan: sa araw, ang nababasa ng termometro ay ang sarili nitong init, hindi ang hangin, kaya lumalabas na masyadong maganda ang sagot. Maliit ang ipinapakita ng pagbasa sa umaga.' },
   stress:  { en: 'Use each day\'s actual afternoon high and morning low, not one reading taken now.', fil: 'Gamitin ang tunay na pinakamainit sa hapon at pinakamalamig sa umaga bawat araw, hindi ang isang pagbasa ngayon.' },
   frost:   { en: 'Read as late as you can before sleeping. The air keeps cooling all night, so a reading taken at 6 or 7 p.m. can understate the risk. Take it outdoors, away from walls, at about head height.', fil: 'Magbasa nang pinakahuli bago matulog. Patuloy na lumalamig ang hangin buong gabi, kaya maaaring maliitin ng pagbasa sa alas-6 o alas-7 ng gabi ang panganib. Sa labas, malayo sa pader, mga kasintaas ng ulo.' },
   disease: { en: 'Take the temperature and humidity outdoors in the evening, near the crop. The late blight section below is separate and needs a data logger; leave it blank if you do not have one.', fil: 'Sukatin ang temperatura at halumigmig sa labas kinagabihan, malapit sa pananim. Hiwalay ang late blight sa ibaba at kailangan nito ng data logger; huwag punan kung wala kayo nito.' },
@@ -1542,7 +1542,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build a4e0ae2f)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 5f6f0309)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa telepono mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1568,9 +1568,9 @@ CARDS.feedback = function (root) {
 const NEEDS = {
   water:   { en: 'A thermometer in the shade, ideally one that keeps the day\'s highest and lowest. A rain gauge. Your location, which the phone can fill in.', fil: 'Termometro sa lilim, mas mabuti kung may tanda ng pinakamataas at pinakamababa sa araw. Panukat ng ulan. Ang lokasyon ninyo, na kayang kunin ng telepono.' },
   rice:    { en: 'A stick or ruler to measure the water. A field water tube as well, if you use safe AWD.', fil: 'Patpat o ruler na pansukat ng tubig. Tubo rin sa bukid, kung safe AWD ang ginagamit ninyo.' },
-  rain:    { en: 'A rain gauge, read at the same hour each day and added up for the whole month.', fil: 'Panukat ng ulan, basahin sa parehong oras araw-araw at ipunin sa buong buwan.' },
+  rain:    { en: 'A rain gauge, read at the same hour each day and added up for the whole month. If you have none, PAGASA publishes monthly rainfall for its stations: use the nearest one, remembering that rainfall can differ a great deal between your field and a station some distance away.', fil: 'Panukat ng ulan, basahin sa parehong oras araw-araw at ipunin sa buong buwan. Kung wala kayo nito, naglalathala ang PAGASA ng buwanang ulan sa mga istasyon nito: gamitin ang pinakamalapit, ngunit tandaan na malaki ang maaaring pagkakaiba ng ulan sa bukid ninyo at sa istasyong malayo.' },
   spray:   { en: 'A thermometer and a hygrometer, taken at the spot you will spray. A watch, and some way to judge the wind.', fil: 'Termometro at hygrometer, sa mismong lugar na sisprayan. Relo, at paraan ng pagtantiya ng hangin.' },
-  dry:     { en: 'A thermometer and a hygrometer at the drying area. A weighing scale. A moisture meter if you have one; otherwise your usual way of judging the grain.', fil: 'Termometro at hygrometer sa patuyuan. Timbangan. Moisture meter kung meron; kung wala, ang nakasanayan ninyong paraan ng pagtingin sa butil.' },
+  dry:     { en: 'A thermometer and a hygrometer, shaded from direct sun but standing in the air beside the drying area. A weighing scale. A moisture meter if you have one; otherwise your usual way of judging the grain.', fil: 'Termometro at hygrometer, may silong mula sa tuwirang araw ngunit nasa hangin sa tabi ng patuyuan. Timbangan. Moisture meter kung meron; kung wala, ang nakasanayan ninyong paraan ng pagtingin sa butil.' },
   stress:  { en: 'A thermometer in the shade that keeps the day\'s highest and lowest.', fil: 'Termometro sa lilim na may tanda ng pinakamataas at pinakamababa sa araw.' },
   frost:   { en: 'A thermometer and a hygrometer, read outdoors away from walls, at about head height.', fil: 'Termometro at hygrometer, basahin sa labas, malayo sa pader, mga kasintaas ng ulo.' },
   disease: { en: 'A thermometer and a hygrometer, read outdoors near the crop in the evening.', fil: 'Termometro at hygrometer, basahin sa labas malapit sa pananim kinagabihan.' },
@@ -1586,7 +1586,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build a4e0ae2f.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 5f6f0309.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
