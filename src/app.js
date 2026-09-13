@@ -516,11 +516,17 @@ CARDS.frost = function (root) {
        knows what would undo this answer, and only while the night still has hours to run. */
     const revoke = { sky: { en: 'the cloud cover', fil: 'ang takip ng ulap' }, wind: { en: 'the wind', fil: 'ang hangin' }, sky_and_wind: { en: 'the cloud cover and the wind', fil: 'ang takip ng ulap at ang hangin' } }[r.ruledOutBy];
     const revocable = revoke && toMin > 1.5;
+    /* Name the month the verdict is based on, so the farmer can see which month the card thinks it is
+       rather than trusting a bare classification. The classification is monthly, so no day is shown. */
+    const mi = new Date().getMonth();
+    const MON_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const MON_FIL = ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'];
+    const mEn = MON_EN[mi], mFil = MON_FIL[mi];
     const seasonText = {
-      peak: { en: 'January, the month with the most recorded frost in Benguet', fil: 'Enero, ang buwan na may pinakamaraming naitalang andap sa Benguet' },
-      core: { en: 'Within the months when frost is recorded in Benguet (December to February)', fil: 'Nasa loob ng mga buwan na may naitalang andap sa Benguet (Disyembre hanggang Pebrero)' },
-      edge: { en: 'Edge of the Benguet frost season (November, least frequent; March, reported by farmers)', fil: 'Gilid ng panahon ng andap sa Benguet (Nobyembre, pinakabihira; Marso, iniuulat ng mga magsasaka)' },
-      outside: { en: 'Outside the months when frost has been recorded in Benguet', fil: 'Wala sa mga buwan na may naitalang andap sa Benguet' }
+      peak: { en: mEn + '. The month with the most recorded frost in Benguet.', fil: mFil + '. Ang buwan na may pinakamaraming naitalang andap sa Benguet.' },
+      core: { en: mEn + '. Within the months when frost is recorded in Benguet, December to February.', fil: mFil + '. Nasa loob ng mga buwan na may naitalang andap sa Benguet, Disyembre hanggang Pebrero.' },
+      edge: { en: mEn + '. Edge of the Benguet frost season: November is the least frequent, March is reported by farmers.', fil: mFil + '. Gilid ng panahon ng andap sa Benguet: Nobyembre ang pinakabihira, Marso ay iniuulat ng mga magsasaka.' },
+      outside: { en: mEn + '. Outside the months when frost has been recorded in Benguet, which run November to March.', fil: mFil + '. Wala sa mga buwan na may naitalang andap sa Benguet, na Nobyembre hanggang Marso.' }
     }[season];
     const lines = [];
     if (revocable) lines.push([bi({ en: 'What is holding frost off', fil: 'Ano ang pumipigil sa andap' }), bi({ en: t(revoke).en + ', which can lift at any hour', fil: t(revoke).fil + ', na maaaring mawala anumang oras' })]);
