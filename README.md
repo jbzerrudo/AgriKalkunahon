@@ -34,6 +34,11 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
 
+## What changed in 0.3.1
+
+Same app as 0.3.0. The 0.3.0 release was published while Zenodo was down, so its archive webhook was
+dropped and no DOI was minted for it. This tag exists so the archive has something to pick up.
+
 ## What changed in 0.3.0
 
 The rice card now asks how you manage the water before anything else, and answers differently for each:
