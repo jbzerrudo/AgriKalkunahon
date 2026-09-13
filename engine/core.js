@@ -600,6 +600,18 @@ function frostReadingUsable(nowH, sunsetH, sunriseH) {
   return start > end ? (nowH >= start || nowH <= end) : (nowH >= start && nowH <= end);
 }
 /* month: 1 to 12. Returns 'peak', 'core', 'edge' or 'outside'. */
+/* Where the Philippine frost record actually is. The reference point is the PAGASA Benguet
+   agrometeorological station as Marasigan (2017) gives it; the elevation is her figure for Benguet.
+   Frost in the Philippines is reported from the highlands, particularly Benguet (Basconcillo et al.,
+   FROST-PH). No elevation threshold for frost is published, so none is applied: the card prints the
+   comparison and lets the farmer see it. */
+const BENGUET = { lat: 16.46, lon: 120.59, place: 'the PAGASA Benguet agrometeorological station at La Trinidad', elevM: 1524, recordLowM: 900, recordHighM: 1600, towns: 'Atok, Buguias, Kabayan, Kibungan and Mankayan' };
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, p = Math.PI / 180;
+  const dLat = (lat2 - lat1) * p, dLon = (lon2 - lon1) * p;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
   if (FROST.seasonCore.indexOf(month) >= 0) return 'core';
@@ -756,7 +768,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

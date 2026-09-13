@@ -266,5 +266,12 @@ console.log('\n== REFERENCES ==');
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
   eq('UNVERIFIED list names the five items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,HARVEST_PM7'); }
 
+/* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
+ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
+ok('haversine 1 deg of longitude at the equator', A.haversineKm(0, 0, 0, 1), 111.195, 0.01, 'km');
+ok('haversine same point is zero', A.haversineKm(14.6, 121.0, 14.6, 121.0), 0, 1e-9, 'km');
+ok('haversine is symmetric', A.haversineKm(16.46, 120.59, 14.6, 121.0) - A.haversineKm(14.6, 121.0, 16.46, 120.59), 0, 1e-9, 'km');
+eq('Benguet reference is the PAGASA agromet station (Marasigan 2017)', A.BENGUET.lat + ',' + A.BENGUET.lon, '16.46,120.59');
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;

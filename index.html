@@ -108,6 +108,10 @@ code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px
 .reading{font-size:13px;margin:0 0 12px;padding:8px 10px;border-left:4px solid var(--green);background:var(--green-soft);border-radius:6px}
 .reading .fil{color:var(--green-ink)}
 .authority .fil{color:var(--earth)}
+.locnote{font-size:13px;margin:6px 0;color:var(--earth);font-weight:600}
+.locwarn{font-size:13px;margin:8px 0 0}
+dl.nums dt.alert{color:#8a4b00;font-weight:700}
+dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px solid #d98324;background:#fdf3e6;border-radius:6px}
 .haiku{margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--line,#ddd);text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
 .haiku .jp{font-size:16px;color:var(--ink);letter-spacing:.08em}
 .haiku .romaji{font-style:italic}
@@ -725,6 +729,18 @@ function frostReadingUsable(nowH, sunsetH, sunriseH) {
   return start > end ? (nowH >= start || nowH <= end) : (nowH >= start && nowH <= end);
 }
 /* month: 1 to 12. Returns 'peak', 'core', 'edge' or 'outside'. */
+/* Where the Philippine frost record actually is. The reference point is the PAGASA Benguet
+   agrometeorological station as Marasigan (2017) gives it; the elevation is her figure for Benguet.
+   Frost in the Philippines is reported from the highlands, particularly Benguet (Basconcillo et al.,
+   FROST-PH). No elevation threshold for frost is published, so none is applied: the card prints the
+   comparison and lets the farmer see it. */
+const BENGUET = { lat: 16.46, lon: 120.59, place: 'the PAGASA Benguet agrometeorological station at La Trinidad', elevM: 1524, recordLowM: 900, recordHighM: 1600, towns: 'Atok, Buguias, Kabayan, Kibungan and Mankayan' };
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, p = Math.PI / 180;
+  const dLat = (lat2 - lat1) * p, dLon = (lon2 - lon1) * p;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
   if (FROST.seasonCore.indexOf(month) >= 0) return 'core';
@@ -881,7 +897,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -914,7 +930,7 @@ const KEY = 'agrikalk.v1';
 let store = {};
 try { store = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { store = {}; }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
-store.loc = store.loc || { lat: 14.6, lon: 121.0, elev: 20, site: 'coastal' };
+store.loc = store.loc || { lat: 14.6, lon: 121.0, elev: 20, site: 'coastal', set: false };
 store.inputs = store.inputs || {};
 
 /* ---------- bilingual strings ---------- */
@@ -1037,14 +1053,37 @@ function locationBlock(onchange) {
   const wrap = el('fieldset', { class: 'loc' }, el('legend', null, bi(T.ui.location)));
   const lat = numInput('lat', T.ui.lat, L.lat, 0.01), lon = numInput('lon', T.ui.lon, L.lon, 0.01), elev = numInput('elev', T.ui.elev, L.elev, 1);
   const site = selectInput('site', T.ui.site, [['coastal', T.ui.siteCoastal], ['interior', T.ui.siteInterior], ['island', T.ui.siteIsland]], L.site);
+  const note = el('p', { class: 'locnote' });
+  /* A silent failure here is how a farmer ends up with someone else's sunrise: the button appears to
+     do nothing and the default quietly stays. Say what happened and what to do instead. */
+  const gpsFailed = why => { note.innerHTML = ''; note.appendChild(bi(why)); redraw(); };
   const gps = el('button', { type: 'button', class: 'btn small', onclick: () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(p => { lat.input.value = p.coords.latitude.toFixed(3); lon.input.value = p.coords.longitude.toFixed(3); if (isFinite(p.coords.altitude)) elev.input.value = Math.round(p.coords.altitude); sync(); }, () => {}, { enableHighAccuracy: true, timeout: 8000 });
+    if (!navigator.geolocation) return gpsFailed({ en: 'This browser cannot read your location. Type the numbers in below.', fil: 'Hindi kayang basahin ng browser na ito ang lokasyon ninyo. I-type ang mga numero sa ibaba.' });
+    navigator.geolocation.getCurrentPosition(
+      p => { lat.input.value = p.coords.latitude.toFixed(3); lon.input.value = p.coords.longitude.toFixed(3); if (isFinite(p.coords.altitude)) elev.input.value = Math.round(p.coords.altitude); sync(); },
+      err => gpsFailed(err && err.code === 1
+        ? { en: 'Your device refused to share its location, so the app is still using the location shown below. Type your own in.', fil: 'Tumanggi ang device ninyo na ibigay ang lokasyon, kaya ang nasa ibaba pa rin ang ginagamit ng app. I-type ang sarili ninyo.' }
+        : { en: 'Could not read your location. Type the numbers in below.', fil: 'Hindi nakuha ang lokasyon ninyo. I-type ang mga numero sa ibaba.' }),
+      { enableHighAccuracy: true, timeout: 8000 });
   } }, bi(T.ui.gps));
-  function sync() { L.lat = +lat.input.value; L.lon = +lon.input.value; L.elev = +elev.input.value; L.site = site.input.value; save(); if (onchange) onchange(); }
+  function sync() { L.lat = +lat.input.value; L.lon = +lon.input.value; L.elev = +elev.input.value; L.site = site.input.value; L.set = true; save(); redraw(); if (onchange) onchange(); }
+  function redraw() { warn.innerHTML = ''; const w = locationWarnings(); w.forEach(x => warn.appendChild(el('p', { class: 'warn locwarn' }, bi(x)))); }
+  const warn = el('div');
   [lat, lon, elev, site].forEach(x => x.input.addEventListener('change', sync));
-  wrap.append(gps, lat.row, lon.row, elev.row, site.row);
+  wrap.append(gps, note, lat.row, lon.row, elev.row, site.row, warn);
+  redraw();
   return wrap;
+}
+/* What the app can check about the saved location without guessing: whether anyone ever set it,
+   whether it is in the country every threshold here comes from, and whether the device clock agrees
+   with the Philippine time the sun calculations assume. */
+function locationWarnings() {
+  const L = store.loc, out = [];
+  if (!L.set) out.push({ en: 'This is the app\'s starting location (Metro Manila), not your field. Nothing you see that depends on location, including sunrise, sunset and the frost reading window, is about your place until you set it.', fil: 'Ito ang panimulang lokasyon ng app (Metro Manila), hindi ang bukid ninyo. Lahat ng nakadepende sa lokasyon, kasama ang pagsikat at paglubog ng araw at ang oras ng pagbasa para sa andap, ay hindi tungkol sa lugar ninyo hangga\'t hindi ninyo ito itinatakda.' });
+  if (isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127)) out.push({ en: 'This location is outside the Philippines. Every threshold in this app comes from Philippine or FAO sources chosen for Philippine conditions, and the frost card is built on Benguet records. Treat the answers as illustrations, not advice for this place.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Lahat ng hangganan sa app na ito ay mula sa Pilipinas o FAO na piniling angkop sa kondisyon ng Pilipinas, at ang card ng andap ay nakabatay sa talaan ng Benguet. Ituring na halimbawa lamang ang mga sagot, hindi payo para sa lugar na ito.' });
+  const tz = -new Date().getTimezoneOffset() / 60;
+  if (tz !== 8) out.push({ en: 'Your device clock is set to UTC' + (tz >= 0 ? '+' : '') + tz + ', not Philippine time (UTC+8). Sunrise, sunset, the spray inversion window and the frost reading window all assume UTC+8, so every hour this app shows you will be out by ' + Math.abs(8 - tz) + ' hours.', fil: 'Nakatakda ang orasan ng device ninyo sa UTC' + (tz >= 0 ? '+' : '') + tz + ', hindi sa oras ng Pilipinas (UTC+8). Ang pagsikat at paglubog ng araw, ang oras ng inversion sa pag-spray, at ang oras ng pagbasa para sa andap ay lahat nakabatay sa UTC+8, kaya mali nang ' + Math.abs(8 - tz) + ' oras ang bawat oras na ipinapakita ng app.' });
+  return out;
 }
 function numInput(id, label, value, step, opts) {
   const input = el('input', { type: 'number', id: id, step: step || 'any', inputmode: 'decimal' });
@@ -1365,6 +1404,7 @@ CARDS.stress = function (root) {
 CARDS.frost = function (root) {
   const prev = recall('frost');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
+  form.appendChild(locationBlock());
   const Tn = numInput('fT', { en: 'Air temperature at the time you read it (°C)', fil: 'Temperatura sa oras ng pagbasa (°C)' }, prev.T, 0.1);
   const RH = numInput('fRH', { en: 'Humidity at the same time (%)', fil: 'Halumigmig sa parehong oras (%)' }, prev.RH, 1);
   const sky = selectInput('fSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear, stars visible', fil: 'Maaliwalas, kita ang bituin' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast or foggy', fil: 'Maulap o maambon' }]], prev.sky || 'clear');
@@ -1423,10 +1463,21 @@ CARDS.frost = function (root) {
       edge: { en: mEn + '. Edge of the Benguet frost season: November is the least frequent, March is reported by farmers.', fil: mFil + '. Gilid ng panahon ng andap sa Benguet: Nobyembre ang pinakabihira, Marso ay iniuulat ng mga magsasaka.' },
       outside: { en: mEn + '. Outside the months when frost has been recorded in Benguet, which run November to March.', fil: mFil + '. Wala sa mga buwan na may naitalang andap sa Benguet, na Nobyembre hanggang Marso.' }
     }[season];
+    /* Frost has only ever been recorded in the Philippine highlands. Below that, or outside the country,
+       the card still answers, because the reading is the farmer's, but it says the answer does not
+       describe their place. No elevation threshold for frost is claimed: 900 m is simply the bottom of
+       the range the records themselves come from (Marasigan 2017, citing Estoque 2012 for Baguio). */
+    const benguetKm = A.haversineKm(L.lat, L.lon, A.BENGUET.lat, A.BENGUET.lon);
+    const offPH = isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127);
+    const lowland = isFinite(L.elev) && L.elev < A.BENGUET.recordLowM;
     const lines = [];
+    if (offPH || lowland) lines.push([bi({ en: 'This place is not in the frost record', fil: 'Wala sa talaan ng andap ang lugar na ito' }),
+      bi({ en: 'No frost has been recorded where you are. The Philippine frost record comes from the Benguet highlands, roughly ' + A.BENGUET.recordLowM + ' to ' + A.BENGUET.recordHighM + ' m, at ' + A.BENGUET.towns + '. Your location is ' + (isFinite(L.elev) ? 'at ' + fmt(L.elev, 0) + ' m and ' : '') + fmt(benguetKm, 0) + ' km away. The answer below is shown so you can see how the card works, not as a warning for your field.',
+              fil: 'Walang naitalang andap sa kinaroroonan ninyo. Ang talaan ng andap sa Pilipinas ay mula sa kabundukan ng Benguet, mga ' + A.BENGUET.recordLowM + ' hanggang ' + A.BENGUET.recordHighM + ' m, sa ' + A.BENGUET.towns + '. Ang lokasyon ninyo ay ' + (isFinite(L.elev) ? 'nasa ' + fmt(L.elev, 0) + ' m at ' : '') + fmt(benguetKm, 0) + ' km ang layo. Ipinapakita ang sagot sa ibaba para makita kung paano gumagana ang card, hindi bilang babala para sa bukid ninyo.' }), 'alert']);
     if (revocable) lines.push([bi({ en: 'What is holding frost off', fil: 'Ano ang pumipigil sa andap' }), bi({ en: t(revoke).en + ', which can lift at any hour', fil: t(revoke).fil + ', na maaaring mawala anumang oras' })]);
     lines.push([bi({ en: 'You read this at', fil: 'Oras ng pagbasa' }), hhmm(nowH) + ', ' + fmt(toMin, 1) + ' hours before the coldest hour'],
       [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')'],
+      [bi({ en: 'Your location', fil: 'Lokasyon ninyo' }), fmt(L.lat, 2) + ' \u00b0N, ' + fmt(L.lon, 2) + ' \u00b0E' + (isFinite(L.elev) ? ' at ' + fmt(L.elev, 0) + ' m' : '') + ', ' + fmt(benguetKm, 0) + ' km from ' + A.BENGUET.place],
       [bi({ en: 'Time of year', fil: 'Panahon ng taon' }), bi(seasonText)], [bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'at or below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none']);
     const why = ['Radiation frosts "are characterized by a clear sky, calm or very little wind, temperature inversion, low dew-point temperatures" (FAO frost manual, Snyder and de Melo-Abreu 2005).', 'The air keeps losing heat to the sky all night, so the minimum comes just before sunrise, when the sun starts to put heat back (FAO frost manual). That is the hour to look at the crop.', 'When dew forms, the released latent heat "reduces the rate of temperature drop" (FAO), so a low dew point lets the surface keep cooling; a high dew point sets a brake near the dew point.', 'Benguet frost (andap) is radiative frost of the northeast monsoon season in Atok, Buguias, Kabayan, Kibungan and Mankayan: weak monsoon flow, cloudless nights, air above freezing while surfaces frost. Marasigan (2017) found 70% of satellite-detected occurrences at land-surface temperatures at or below 10 °C (57% at or below 9 °C), consistent with farmers\' reports of frost at or below 10 °C; Basquial et al. (2021) measured 1.5 to 3.9 °C air temperature on frost mornings.', 'Atok farmers name the same precursors: a very cold, still evening, thick dew and no wind after a long dry spell; wind at dawn prevents frost; frost settles on low ground; and 9 °C without frost against 13 °C with frost shows that temperature alone is not enough (Launio et al. 2020).'];
     const assumptions = ['The reading time comes from this device\'s clock, and the card assumes Philippine time. If the clock is wrong, the hours before the coldest hour are wrong with it.', 'Sunrise from FAO-56 Eq. 25 and 31 to 33 for Philippine time (UTC+8), at the location saved on the water or spray card. The one-hour window before it is where the minimum usually falls, not a computed minimum: this card forecasts no temperature.', 'The 2 °C dew-point line is a design assumption of this app. FAO prints no threshold; its method is a regression whose coefficients must be fitted from local records, and none exist for Benguet. The line tests how dry the air is, not how cold it is: the dew point is always at or below the air temperature, so 2 °C is reached on an ordinary dry night with the air near 10 °C.', 'Readings taken outdoors, away from walls, at about head height. The card does not know what time you read the thermometer: the later in the evening, the more the reading tells you about the night ahead.', 'The 10 °C line comes from Marasigan (2017), where it is a land surface temperature measured by satellite (passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.), not an air temperature. At night the surface runs colder than the air at head height, so holding your air reading to 10 °C is stricter than her finding requires. The reading is also taken hours before the night minimum, so a reading above 10 °C does not mean the night will stay above 10 °C. That is why a clear, calm night is never reported as unlikely here.'];
@@ -1552,7 +1603,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 696fe12a. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.4.0, build 540247cd. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1593,7 +1644,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 696fe12a)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 540247cd)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1637,7 +1688,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 696fe12a.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 540247cd.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
