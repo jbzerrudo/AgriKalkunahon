@@ -140,6 +140,19 @@ eq('FAO TM4 efficiencies 60/75/90 encoded in UI (engine takes a number)', typeof
 
 console.log('\n== RICE AWD RULES (IRRI, DA AO 25-09, PhilRice) ==');
 eq('trigger dry season 15 cm', A.AWD.triggerCm.dry, 15); eq('trigger wet season 20 cm', A.AWD.triggerCm.wet, 20);
+/* three water-management methods */
+eq('CF early, shallow: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 10, pondedCm: 1 }).code, 'cf_top_up');
+eq('CF mid season, 7 cm: fine', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, pondedCm: 7 }).code, 'cf_ok');
+eq('CF mid season, 2 cm: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, pondedCm: 2 }).code, 'cf_top_up');
+eq('CF drains 7-10 days before harvest (IRRI RKB)', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 100, daysToHarvest: 8, pondedCm: 5 }).code, 'cf_drain_now');
+eq('CF flowering needs 5 cm', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 60, daysToFlowering: 2, pondedCm: 2 }).code, 'cf_flowering_top_up');
+eq('CF target depths are the IRRI values', A.AWD.continuous.afterTransplantCm + '/' + A.AWD.continuous.laterCm.join('-') + '/' + A.AWD.continuous.drainBeforeHarvestDays.join('-'), '3/5-10/7-10');
+eq('no tube: no re-flood threshold is returned', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).code, 'intermittent_no_threshold');
+eq('no tube: the answer is flagged as unsourced', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).flags.indexOf('no_tube_no_published_threshold') >= 0, true);
+eq('no tube: flowering rule still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 60, daysToFlowering: 2, pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
+eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 100, daysToHarvest: 5, soil: 'light' }).code, 'drain_stop_irrigating');
+eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
+eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
 eq('reflood now at 16 cm dry season', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
 eq('not yet at 16 cm wet season', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'not_yet');
 ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');

@@ -37,6 +37,7 @@ const T = {
     disease: { en: 'Wet leaves and disease weather', fil: 'Basang dahon at panahon ng sakit' },
     timing: { en: 'When is harvest? Heat units, day length', fil: 'Kailan ang ani? Init na naipon, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
+    feedback: { en: 'Comments and suggestions', fil: 'Puna at mungkahi' },
     about: { en: 'About this app', fil: 'Tungkol sa app na ito' }
   },
   ui: {
@@ -60,6 +61,14 @@ const T = {
   windClass: { unknown: { en: 'Not known (2 m/s assumed)', fil: 'Hindi alam (ipagpapalagay na 2 m/s)' }, light: { en: 'Light (leaves barely move)', fil: 'Mahina (halos di gumagalaw ang dahon)' }, lightmoderate: { en: 'Light to moderate (leaves rustle)', fil: 'Mahina hanggang katamtaman (kumakaluskos ang dahon)' }, moderatestrong: { en: 'Moderate to strong (branches move)', fil: 'Katamtaman hanggang malakas (gumagalaw ang sanga)' }, strong: { en: 'Strong (small trees sway)', fil: 'Malakas (umuuga ang maliliit na puno)' } },
   methods: { surface: { en: 'Flooding, furrow or basin (60%)', fil: 'Pagbaha, kanal o basin (60%)' }, sprinkler: { en: 'Sprinkler (75%)', fil: 'Sprinkler (75%)' }, drip: { en: 'Drip (90%)', fil: 'Drip (90%)' } },
   verdicts: {
+    cf_ok: { en: 'Water level is right. Keep it there.', fil: 'Tama ang lalim ng tubig. Panatilihin ito.' },
+    cf_top_up: { en: 'Top up. Bring the water to {lo} to {hi} cm.', fil: 'Dagdagan ang tubig. Iangat sa {lo} hanggang {hi} cm.' },
+    cf_too_deep: { en: 'Too deep. Let it down to {lo} to {hi} cm.', fil: 'Masyadong malalim. Pababain sa {lo} hanggang {hi} cm.' },
+    cf_need_depth: { en: 'Measure the water depth in the field first.', fil: 'Sukatin muna ang lalim ng tubig sa bukid.' },
+    cf_flowering_ok: { en: 'Flowering: the water is deep enough. Keep it flooded.', fil: 'Namumulaklak: sapat ang tubig. Panatilihing nakababad.' },
+    cf_flowering_top_up: { en: 'Flowering: top up to 5 cm now.', fil: 'Namumulaklak: dagdagan ang tubig hanggang 5 cm ngayon.' },
+    cf_drain_now: { en: 'Drain the field now for harvest.', fil: 'Patuyuin na ang bukid para sa anihan.' },
+    intermittent_no_threshold: { en: 'No published depth says when to re-flood without a tube.', fil: 'Walang nailathalang lalim kung kailan dapat patubigan kung walang tubo.' },
     water_now: { en: 'Water now. Give about {mm} mm.', fil: 'Magpatubig na ngayon. Mga {mm} mm.' },
     water_tomorrow: { en: 'Water by tomorrow. Give about {mm} mm.', fil: 'Magpatubig bukas. Mga {mm} mm.' },
     wait: { en: 'No need to water yet. Wait about {d} days.', fil: 'Hindi pa kailangang magpatubig. Maghintay ng mga {d} araw.' },
@@ -98,6 +107,7 @@ const bi = (obj, ph, cls) => { const s = t(obj, ph); return el('span', { class: 
 
 /* explanations of engine method and flag codes */
 const CODES = {
+  no_tube_no_published_threshold: 'Letting the field dry without a field water tube is not safe AWD. Safe AWD is defined by reading the water table in the tube, and the IRRI fact sheet gives no re-flood depth for a farmer without one. This app will not invent a number for it, so the answer below covers only what holds whatever method you use.',
   ea_given: 'Humidity from the vapour pressure you entered.', eq14_tdew: 'Humidity from the dew point (FAO-56 Eq. 14).', eq15_wetbulb: 'Humidity from the wet bulb (FAO-56 Eq. 15).',
   eq17_rhmaxmin: 'Humidity from morning and afternoon RH (FAO-56 Eq. 17).', eq18_rhmax: 'Humidity from morning RH only (FAO-56 Eq. 18).', eq19_rhmean: 'Humidity from mean RH (FAO-56 Eq. 19, which FAO-56 calls less desirable).',
   eq48_tdew_eq_tmin: 'No humidity given: dew point taken equal to the morning low (FAO-56 Eq. 48). FAO-56: this holds where the air is near saturation at sunrise and "should be checked" for the region; in dry conditions the true value is 2 to 3 °C lower.',
@@ -255,6 +265,11 @@ CARDS.water = function (root) {
 CARDS.rice = function (root) {
   const prev = recall('rice');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
+  const method = selectInput('rmethod', { en: 'How you manage the water', fil: 'Paraan ng pamamahala ng tubig' }, [
+    ['continuous', { en: 'Continuous flooding: the field is kept flooded', fil: 'Laging nakababad ang bukid' }],
+    ['awd', { en: 'Safe AWD: you have a field water tube and read it', fil: 'Safe AWD: may tubo sa bukid at binabasa mo ito' }],
+    ['intermittent', { en: 'You let the field dry, with no field water tube', fil: 'Hinahayaang matuyo ang bukid, walang tubo' }]
+  ], prev.method || 'awd');
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }]], prev.season || 'dry');
   const est = dateInput('est', { en: 'Date transplanted or sown', fil: 'Petsa ng lipat-tanim o sabog-tanim' }, prev.est);
   const flower = dateInput('flower', { en: 'Expected flowering date (if known)', fil: 'Inaasahang petsa ng pamumulaklak (kung alam)' }, prev.flower, true);
@@ -264,22 +279,34 @@ CARDS.rice = function (root) {
   const pond = numInput('pond', { en: 'Water depth above the soil, cm (if flooded)', fil: 'Lalim ng tubig sa ibabaw ng lupa, cm (kung may tubig)' }, prev.pond, 1);
   const drop = numInput('drop', { en: 'How fast the water level drops, cm per day (if you have watched it)', fil: 'Gaano kabilis bumaba ang tubig, cm kada araw (kung napansin mo)' }, prev.drop, 0.5);
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
-  form.append(season.row, est.row, flower.row, harvest.row, soil.row, tube.row, pond.row, drop.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, tube.row, pond.row, drop.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* The tube reading only means anything under safe AWD; the drop rate is read from the tube too. */
+  const syncMethod = () => { const awd = method.input.value === 'awd'; tube.row.hidden = !awd; drop.row.hidden = !awd; };
+  method.input.addEventListener('change', syncMethod); syncMethod();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value, soil: soil.input.value, tube: num(tube.input), pond: num(pond.input), drop: num(drop.input), weeds: weeds.input.checked };
+    const inp = { method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value, soil: soil.input.value, tube: num(tube.input), pond: num(pond.input), drop: num(drop.input), weeds: weeds.input.checked };
     remember('rice', inp); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
-    const r = A.awdDecision({ daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest), season: inp.season, tubeBelowSurfaceCm: inp.tube, pondedCm: inp.pond, weedsManaged: inp.weeds, soil: inp.soil, pondDropCmPerDay: inp.drop });
-    const level = { reflood_now: 'stop', flowering_top_up_to_5cm: 'stop', drain_stop_irrigating: 'caution', need_tube_reading: 'info', before_awd_keep_shallow: 'caution' }[r.code] || 'go';
+    const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest), season: inp.season, tubeBelowSurfaceCm: inp.tube, pondedCm: inp.pond, weedsManaged: inp.weeds, soil: inp.soil, pondDropCmPerDay: inp.drop });
+    const level = { reflood_now: 'stop', flowering_top_up_to_5cm: 'stop', cf_flowering_top_up: 'stop', cf_top_up: 'stop', cf_too_deep: 'caution', drain_stop_irrigating: 'caution', cf_drain_now: 'caution', need_tube_reading: 'info', cf_need_depth: 'info', intermittent_no_threshold: 'info', before_awd_keep_shallow: 'caution' }[r.code] || 'go';
     const lines = [];
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger this season', fil: 'Hudyat ng pagpapatubig ngayong panahon' }), r.triggerCm + ' cm below the soil surface, then flood to about 5 cm']);
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm' + (r.daysLeft != null ? ', about ' + fmt(r.daysLeft, 0) + ' days at your drop rate' : '')]);
     if (r.drainDays) lines.push([bi({ en: 'Drain', fil: 'Patuyuin' }), r.drainDays + ' days before harvest for this soil']);
-    const why = ['Safe AWD: re-flood when the field tube shows the trigger depth; 15 cm in the dry season and 20 cm in the wet season (DA Administrative Order 25-09; PhilRice observation well); IRRI uses 15 cm all season.', 'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).', 'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).', 'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
-    const flags = (r.flags || []).map(f => CODES[f]).filter(Boolean);
+    const whyByMethod = {
+      continuous: ['Continuous flooding, as the IRRI Rice Knowledge Bank describes it: "After transplanting, water levels should be around 3 cm initially" and "gradually increase to 5-10 cm (with increasing plant height) and remain there until the field is drained". Keep 5 cm "at all times from heading to the end of flowering", and drain "7-10 days before harvest".'],
+      intermittent: ['Safe AWD is defined by the field water tube. IRRI\'s fact sheet sets the re-flood depth by what the tube shows, and gives no depth for a field without one, so this app reports none rather than estimating one. Drying an unmonitored field risks taking the water table below the roots without the farmer seeing it.', 'What still holds whatever you do: keep the field flooded to 5 cm from one week before to one week after flowering, drain before harvest, and postpone drying for 2 to 3 weeks while weeds are uncontrolled (IRRI).']
+    }[inp.method];
+    const why = whyByMethod || ['Safe AWD: re-flood when the field tube shows the trigger depth; 15 cm in the dry season and 20 cm in the wet season (DA Administrative Order 25-09; PhilRice observation well); IRRI uses 15 cm all season.', 'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).', 'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).', 'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
+    const flags = (r.flags || []).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);   // the Why text already carries this one in full
     const limits = ['Safe AWD assumes heavy soils with a shallow water table; on loamy and sandy soils with deep water tables, IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).', 'No percolation rate is assumed; the "days left" line appears only when you enter your own observed drop rate.'];
-    show(out, result({ level, verdict: t(T.verdicts[r.code], { trig: r.triggerCm }), lines, why, flags, assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot.'], limits, sources: r.sources }));
+    if (r.targetCm && Array.isArray(r.targetCm)) lines.push([bi({ en: 'Target depth now', fil: 'Dapat na lalim ngayon' }), r.targetCm[0] === r.targetCm[1] ? r.targetCm[0] + ' cm' : r.targetCm[0] + ' to ' + r.targetCm[1] + ' cm']);
+    if (r.tube) {
+      lines.push([bi({ en: 'How to make a field water tube', fil: 'Paano gumawa ng tubo sa bukid' }),
+        r.tube.lengthCm + ' cm of plastic pipe or bamboo, ' + r.tube.diameterCm[0] + ' to ' + r.tube.diameterCm[1] + ' cm across, hammered in so ' + r.tube.aboveSoilCm + ' cm stands above the soil (IRRI)']);
+    }
+    show(out, result({ level, verdict: t(T.verdicts[r.code], { trig: r.triggerCm, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags, assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot.'], limits, sources: r.sources }));
   }
 };
 
@@ -587,9 +614,32 @@ const READING = {
   timing:  { en: 'Use a typical afternoon high and morning low for the season so far, not today\'s weather alone.', fil: 'Gamitin ang karaniwang pinakamainit sa hapon at pinakamalamig sa umaga sa buong panahon, hindi ang panahon ngayon lamang.' }
 };
 
+CARDS.feedback = function (root) {
+  const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build __BUILD__)');
+  root.appendChild(el('p', null, bi({
+    en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
+    fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa telepono mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
+  })));
+  root.appendChild(el('p', null, el('a', { class: 'btn primary', href: 'mailto:' + MAIL + '?subject=' + subject, style: 'display:block;text-align:center;text-decoration:none' }, bi({ en: 'Write to the author', fil: 'Sumulat sa may-akda' }))));
+  root.appendChild(el('p', { class: 'hint' }, bi({ en: 'Or copy the address: ', fil: 'O kopyahin ang address: ' }), el('code', null, MAIL)));
+  root.appendChild(el('h4', null, bi({ en: 'What helps most', fil: 'Ano ang pinakanakakatulong' })));
+  const ul = el('ul', { class: 'refs' });
+  [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
+   { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
+   { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
+   { en: 'The build shown at the bottom of the home screen.', fil: 'Ang build na nasa ibaba ng unang pahina.' }
+  ].forEach(x => ul.appendChild(el('li', null, bi(x))));
+  root.appendChild(ul);
+  root.appendChild(el('p', { class: 'warn' }, bi({
+    en: 'This app is offline and sends nothing by itself. The button opens your own mail app, and nothing you type into the calculators ever leaves your phone.',
+    fil: 'Offline ang app na ito at walang ipinapadala nang kusa. Binubuksan lang ng pindutan ang sarili mong mail app, at walang inilalagay sa mga kalkulador ang lumalabas sa telepono mo.'
+  })));
+};
+
 /* ---------- router ---------- */
-const ORDER = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing', 'sources', 'about'];
-const ICON = { water: '💧', rice: '🌾', rain: '🌧', spray: '🧴', dry: '☀', stress: '🌡', frost: '❄', disease: '🍃', timing: '📅', sources: '📚', about: 'ℹ' };
+const ORDER = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing', 'sources', 'about', 'feedback'];
+const ICON = { water: '💧', rice: '🌾', rain: '🌧', spray: '🧴', dry: '☀', stress: '🌡', frost: '❄', disease: '🍃', timing: '📅', sources: '📚', about: 'ℹ', feedback: '✉' };
 function renderHome(main) {
   main.innerHTML = '';
   main.appendChild(el('p', { class: 'lead' }, bi(T.tagline)));

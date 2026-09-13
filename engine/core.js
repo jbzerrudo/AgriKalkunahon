@@ -358,8 +358,52 @@ const AWD = {
   floweringWindowDays: 7,                    // one week before to one week after flowering (IRRI, Bouman)
   drainBeforeHarvestDays: { light: 7, clay: 14 },   // PhilRice, PalayCheck
   preAwdDepthCm: [2, 3],                     // PhilRice (Saludez 2022): 2-3 cm before AWD starts
-  continuous: { afterTransplantCm: 3, laterCm: [5, 10], drainBeforeHarvestDays: [7, 10] }   // IRRI RKB
+  continuous: { afterTransplantCm: 3, laterCm: [5, 10], drainBeforeHarvestDays: [7, 10], headingCm: 5 },  // IRRI RKB, verbatim
+  /* IRRI fact sheet: the tube is 30 cm of plastic pipe or bamboo, 10-15 cm across, hammered in so 15 cm
+     stands above the soil. Quoted on the card, because a farmer without one can make one in an hour. */
+  tube: { lengthCm: 30, diameterCm: [10, 15], aboveSoilCm: 15 },
+  weedPostponeWeeks: [2, 3]
 };
+/* CONTINUOUS FLOODING  [IRRI_AWD]. Depths from the IRRI Rice Knowledge Bank: "around 3 cm initially",
+   "gradually increase to 5-10 cm (with increasing plant height)", 5 cm "from heading to the end of
+   flowering", "drained 7-10 days before harvest". */
+function continuousFloodDecision(inp) {
+  const C = AWD.continuous, src = ['IRRI_AWD', 'PALAYCHECK'];
+  const d = C.drainBeforeHarvestDays;
+  if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= d[1]) return { code: 'cf_drain_now', drainDays: d, sources: src };
+  if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays) {
+    const ok = isNum(inp.pondedCm) && inp.pondedCm >= C.headingCm;
+    return { code: ok ? 'cf_flowering_ok' : 'cf_flowering_top_up', targetCm: C.headingCm, sources: src };
+  }
+  const early = isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0];
+  const target = early ? [C.afterTransplantCm, C.afterTransplantCm] : C.laterCm;
+  if (!isNum(inp.pondedCm)) return { code: 'cf_need_depth', targetCm: target, sources: src };
+  if (inp.pondedCm < target[0]) return { code: 'cf_top_up', targetCm: target, shortCm: target[0] - inp.pondedCm, sources: src };
+  if (inp.pondedCm > target[1] + 5) return { code: 'cf_too_deep', targetCm: target, sources: src };
+  return { code: 'cf_ok', targetCm: target, sources: src };
+}
+/* INTERMITTENT DRYING WITHOUT A TUBE  [IRRI_AWD]. Returns no dry-down threshold, deliberately. Safe AWD
+   is defined by reading the water table in a tube; the IRRI fact sheet gives no guidance for a farmer
+   without one, and this app does not invent one. What it does return is what holds whatever the method:
+   flooded through flowering, drained before harvest, postponed while weeds are unmanaged. */
+function intermittentDecision(inp) {
+  const src = ['IRRI_AWD', 'PALAYCHECK'], flags = ['no_tube_no_published_threshold'];
+  const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
+  if (inp.weedsManaged === false) flags.push('postpone_awd_weeds');
+  if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, flags: flags, tube: AWD.tube, sources: src };
+  if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays) {
+    const ok = isNum(inp.pondedCm) && inp.pondedCm >= AWD.floweringFloodCm;
+    return { code: ok ? 'flowering_keep_flooded' : 'flowering_top_up_to_5cm', targetCm: AWD.floweringFloodCm, flags: flags, tube: AWD.tube, sources: src };
+  }
+  if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, flags: flags, tube: AWD.tube, sources: src };
+  return { code: 'intermittent_no_threshold', flags: flags, tube: AWD.tube, sources: src };   // no triggerCm: there is none to give
+}
+/* Dispatch on the farmer's chosen method. */
+function riceWaterDecision(inp) {
+  if (inp.method === 'continuous') return continuousFloodDecision(inp);
+  if (inp.method === 'intermittent') return intermittentDecision(inp);
+  return awdDecision(inp);
+}
 /* inp: {daysAfterEstablish, daysToFlowering (negative after), daysToHarvest, season:'wet'|'dry', tubeBelowSurfaceCm (positive = below), pondedCm, weedsManaged, soil:'light'|'clay', pondDropCmPerDay} */
 function awdDecision(inp) {
   const flags = [], src = ['IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK'];
@@ -669,7 +713,7 @@ const API = {
   // soil water
   SOILS, soilMid, TAW, RAW, pAdjust, Ks, waterBalance, irrigationDecision,
   // rice
-  AWD, awdDecision,
+  AWD, awdDecision, continuousFloodDecision, intermittentDecision, riceWaterDecision,
   // rain
   effectiveRainMonthly,
   // spray
