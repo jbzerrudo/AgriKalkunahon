@@ -647,6 +647,12 @@ function frostIndicator(inp) {
    design assumption of this app, stated on the card: FAO defines dew by the surface reaching the dew
    point and prints no such number. */
 const DEW = { nearSaturationC: 2.0 };
+/* Luo & Goudriaan (2000), Agric. For. Meteorol. 104(4):303-313. Dew onset and drying on rice top leaves
+   checked visually every 15 min over 16 rain-free nights, February to April 1994, IR72, at IRRI Los Banos
+   (14 deg 11' N, 121 deg 15' E, 20 m amsl). Section 3.1 gives the after-sunrise range; Table 3 gives the
+   nightly totals for the 14 heavy dew nights. Measured values, not a model: nothing here is calculated. */
+const DEW_RICE_LB = { afterSunriseLoH: 1.4, afterSunriseHiH: 3.4, nightLoH: 9.0, nightHiH: 12.8, nights: 14,
+  shiftFromShieldingHiH: 2.0, site: 'IRRI Los Banos', variety: 'IR72', season: 'dry season, February to April' };
 function dewTonight(T, RH, sky, wind) {
   const td = tdewFromEa(es0(T) * RH / 100);
   const depression = T - td;
@@ -734,6 +740,7 @@ const REFS = {
   CAUBA2025: { cls: 'primary', cite: 'Cauba, A.G. Jr., Darvishzadeh, R., Schlund, M., Nelson, A., Laborte, A. (2025). Estimation of transplanting and harvest dates of rice crops in the Philippines using Sentinel-1 data. Remote Sensing Applications: Society and Environment 37:101435. Harvest-date root mean squared differences against farmer-reported dates across 99 fields in Agusan del Sur, Cagayan and Leyte: 16 to 17.5 days in the dry season, 8 to 22 days in the wet.', url: 'https://doi.org/10.1016/j.rsase.2024.101435' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
+  LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
   ORYZA2000: { cls: 'extension', cite: 'IRRI ORYZA2000 crop data file IR72.D92: TBD = 8, TOD = 30, TMD = 42 C.', url: 'https://sites.google.com/a/irri.org/oryza2000/tutorials/model-setup/appendix-5---ir72-d92' },
@@ -745,6 +752,7 @@ const UNVERIFIED = [
   { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
   { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption. The FAO frost manual prints no threshold: its recommended method is a regression, Tmin = a T + b Td + c, from the temperature and dew point two hours after sunset on radiative frost nights, whose coefficients must be fitted locally from historical records. No such fit exists for Benguet, and neither Marasigan (2017) nor Launio et al. (2020) gives a dew-point value.' },
   { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
+  { id: 'LEAF_WETNESS_DURATION', text: 'Hours of leaf wetness are not calculated, because every published method needs an input this card does not have. The RH >= 90% estimator needs hourly humidity through the night (Sentelhas et al. 2008). The sigmoid on daily mean relative humidity used by Alsafadi et al. (2024), after Alvares et al. (2015) in Brazil, needs its three coefficients fitted locally, and no Philippine fit is published. Luo and Goudriaan (2000), the only Philippine study of dew duration on rice, drove its model with nocturnal net radiation measured by a net radiometer. What this card reports instead is their measured drying time.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' }
 ];
 
@@ -768,7 +776,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

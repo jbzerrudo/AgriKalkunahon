@@ -950,7 +950,7 @@ const T = {
     dry: { en: 'Can my palay be dried enough today?', fil: 'Matutuyo ba nang sapat ang palay ngayon?' },
     stress: { en: 'Too hot or too cold for my crop?', fil: 'Masyado bang mainit o malamig para sa pananim?' },
     frost: { en: 'Frost (andap) tonight?', fil: 'Mag-aandap (frost) ba ngayong gabi?' },
-    disease: { en: 'Will the leaves be wet tonight?', fil: 'Mababasa ba ang dahon ngayong gabi?' },
+    disease: { en: 'Will the leaves be wet in the morning?', fil: 'Mababasa ba ang dahon sa umaga?' },
     timing: { en: 'When is harvest? Heat units, day length', fil: 'Kailan ang ani? Init na naipon, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
     feedback: { en: 'Comments and suggestions', fil: 'Puna at mungkahi' },
@@ -1012,9 +1012,9 @@ const T = {
     possible: { en: 'Frost possible tonight. Protect if you can.', fil: 'Maaaring mag-andap ngayong gabi. Protektahan kung kaya.' },
     watch: { en: 'Watch tonight. Check the field in the hour before sunrise.', fil: 'Bantayan ngayong gabi. Tingnan ang bukid sa loob ng isang oras bago sumikat ang araw.' },
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
-    dew_very_likely_near_saturation: { en: 'Dew very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak ang hamog. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
+    dew_very_likely_near_saturation: { en: 'Wet leaves at dawn very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak na basa ang dahon sa madaling-araw. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
     dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
-    dew_less_likely: { en: 'Dew less likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malabong magkaroon ng hamog: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
+    dew_less_likely: { en: 'Dry leaves by morning more likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malamang tuyo ang dahon sa umaga: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
     harvest: { en: 'Expected harvest around {date}. Judge by the grain, not by the date.', fil: 'Inaasahang ani sa bandang {date}. Ang butil ang basehan, hindi ang petsa.' }
@@ -1612,7 +1612,7 @@ CARDS.disease = function (root) {
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
       show(out, result({ level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: [[bi({ en: 'The air must cool', fil: 'Kailangang lumamig ang hangin ng' }), fmt(d.depression, 1) + ' °C to reach the dew point'], [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C']],
-        why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.',
+        why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.', 'The question is about the morning, not the evening, because dew that forms early is close to universal on a clear, calm night and tells you little on its own. What decides infection is how long the leaves stay wet, and that period runs from the moment dew forms until the sun dries it, usually well into the morning. A night that leaves the crop wet at dawn is the one that matters.',
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not estimated: the RH ≥ 90% method needs hourly humidity and local calibration (Sentelhas et al. 2008).'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008'] }));
     }
@@ -1682,7 +1682,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 71351529. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 518282ae. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1723,7 +1723,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 71351529)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 518282ae)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1735,7 +1735,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 71351529).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 71351529 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 518282ae).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 518282ae ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1767,7 +1767,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 71351529.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 518282ae.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

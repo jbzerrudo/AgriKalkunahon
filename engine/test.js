@@ -262,9 +262,9 @@ ok('daylight Bangkok 15 April (Ex17)', A.daylight(13.73, 105), 12.31, 0.01, 'h')
 console.log('\n== REFERENCES ==');
 { const used = new Set();
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
-  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES']
+  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the five items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,HARVEST_PM7'); }
+  eq('UNVERIFIED list names the six items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
@@ -272,6 +272,13 @@ ok('haversine 1 deg of longitude at the equator', A.haversineKm(0, 0, 0, 1), 111
 ok('haversine same point is zero', A.haversineKm(14.6, 121.0, 14.6, 121.0), 0, 1e-9, 'km');
 ok('haversine is symmetric', A.haversineKm(16.46, 120.59, 14.6, 121.0) - A.haversineKm(14.6, 121.0, 16.46, 120.59), 0, 1e-9, 'km');
 eq('Benguet reference is the PAGASA agromet station (Marasigan 2017)', A.BENGUET.lat + ',' + A.BENGUET.lon, '16.46,120.59');
+
+/* ---- Luo & Goudriaan (2000) measured dew figures: verbatim from the paper, nothing derived ---- */
+eq('Luo 2000 dew persists after sunrise (section 3.1)', A.DEW_RICE_LB.afterSunriseLoH + ' to ' + A.DEW_RICE_LB.afterSunriseHiH, '1.4 to 3.4');
+eq('Luo 2000 nightly dew duration range (Table 3)', A.DEW_RICE_LB.nightLoH + ' to ' + A.DEW_RICE_LB.nightHiH, '9 to 12.8');
+eq('Luo 2000 Table 3 counts 14 heavy dew nights', A.DEW_RICE_LB.nights, 14);
+eq('Luo 2000 drying time barely moves when dew is cut short', A.DEW_RICE_LB.shiftFromShieldingHiH, 2.0);
+eq('the after-sunrise window sits inside the whole dew period', A.DEW_RICE_LB.afterSunriseHiH < A.DEW_RICE_LB.nightLoH, true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;
