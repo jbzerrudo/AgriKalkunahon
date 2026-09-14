@@ -663,17 +663,15 @@ function dewTonight(T, RH, sky, wind) {
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
-/* A forecast leaf-wetness figure (PAGASA Farm Weather Forecast) placed against the only Philippine rice
-   measurement of dew duration there is: Luo & Goudriaan (2000), 9.0 to 12.8 h over 14 heavy dew nights.
-   No risk threshold is applied, because none is published for Philippine conditions. This only reports
-   where the forecast number falls relative to that measured range. */
-function leafWetnessContext(hours) {
-  if (!isNum(hours) || hours < 0 || hours > 24) return { code: 'lw_out_of_range', sources: ['PAGASA_FWFA'] };
-  const R = DEW_RICE_LB;
-  let code = 'lw_within_measured';
-  if (hours < R.nightLoH) code = 'lw_below_measured';
-  else if (hours > R.nightHiH) code = 'lw_above_measured';
-  return { code: code, hours: hours, loH: R.nightLoH, hiH: R.nightHiH, sources: ['PAGASA_FWFA', 'LUO2000'] };
+/* PAGASA publishes Leaf Wetness in the Farm Weather Forecast as a range across the forecast area,
+   alongside temperature and humidity ranges for that same area. This reports the pair back as given.
+   It is deliberately NOT compared with Luo & Goudriaan's measured dew duration: the published product
+   does not define how the column is derived, and the two may not be the same quantity. Reported, not
+   interpreted, and not converted. */
+function leafWetnessReport(loH, hiH) {
+  if (!isNum(loH) || !isNum(hiH)) return { code: 'lw_need_both', sources: ['PAGASA_FWFA'] };
+  if (loH < 0 || hiH > 24 || loH > hiH) return { code: 'lw_out_of_range', sources: ['PAGASA_FWFA'] };
+  return { code: 'lw_reported', loH: loH, hiH: hiH, spanH: hiH - loH, sources: ['PAGASA_FWFA'] };
 }
 
 /* days: [{Tmin, hoursRH90}] last two days */
@@ -790,7 +788,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria, leafWetnessContext,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

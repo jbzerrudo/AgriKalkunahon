@@ -280,15 +280,16 @@ eq('Luo 2000 Table 3 counts 14 heavy dew nights', A.DEW_RICE_LB.nights, 14);
 eq('Luo 2000 drying time barely moves when dew is cut short', A.DEW_RICE_LB.shiftFromShieldingHiH, 2.0);
 eq('the after-sunrise window sits inside the whole dew period', A.DEW_RICE_LB.afterSunriseHiH < A.DEW_RICE_LB.nightLoH, true);
 
-/* ---- forecast leaf wetness placed against Luo's measured range: boundaries are the measured values ---- */
-eq('leaf wetness below the measured range', A.leafWetnessContext(6).code, 'lw_below_measured');
-eq('leaf wetness at the lower measured bound is inside it', A.leafWetnessContext(9.0).code, 'lw_within_measured');
-eq('leaf wetness mid-range', A.leafWetnessContext(11).code, 'lw_within_measured');
-eq('leaf wetness at the upper measured bound is inside it', A.leafWetnessContext(12.8).code, 'lw_within_measured');
-eq('leaf wetness above the measured range', A.leafWetnessContext(14).code, 'lw_above_measured');
-eq('leaf wetness cannot exceed a day', A.leafWetnessContext(25).code, 'lw_out_of_range');
-eq('leaf wetness cannot be negative', A.leafWetnessContext(-1).code, 'lw_out_of_range');
-eq('a blank leaf wetness entry is rejected, not treated as zero', A.leafWetnessContext(null).code, 'lw_out_of_range');
+/* ---- PAGASA leaf wetness is a published range for an area: reported back, never interpreted ---- */
+eq('a published range is reported as given', A.leafWetnessReport(0, 4).code, 'lw_reported');
+eq('the span of that range is kept', A.leafWetnessReport(0, 4).spanH, 4);
+eq('a zero-width range is still a range', A.leafWetnessReport(3, 3).code, 'lw_reported');
+eq('a full day is allowed', A.leafWetnessReport(0, 24).code, 'lw_reported');
+eq('reversed figures are rejected', A.leafWetnessReport(4, 0).code, 'lw_out_of_range');
+eq('more than a day is rejected', A.leafWetnessReport(0, 25).code, 'lw_out_of_range');
+eq('negative hours are rejected', A.leafWetnessReport(-1, 4).code, 'lw_out_of_range');
+eq('one figure alone is not enough', A.leafWetnessReport(0, null).code, 'lw_need_both');
+eq('a blank pair is rejected, not treated as zero', A.leafWetnessReport(null, null).code, 'lw_need_both');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;

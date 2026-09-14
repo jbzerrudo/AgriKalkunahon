@@ -98,10 +98,9 @@ const T = {
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
     dew_very_likely_near_saturation: { en: 'Wet leaves at dawn very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak na basa ang dahon sa madaling-araw. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
     dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
-    lw_within_measured: { en: 'PAGASA forecasts {h} hours of leaf wetness. That falls inside the {lo} to {hi} hours measured on rice at Los Banos on heavy dew nights.', fil: 'Ang hula ng PAGASA ay {h} oras na basa ang dahon. Nasa loob ito ng {lo} hanggang {hi} oras na nasukat sa palay sa Los Banos tuwing malakas ang hamog.' },
-    lw_below_measured: { en: 'PAGASA forecasts {h} hours of leaf wetness, shorter than the {lo} to {hi} hours measured on rice at Los Banos on heavy dew nights.', fil: 'Ang hula ng PAGASA ay {h} oras na basa ang dahon, mas maikli kaysa sa {lo} hanggang {hi} oras na nasukat sa palay sa Los Banos tuwing malakas ang hamog.' },
-    lw_above_measured: { en: 'PAGASA forecasts {h} hours of leaf wetness, longer than the {lo} to {hi} hours measured on rice at Los Banos on heavy dew nights.', fil: 'Ang hula ng PAGASA ay {h} oras na basa ang dahon, mas mahaba kaysa sa {lo} hanggang {hi} oras na nasukat sa palay sa Los Banos tuwing malakas ang hamog.' },
-    lw_out_of_range: { en: 'Leaf wetness hours must be between 0 and 24.', fil: 'Ang oras ng basang dahon ay dapat nasa 0 hanggang 24.' },
+    lw_reported: { en: 'PAGASA forecasts {lo} to {hi} hours of leaf wetness for your forecast area.', fil: 'Ang hula ng PAGASA para sa inyong forecast area ay {lo} hanggang {hi} oras na basa ang dahon.' },
+    lw_out_of_range: { en: 'Leaf wetness hours must be between 0 and 24, with the low figure first.', fil: 'Ang oras ng basang dahon ay dapat nasa 0 hanggang 24, at ang mas mababa ang mauuna.' },
+    lw_need_both: { en: 'Enter both figures of the range, for example 0 and 4.', fil: 'Ilagay ang dalawang bilang ng saklaw, halimbawa 0 at 4.' },
     dew_less_likely: { en: 'Dry leaves by morning more likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malamang tuyo ang dahon sa umaga: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
     hutton_high_risk: { en: 'High late blight risk: the Hutton Criteria were met.', fil: 'Mataas ang panganib ng late blight: natugunan ang Hutton Criteria.' },
     hutton_not_met: { en: 'Hutton Criteria not met in the last two days.', fil: 'Hindi natugunan ang Hutton Criteria sa huling dalawang araw.' },
@@ -668,10 +667,11 @@ CARDS.disease = function (root) {
   const RH = numInput('zRH', { en: 'Humidity this evening (%)', fil: 'Halumigmig ngayong gabi (%)' }, prev.RH, 1);
   const sky = selectInput('zSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear', fil: 'Maaliwalas' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast', fil: 'Maulap' }]], prev.sky || 'clear');
   const wind = selectInput('zWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy', fil: 'Mahangin' }]], prev.wind || 'calm');
-  const lw = numInput('zLW', { en: 'PAGASA forecast leaf wetness (hours)', fil: 'Leaf wetness mula sa PAGASA (oras)' }, prev.lw, 0.5, { optional: true });
+  const lwLo = numInput('zLWlo', { en: 'PAGASA leaf wetness, lower figure (hours)', fil: 'Leaf wetness ng PAGASA, mas mababang bilang (oras)' }, prev.lwLo, 0.5, { optional: true });
+  const lwHi = numInput('zLWhi', { en: 'PAGASA leaf wetness, upper figure (hours)', fil: 'Leaf wetness ng PAGASA, mas mataas na bilang (oras)' }, prev.lwHi, 0.5, { optional: true });
   const lwNote = el('p', { class: 'hint' }, bi({
-    en: 'From the Leaf Wetness column of the daily Farm Weather Forecast at bagong.pagasa.dost.gov.ph/agri-weather. This app reports it back and compares it with published measurements; it does not recompute it. Leave blank if you do not have it.',
-    fil: 'Mula sa hanay na Leaf Wetness ng araw-araw na Farm Weather Forecast sa bagong.pagasa.dost.gov.ph/agri-weather. Iniuulat lang ito ng app at inihahambing sa mga nailathalang sukat; hindi ito muling kinakalkula. Huwag punan kung wala kayo nito.'
+    en: 'From the Leaf Wetness column of the daily Farm Weather Forecast at bagong.pagasa.dost.gov.ph/agri-weather. It is published as a range for the whole forecast area, such as 0 to 4, so enter both figures. This app reports them back as given and does not convert or interpret them. Leave blank if you do not have them.',
+    fil: 'Mula sa hanay na Leaf Wetness ng araw-araw na Farm Weather Forecast sa bagong.pagasa.dost.gov.ph/agri-weather. Saklaw ito para sa buong forecast area, tulad ng 0 hanggang 4, kaya ilagay ang dalawang bilang. Iniuulat lang ito ng app nang buo at hindi kinakalkula o binibigyang-kahulugan. Huwag punan kung wala kayo nito.'
   }));
   const h = el('h4', null, bi({ en: 'Potato late blight, only with a data logger', fil: 'Late blight ng patatas, kung may data logger lamang' }));
   const hNote = el('p', { class: 'hint' }, bi({
@@ -681,12 +681,12 @@ CARDS.disease = function (root) {
   const hOn = checkInput('zLogger', { en: 'I have a data logger or weather station', fil: 'May data logger o weather station ako' }, prev.logger);
   const a1 = numInput('zA1', { en: 'Yesterday: lowest temperature (°C)', fil: 'Kahapon: pinakamababang temperatura (°C)' }, prev.a1, 0.1, { optional: true }), a2 = numInput('zA2', { en: 'Yesterday: hours at or above 90% humidity', fil: 'Kahapon: oras na 90% pataas ang halumigmig' }, prev.a2, 0.5, { optional: true });
   const b1 = numInput('zB1', { en: 'Day before: lowest temperature (°C)', fil: 'Noong isang araw: pinakamababang temperatura (°C)' }, prev.b1, 0.1, { optional: true }), b2 = numInput('zB2', { en: 'Day before: hours at or above 90% humidity', fil: 'Noong isang araw: oras na 90% pataas ang halumigmig' }, prev.b2, 0.5, { optional: true });
-  form.append(Tn.row, RH.row, sky.row, wind.row, lw.row, lwNote, h, hNote, hOn.row, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(Tn.row, RH.row, sky.row, wind.row, lwLo.row, lwHi.row, lwNote, h, hNote, hOn.row, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const syncLogger = () => { const on = hOn.input.checked; [a1, a2, b1, b2].forEach(x => { x.row.hidden = !on; }); };
   hOn.input.addEventListener('change', syncLogger); syncLogger();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, lw: num(lw.input), logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
+    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, lwLo: num(lwLo.input), lwHi: num(lwHi.input), logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L0 = store.loc, now0 = new Date();
@@ -727,15 +727,15 @@ CARDS.disease = function (root) {
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not calculated for your own field. The RH ≥ 90% method needs humidity recorded right through the night, not one evening reading, and its threshold has to be fitted locally: Sentelhas et al. (2008) fitted 83, 85, 90 and 92% at four sites on turfgrass. No Philippine fit is published.', 'The drying time above is your own sunrise plus a range measured on rice at one lowland site in the 1994 dry season (Luo and Goudriaan 2000). Sunrise is calculated for your location; the rest is measurement from elsewhere, not a prediction for your field, crop or season.', 'The start of the wet period is not given, because no published method gets the moment dew forms from a single evening reading.'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008', 'LUO2000'] }));
     }
-    if (inp.lw != null) {
-      const lwc = A.leafWetnessContext(inp.lw);
-      show(out, result({ level: 'info', verdict: t(T.verdicts[lwc.code], { h: fmt(inp.lw, 1), lo: fmt(lwc.loH, 1), hi: fmt(lwc.hiH, 1) }),
-        why: ['This is PAGASA\'s own forecast figure from the daily Farm Weather Forecast, reported back to you. The app does not recompute it.',
-          'It is placed against the only Philippine measurement of dew duration on rice there is (Luo and Goudriaan 2000) so you can see whether the forecast night is a heavy dew night by that yardstick. No risk threshold is applied to it, because none is published for Philippine conditions.'],
+    if (inp.lwLo != null || inp.lwHi != null) {
+      const lwr = A.leafWetnessReport(inp.lwLo, inp.lwHi);
+      show(out, result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1) }),
+        why: ['This is PAGASA\'s own figure from the daily Farm Weather Forecast, reported back to you exactly as published. The app does not recompute it, convert it, or score risk from it.',
+          'The column is published as a range across a whole forecast area, in the same way the temperature and humidity columns beside it are. The low figure and the high figure describe different places inside that area, not the start and end of one night.'],
         limits: ['A forecast covers an area, not your field. Where PAGASA and this card differ, follow PAGASA.',
-          'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not put this number in the Hutton boxes below.',
-          'The measured range it is compared against is lowland paddy rice at one site in the 1994 dry season.'],
-        sources: ['PAGASA_FWFA', 'LUO2000'] }));
+          'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not put these numbers in the Hutton boxes below.',
+          'This figure is not compared with the measured dew durations shown above. The published product does not state how the column is derived, so the app does not assume the two are the same quantity.'],
+        sources: ['PAGASA_FWFA'] }));
     }
     if (inp.logger && inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
       const hcr = A.huttonCriteria([{ Tmin: inp.b1, hoursRH90: inp.b2 }, { Tmin: inp.a1, hoursRH90: inp.a2 }]);
