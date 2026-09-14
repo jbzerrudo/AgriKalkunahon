@@ -664,14 +664,21 @@ function dewTonight(T, RH, sky, wind) {
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
 /* PAGASA publishes Leaf Wetness in the Farm Weather Forecast as a range across the forecast area,
-   alongside temperature and humidity ranges for that same area. This reports the pair back as given.
-   It is deliberately NOT compared with Luo & Goudriaan's measured dew duration: the published product
-   does not define how the column is derived, and the two may not be the same quantity. Reported, not
-   interpreted, and not converted. */
+   alongside the temperature and humidity ranges for that same area. Reported back as given, never
+   converted. It is then placed against the only measured dew durations from a Philippine rice field
+   (Luo & Goudriaan 2000, 9.0 to 12.8 h on heavy dew nights) purely so a reader can tell a short spell
+   from a long one. That is a yardstick, not a risk score: the conditions behind the measurement are
+   stated wherever the comparison is shown, and no infection threshold is applied, because the
+   published ones in hours of wetness are for other crops and other climates. */
 function leafWetnessReport(loH, hiH) {
   if (!isNum(loH) || !isNum(hiH)) return { code: 'lw_need_both', sources: ['PAGASA_FWFA'] };
   if (loH < 0 || hiH > 24 || loH > hiH) return { code: 'lw_out_of_range', sources: ['PAGASA_FWFA'] };
-  return { code: 'lw_reported', loH: loH, hiH: hiH, spanH: hiH - loH, sources: ['PAGASA_FWFA'] };
+  const R = DEW_RICE_LB;
+  let code = 'lw_overlaps_measured';
+  if (hiH < R.nightLoH) code = 'lw_shorter_than_measured';
+  else if (loH > R.nightHiH) code = 'lw_longer_than_measured';
+  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, refLoH: R.nightLoH, refHiH: R.nightHiH,
+    sources: ['PAGASA_FWFA', 'LUO2000'] };
 }
 
 /* days: [{Tmin, hoursRH90}] last two days */

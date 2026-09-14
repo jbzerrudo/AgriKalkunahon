@@ -280,11 +280,15 @@ eq('Luo 2000 Table 3 counts 14 heavy dew nights', A.DEW_RICE_LB.nights, 14);
 eq('Luo 2000 drying time barely moves when dew is cut short', A.DEW_RICE_LB.shiftFromShieldingHiH, 2.0);
 eq('the after-sunrise window sits inside the whole dew period', A.DEW_RICE_LB.afterSunriseHiH < A.DEW_RICE_LB.nightLoH, true);
 
-/* ---- PAGASA leaf wetness is a published range for an area: reported back, never interpreted ---- */
-eq('a published range is reported as given', A.leafWetnessReport(0, 4).code, 'lw_reported');
-eq('the span of that range is kept', A.leafWetnessReport(0, 4).spanH, 4);
-eq('a zero-width range is still a range', A.leafWetnessReport(3, 3).code, 'lw_reported');
-eq('a full day is allowed', A.leafWetnessReport(0, 24).code, 'lw_reported');
+/* ---- PAGASA leaf wetness: a published range for an area, set against Luo's measured 9.0 to 12.8 h ---- */
+eq('the Batanes sheet, 0 to 4 h, is a short spell', A.leafWetnessReport(0, 4).code, 'lw_shorter_than_measured');
+eq('a range ending just below the measured band is short', A.leafWetnessReport(2, 8.9).code, 'lw_shorter_than_measured');
+eq('a range touching the lower measured bound overlaps', A.leafWetnessReport(2, 9.0).code, 'lw_overlaps_measured');
+eq('a range inside the measured band overlaps', A.leafWetnessReport(10, 12).code, 'lw_overlaps_measured');
+eq('a range touching the upper measured bound overlaps', A.leafWetnessReport(12.8, 14).code, 'lw_overlaps_measured');
+eq('a range starting above the measured band is long', A.leafWetnessReport(13, 20).code, 'lw_longer_than_measured');
+eq('a range spanning the whole band overlaps', A.leafWetnessReport(0, 24).code, 'lw_overlaps_measured');
+eq('the span of the reported range is kept', A.leafWetnessReport(0, 4).spanH, 4);
 eq('reversed figures are rejected', A.leafWetnessReport(4, 0).code, 'lw_out_of_range');
 eq('more than a day is rejected', A.leafWetnessReport(0, 25).code, 'lw_out_of_range');
 eq('negative hours are rejected', A.leafWetnessReport(-1, 4).code, 'lw_out_of_range');
