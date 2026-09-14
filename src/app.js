@@ -183,12 +183,18 @@ function locationBlock(onchange) {
    to any other zone the two are not on the same footing, so the window cannot be tested; the card then
    answers anyway and says the window went unchecked, rather than refusing for a reason that is false. */
 const tzHours = () => -new Date().getTimezoneOffset() / 60;
-/* The clock the FARM runs on, not the one this device runs on. Every sun time in this app belongs to a
-   set of coordinates, so it has to be told in the time kept at those coordinates: a phone carried
-   abroad, or a browser behind a VPN, otherwise turns a 05:48 sunrise into 23:48. The offset is the
-   standard meridian for that longitude, 15 degrees to the hour, which is exact for the Philippines
-   (UTC+8, no daylight saving) and within an hour of legal time nearly everywhere else. */
-const fieldTz = () => { const L = store.loc; return isFinite(L.lon) ? Math.round(L.lon / 15) : tzHours(); };
+/* Which clock the sun times belong to. The device clock is the better answer whenever the person is
+   anywhere near their field: it knows the legal offset and any daylight saving, and longitude knows
+   neither. It is the wrong answer only when the device is somewhere else entirely, which is what
+   turns a 05:48 Manila sunrise into 23:48 on a European laptop. So trust the device while it sits
+   within two hours of the field's standard meridian, which covers daylight saving and the ordinary
+   legal departures from the meridian, and fall back to the meridian beyond that. */
+const meridianTz = () => { const L = store.loc; return isFinite(L.lon) ? Math.round(L.lon / 15) : tzHours(); };
+/* If the location came from this device's own fix, the device is standing in the field and its clock
+   is the field's clock, daylight saving and all. store.loc.acc is set only by the locate button and
+   cleared the moment anyone types a coordinate by hand, so it answers exactly that question. */
+const locFromGps = () => store.loc.acc != null;
+const fieldTz = () => (locFromGps() || Math.abs(tzHours() - meridianTz()) <= 2 ? tzHours() : meridianTz());
 const fieldShiftH = () => fieldTz() - tzHours();
 const fieldNow = () => new Date(Date.now() + fieldShiftH() * 3600000);
 const fieldHourNow = () => { const d = fieldNow(); return d.getHours() + d.getMinutes() / 60; };
@@ -245,8 +251,8 @@ function locationWarnings() {
   if (isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127)) out.push({ en: 'This location is outside the Philippines. The physics still holds anywhere: evapotranspiration, dew point, drying and day length are FAO-56 and general, and the clock times are computed for your own time zone. The thresholds are another matter. The rice water depths and harvest checks are Philippine, the spray bands Australian, the vegetable thresholds Queensland, the late blight model Scottish and untested outside the UK, and the frost card is built on Benguet records. Every result names its source, so check whether that source suits your country.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Nananatiling tama ang pisika kahit saan: ang evapotranspiration, dew point, pagpapatuyo at haba ng araw ay FAO-56 at pangkalahatan, at ang mga oras ay batay sa sariling time zone ninyo. Iba naman ang mga hangganan. Ang lalim ng tubig sa palayan at ang pagsusuri sa pag-ani ay Pilipino, ang spray bands ay Australyano, ang hangganan sa gulay ay Queensland, ang modelo sa late blight ay Scottish at hindi pa nasusubok sa labas ng UK, at ang card ng andap ay nakabatay sa talaan ng Benguet. Bawat sagot ay may nakasaad na sanggunian, kaya suriin kung angkop ito sa bansa ninyo.' });
   const dev = tzHours(), fld = fieldTz();
   const z = n => 'UTC' + (n >= 0 ? '+' : '') + n;
-  if (dev !== fld) out.push({ en: 'Every hour this app shows you is the time kept at your field, ' + z(fld) + ', worked out from its longitude. This device\'s own clock is set to ' + z(dev) + ', so the app has shifted "now" by ' + (fld - dev) + ' hours to match the field. If you are standing in the field, the times shown are the ones on the clocks around you.', fil: 'Lahat ng oras na ipinapakita ng app ay ang oras sa bukid ninyo, ' + z(fld) + ', batay sa longitude nito. Ang orasan ng device na ito ay nakatakda sa ' + z(dev) + ', kaya inilipat ng app ang "ngayon" nang ' + (fld - dev) + ' oras upang tumugma sa bukid. Kung nasa bukid kayo, ang mga oras na ipinapakita ay siyang nasa mga orasan sa paligid ninyo.' });
-  if (fld * 15 !== Math.round(L.lon) && isFinite(L.lon)) out.push({ en: 'Field time is the standard meridian for your longitude, 15 degrees to the hour. That is exact for the Philippines, which keeps UTC+8 and no daylight saving. Elsewhere the legal clock can sit up to an hour off it, and further where daylight saving applies.', fil: 'Ang oras sa bukid ay batay sa standard meridian ng longitude ninyo, 15 digri kada oras. Tama ito nang eksakto para sa Pilipinas, na nasa UTC+8 at walang daylight saving. Sa ibang bansa, maaaring umabot sa isang oras ang pagkakaiba sa opisyal na orasan, at mas malaki pa kung may daylight saving.' });
+  if (dev !== fld) out.push({ en: 'This device\'s clock is set to ' + z(dev) + ', too far from your field to be its clock, so every hour shown here, sunrise, sunset, the reading window and the drying window, is worked out for ' + z(fld) + ' instead, from the field\'s longitude. Those are the times on the clocks around the field, not the time on this screen.', fil: 'Nakatakda sa ' + z(dev) + ' ang orasan ng device na ito, masyadong malayo sa bukid ninyo, kaya lahat ng oras dito, ang pagsikat at paglubog ng araw, ang oras ng pagbasa at ang oras ng pagkatuyo, ay ayon sa ' + z(fld) + ' batay sa longitude ng bukid. Ito ang mga oras sa mga orasan sa paligid ng bukid, hindi ang oras sa screen na ito.' });
+  else if (isFinite(L.lon) && dev !== meridianTz() && !locFromGps()) out.push({ en: 'Times here follow this device\'s clock, ' + z(dev) + ', which is taken to be your field\'s clock as well. That is right if you are at or near the field. If you have carried this device into another time zone without moving the location above, press the locate button or type in where the crop actually is.', fil: 'Ang mga oras dito ay sumusunod sa orasan ng device na ito, ' + z(dev) + ', na itinuturing ding orasan ng bukid ninyo. Tama ito kung nasa bukid kayo o malapit dito. Kung dinala ninyo ang device sa ibang time zone nang hindi binabago ang lokasyon sa itaas, pindutin ang locate button o i-type kung nasaan talaga ang pananim.' });
   return out;
 }
 function numInput(id, label, value, step, opts) {
