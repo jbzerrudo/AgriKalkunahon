@@ -280,15 +280,22 @@ eq('Luo 2000 Table 3 counts 14 heavy dew nights', A.DEW_RICE_LB.nights, 14);
 eq('Luo 2000 drying time barely moves when dew is cut short', A.DEW_RICE_LB.shiftFromShieldingHiH, 2.0);
 eq('the after-sunrise window sits inside the whole dew period', A.DEW_RICE_LB.afterSunriseHiH < A.DEW_RICE_LB.nightLoH, true);
 
-/* ---- PAGASA leaf wetness: a published range for an area, set against Luo's measured 9.0 to 12.8 h ---- */
-eq('the Batanes sheet, 0 to 4 h, is a short spell', A.leafWetnessReport(0, 4).code, 'lw_shorter_than_measured');
-eq('a range ending just below the measured band is short', A.leafWetnessReport(2, 8.9).code, 'lw_shorter_than_measured');
-eq('a range touching the lower measured bound overlaps', A.leafWetnessReport(2, 9.0).code, 'lw_overlaps_measured');
-eq('a range inside the measured band overlaps', A.leafWetnessReport(10, 12).code, 'lw_overlaps_measured');
-eq('a range touching the upper measured bound overlaps', A.leafWetnessReport(12.8, 14).code, 'lw_overlaps_measured');
-eq('a range starting above the measured band is long', A.leafWetnessReport(13, 20).code, 'lw_longer_than_measured');
-eq('a range spanning the whole band overlaps', A.leafWetnessReport(0, 24).code, 'lw_overlaps_measured');
-eq('the span of the reported range is kept', A.leafWetnessReport(0, 4).spanH, 4);
+/* ---- PAGASA leaf wetness: banded on the upper figure against Jackson's 6 to 8 h and Luo's 9.0 to 12.8 h ---- */
+eq('blast germination window is Jackson 2017', A.BLAST_WET.germLoH + ' to ' + A.BLAST_WET.germHiH, '6 to 8');
+eq('0 to 4 h stays under the germination window', A.leafWetnessReport(0, 4).code, 'lw_under_blast');
+eq('0 to 5.9 h is still under it', A.leafWetnessReport(0, 5.9).code, 'lw_under_blast');
+eq('0 to 6 h reaches it exactly', A.leafWetnessReport(0, 6).code, 'lw_at_blast');
+eq('0 to 7 h reaches it', A.leafWetnessReport(0, 7).code, 'lw_at_blast');
+eq('0 to 8.9 h is past the window but short of a dewing night', A.leafWetnessReport(0, 8.9).code, 'lw_at_blast');
+eq('0 to 9 h reaches a dewing night', A.leafWetnessReport(0, 9).code, 'lw_dew_night');
+eq('10 to 12.8 h is a dewing night', A.leafWetnessReport(10, 12.8).code, 'lw_dew_night');
+eq('0 to 13 h is beyond dew alone', A.leafWetnessReport(0, 13).code, 'lw_beyond_dew');
+/* the split a single verdict cannot express */
+eq('0 to 7 h straddles the germination figure', A.leafWetnessReport(0, 7).straddlesBlast, true);
+eq('0 to 4 h does not straddle it', A.leafWetnessReport(0, 4).straddlesBlast, false);
+eq('7 to 8 h sits wholly inside it, no straddle', A.leafWetnessReport(7, 8).straddlesBlast, false);
+eq('0 to 12 h straddles it too', A.leafWetnessReport(0, 12).straddlesBlast, true);
+eq('the span of the reported range is kept', A.leafWetnessReport(0, 7).spanH, 7);
 eq('reversed figures are rejected', A.leafWetnessReport(4, 0).code, 'lw_out_of_range');
 eq('more than a day is rejected', A.leafWetnessReport(0, 25).code, 'lw_out_of_range');
 eq('negative hours are rejected', A.leafWetnessReport(-1, 4).code, 'lw_out_of_range');

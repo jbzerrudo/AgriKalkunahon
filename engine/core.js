@@ -663,22 +663,32 @@ function dewTonight(T, RH, sky, wind) {
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
+/* Jackson (2017), Pacific Pests and Pathogens fact sheet 252: on rice, "the leaves need to be wet for
+   6-8 hours for spore germination", with 24 to 28 C favourable and humidity near 100% needed for
+   infection. Germination is the first step, not a diseased crop. */
+const BLAST_WET = { germLoH: 6, germHiH: 8, favLoC: 24, favHiC: 28, src: 'PACIFICPESTS_BLAST' };
+
 /* PAGASA publishes Leaf Wetness in the Farm Weather Forecast as a range across the forecast area,
    alongside the temperature and humidity ranges for that same area. Reported back as given, never
-   converted. It is then placed against the only measured dew durations from a Philippine rice field
-   (Luo & Goudriaan 2000, 9.0 to 12.8 h on heavy dew nights) purely so a reader can tell a short spell
-   from a long one. That is a yardstick, not a risk score: the conditions behind the measurement are
-   stated wherever the comparison is shown, and no infection threshold is applied, because the
-   published ones in hours of wetness are for other crops and other climates. */
+   converted. It is banded against the two published figures this app has: the 6 to 8 h rice blast
+   spores need to germinate (Jackson 2017) and the 9.0 to 12.8 h dew actually lasted on lowland rice
+   at Los Banos (Luo & Goudriaan 2000). Banding is on the UPPER figure, because that is the worst case
+   inside the forecast area and the one worth acting on. No risk score is attached to any band. */
 function leafWetnessReport(loH, hiH) {
   if (!isNum(loH) || !isNum(hiH)) return { code: 'lw_need_both', sources: ['PAGASA_FWFA'] };
   if (loH < 0 || hiH > 24 || loH > hiH) return { code: 'lw_out_of_range', sources: ['PAGASA_FWFA'] };
-  const R = DEW_RICE_LB;
-  let code = 'lw_overlaps_measured';
-  if (hiH < R.nightLoH) code = 'lw_shorter_than_measured';
-  else if (loH > R.nightHiH) code = 'lw_longer_than_measured';
-  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, refLoH: R.nightLoH, refHiH: R.nightHiH,
-    sources: ['PAGASA_FWFA', 'LUO2000'] };
+  const R = DEW_RICE_LB, B = BLAST_WET;
+  let code;
+  if (hiH < B.germLoH) code = 'lw_under_blast';
+  else if (hiH < R.nightLoH) code = 'lw_at_blast';
+  else if (hiH <= R.nightHiH) code = 'lw_dew_night';
+  else code = 'lw_beyond_dew';
+  /* A range can straddle the germination figure: the drier parts of the area stay under it while the
+     wetter parts reach it. One verdict cannot say that, so the card adds a line when it happens. */
+  const straddlesBlast = loH < B.germLoH && hiH >= B.germLoH;
+  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, straddlesBlast: straddlesBlast,
+    germLoH: B.germLoH, germHiH: B.germHiH, refLoH: R.nightLoH, refHiH: R.nightHiH,
+    sources: ['PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'LUO2000'] };
 }
 
 /* days: [{Tmin, hoursRH90}] last two days */
@@ -796,7 +806,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria, leafWetnessReport,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
