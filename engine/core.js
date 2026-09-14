@@ -663,6 +663,19 @@ function dewTonight(T, RH, sky, wind) {
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
+/* A forecast leaf-wetness figure (PAGASA Farm Weather Forecast) placed against the only Philippine rice
+   measurement of dew duration there is: Luo & Goudriaan (2000), 9.0 to 12.8 h over 14 heavy dew nights.
+   No risk threshold is applied, because none is published for Philippine conditions. This only reports
+   where the forecast number falls relative to that measured range. */
+function leafWetnessContext(hours) {
+  if (!isNum(hours) || hours < 0 || hours > 24) return { code: 'lw_out_of_range', sources: ['PAGASA_FWFA'] };
+  const R = DEW_RICE_LB;
+  let code = 'lw_within_measured';
+  if (hours < R.nightLoH) code = 'lw_below_measured';
+  else if (hours > R.nightHiH) code = 'lw_above_measured';
+  return { code: code, hours: hours, loH: R.nightLoH, hiH: R.nightHiH, sources: ['PAGASA_FWFA', 'LUO2000'] };
+}
+
 /* days: [{Tmin, hoursRH90}] last two days */
 function huttonCriteria(days) {
   if (!days || days.length < 2) return { code: 'need_two_days', sources: ['HUTTON'] };
@@ -740,6 +753,7 @@ const REFS = {
   CAUBA2025: { cls: 'primary', cite: 'Cauba, A.G. Jr., Darvishzadeh, R., Schlund, M., Nelson, A., Laborte, A. (2025). Estimation of transplanting and harvest dates of rice crops in the Philippines using Sentinel-1 data. Remote Sensing Applications: Society and Environment 37:101435. Harvest-date root mean squared differences against farmer-reported dates across 99 fields in Agusan del Sur, Cagayan and Leyte: 16 to 17.5 days in the dry season, 8 to 22 days in the wet.', url: 'https://doi.org/10.1016/j.rsase.2024.101435' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
+  PAGASA_FWFA: { cls: 'extension', cite: 'DOST-PAGASA daily Farm Weather Forecast and Advisories, among the agri-weather products: lowland and upland temperature and humidity, winds, leaf wetness in hours, soil moisture and farming advisories.', url: 'https://bagong.pagasa.dost.gov.ph/agri-weather' },
   LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
@@ -776,7 +790,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria,
+  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, dewTonight, huttonCriteria, leafWetnessContext,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
