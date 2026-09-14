@@ -757,7 +757,8 @@ CARDS.disease = function (root) {
           if (d.code !== 'dew_less_likely') {
             const R = A.DEW_RICE_LB;
             ls.push([bi({ en: 'Leaves likely dry by', fil: 'Malamang tuyo na ang dahon bandang' }),
-              hhmm0(stN.sunrise + R.afterSunriseLoH) + ' to ' + hhmm0(stN.sunrise + R.afterSunriseHiH) + ', that is your sunrise ' + hhmm0(stN.sunrise) + ' plus the ' + R.afterSunriseLoH + ' to ' + R.afterSunriseHiH + ' h that dew outlasted sunrise on rice at IRRI Los Baños', 'key']);
+              bi({ en: hhmm0(stN.sunrise + R.afterSunriseLoH) + ' to ' + hhmm0(stN.sunrise + R.afterSunriseHiH) + ', that is your sunrise (at ' + hhmm0(stN.sunrise) + ') plus the ' + R.afterSunriseLoH + ' to ' + R.afterSunriseHiH + ' h that the dew outlasted the sunrise on rice at IRRI Los Baños (see "Sources" below).',
+                fil: hhmm0(stN.sunrise + R.afterSunriseLoH) + ' hanggang ' + hhmm0(stN.sunrise + R.afterSunriseHiH) + ', iyan ang iyong pagsikat ng araw (nang ' + hhmm0(stN.sunrise) + ') kasama ang ' + R.afterSunriseLoH + ' hanggang ' + R.afterSunriseHiH + ' oras na mas matagal ang hamog kaysa sa pagsikat ng araw sa palay sa IRRI Los Baños (tingnan ang "Sanggunian" sa ibaba).' }), 'key']);
             ls.push([bi({ en: 'Wet period measured there', fil: 'Sukat na haba ng pagkabasa roon' }),
               R.nightLoH.toFixed(1) + ' to ' + R.nightHiH.toFixed(1) + ' h, measured on ' + R.nights + ' heavy dew nights at that one site, not calculated for your field', 'minor']);
           }
