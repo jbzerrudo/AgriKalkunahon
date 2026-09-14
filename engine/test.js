@@ -295,6 +295,16 @@ eq('0 to 7 h straddles the germination figure', A.leafWetnessReport(0, 7).stradd
 eq('0 to 4 h does not straddle it', A.leafWetnessReport(0, 4).straddlesBlast, false);
 eq('7 to 8 h sits wholly inside it, no straddle', A.leafWetnessReport(7, 8).straddlesBlast, false);
 eq('0 to 12 h straddles it too', A.leafWetnessReport(0, 12).straddlesBlast, true);
+/* The six-rung ladder: band sets the rung, and a range starting below the germination figure drops it
+   one half-step because part of the area is still in the clear. */
+eq('0 to 5 h, whole area clear', A.leafWetnessReport(0, 5).newsLevel, 'good');
+eq('6 to 8 h, whole area in the germination window', A.leafWetnessReport(6, 8).newsLevel, 'bad');
+eq('0 to 8 h, only the wet end reaches it', A.leafWetnessReport(0, 8).newsLevel, 'somewhat_bad');
+eq('10 to 12 h, whole area at a dewing night', A.leafWetnessReport(10, 12).newsLevel, 'worse');
+eq('0 to 12 h, only the wet end is', A.leafWetnessReport(0, 12).newsLevel, 'somewhat_worse');
+eq('13 to 20 h, whole area past what dew alone gives', A.leafWetnessReport(13, 20).newsLevel, 'worst');
+eq('0 to 20 h, a 0 still holds it one rung back', A.leafWetnessReport(0, 20).newsLevel, 'worse');
+eq('the ladder runs in order', [[0,5],[0,8],[6,8],[0,12],[10,12],[13,20]].map(r => A.leafWetnessReport(r[0], r[1]).newsLevel).join(','), 'good,somewhat_bad,bad,somewhat_worse,worse,worst');
 eq('the span of the reported range is kept', A.leafWetnessReport(0, 7).spanH, 7);
 eq('reversed figures are rejected', A.leafWetnessReport(4, 0).code, 'lw_out_of_range');
 eq('more than a day is rejected', A.leafWetnessReport(0, 25).code, 'lw_out_of_range');

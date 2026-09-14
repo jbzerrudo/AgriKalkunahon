@@ -825,7 +825,19 @@ function leafWetnessReport(loH, hiH) {
   /* A range can straddle the germination figure: the drier parts of the area stay under it while the
      wetter parts reach it. One verdict cannot say that, so the card adds a line when it happens. */
   const straddlesBlast = loH < B.germLoH && hiH >= B.germLoH;
-  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, straddlesBlast: straddlesBlast,
+  /* How bad the news is, which is not the same question as how long the wet spell is. Two things set it:
+     which band the upper figure falls in, and whether the range starts below the germination figure. A
+     range that starts below it always leaves part of the area in the clear, so it is never the flat
+     verdict for its band, only the half-step below. The ladder is ordinal: longer wetness is worse for
+     infection, but nothing published says by how much. */
+  const NEWS = {
+    lw_under_blast:  ['good',           'good'],
+    lw_at_blast:     ['bad',            'somewhat_bad'],
+    lw_dew_night:    ['worse',          'somewhat_worse'],
+    lw_beyond_dew:   ['worst',          'worse']
+  };
+  const newsLevel = NEWS[code][straddlesBlast ? 1 : 0];
+  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, straddlesBlast: straddlesBlast, newsLevel: newsLevel,
     germLoH: B.germLoH, germHiH: B.germHiH, refLoH: R.nightLoH, refHiH: R.nightHiH,
     sources: ['PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'LUO2000'] };
 }
@@ -1057,10 +1069,10 @@ const T = {
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
     dew_very_likely_near_saturation: { en: 'Wet leaves at dawn very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak na basa ang dahon sa madaling-araw. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
     dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
-    lw_under_blast: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. Good news, because that is a short wet spell (below the {blo} to {bhi} hours rice blast spores need to germinate, and shorter than the {rlo} to {rhi} hours dew lasted on clear, dry-season nights over lowland rice at Los Baños; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Magandang balita, dahil maikli lang ang pagkabasa na iyan (mas mababa sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo, at mas maikli sa {rlo} hanggang {rhi} oras na nanatiling basa ang mga dahon sa maaliwalas at tuyong gabi sa kapatagan ng Los Baños; tingnan ang "Sanggunian" sa ibaba).' },
-    lw_at_blast: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. Somewhat bad news, because that reaches the {blo} to {bhi} hours rice blast spores need to germinate (see "Sources" below). Germination is the first step, not a diseased crop: it still needs spores present, humidity near 100%, and a susceptible variety and stage.', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Medyo hindi magandang balita, dahil umaabot ito sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (tingnan ang "Sanggunian" sa ibaba). Ang pagtubo ay unang hakbang lamang at hindi pa sakit: kailangan pa rin ng spore, ng halumigmig na malapit sa 100%, at ng baryedad at yugto ng pananim na tablan nito.' },
-    lw_dew_night: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. Bad news, because that is as long as a dewing night, well past the {blo} to {bhi} hours rice blast spores need to germinate (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Masamang balita, dahil kasintagal ito ng isang gabing may hamog at lampas na sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba).' },
-    lw_beyond_dew: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. Bad news, because that is a long wet spell, longer than dew alone usually gives and well past the {blo} to {bhi} hours rice blast spores need to germinate (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below). Rain or fog is the usual reason.', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Masamang balita, dahil mahaba ang pagkabasa na iyan, mas mahaba kaysa sa karaniwang naidudulot ng hamog lamang at lampas na sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba). Karaniwang ulan o hamog-ulap ang dahilan.' },
+    lw_under_blast: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. {news}, because that is a short wet spell (below the {blo} to {bhi} hours rice blast spores need to germinate, and shorter than the {rlo} to {rhi} hours dew lasted on clear, dry-season nights over lowland rice at Los Baños; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. {newsF}, dahil maikli lang ang pagkabasa na iyan (mas mababa sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo, at mas maikli sa {rlo} hanggang {rhi} oras na nanatiling basa ang mga dahon sa maaliwalas at tuyong gabi sa kapatagan ng Los Baños; tingnan ang "Sanggunian" sa ibaba).' },
+    lw_at_blast: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. {news}{scope}, because that reaches the {blo} to {bhi} hours rice blast spores need to germinate (see "Sources" below). Germination is the first step, not a diseased crop: it still needs spores present, humidity near 100%, and a susceptible variety and stage.', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. {newsF}{scopeF}, dahil umaabot ito sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (tingnan ang "Sanggunian" sa ibaba). Ang pagtubo ay unang hakbang lamang at hindi pa sakit: kailangan pa rin ng spore, ng halumigmig na malapit sa 100%, at ng baryedad at yugto ng pananim na tablan nito.' },
+    lw_dew_night: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. {news}{scope}, because that is as long as a dewing night, well past the {blo} to {bhi} hours rice blast spores need to germinate (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. {newsF}{scopeF}, dahil kasintagal ito ng isang gabing may hamog at lampas na sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba).' },
+    lw_beyond_dew: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. {news}{scope}, because that is a long wet spell, longer than dew alone usually gives and well past the {blo} to {bhi} hours rice blast spores need to germinate (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below). Rain or fog is the usual reason.', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. {newsF}{scopeF}, dahil mahaba ang pagkabasa na iyan, mas mahaba kaysa sa karaniwang naidudulot ng hamog lamang at lampas na sa {blo} hanggang {bhi} oras na kailangan ng spore ng blast upang tumubo (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba). Karaniwang ulan o hamog-ulap ang dahilan.' },
     lw_out_of_range: { en: 'Leaf wetness hours must be between 0 and 24, with the low figure first.', fil: 'Ang oras ng basang dahon ay dapat nasa 0 hanggang 24, at ang mas mababa ang mauuna.' },
     lw_need_both: { en: 'Enter both figures of the range, for example 0 and 4.', fil: 'Ilagay ang dalawang bilang ng saklaw, halimbawa 0 at 4.' },
     dew_less_likely: { en: 'Dry leaves by morning more likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malamang tuyo ang dahon sa umaga: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
@@ -1679,10 +1691,16 @@ CARDS.disease = function (root) {
     let lwPanel = null;
     if (inp.lwLo != null || inp.lwHi != null) {
       const lwr = A.leafWetnessReport(inp.lwLo, inp.lwHi);
-      lwPanel = result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), blo: A.BLAST_WET.germLoH, bhi: A.BLAST_WET.germHiH, rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
+      lwPanel = result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), blo: A.BLAST_WET.germLoH, bhi: A.BLAST_WET.germHiH,
+          /* A range starting below the germination figure is not one piece of news: the dry end of the
+             area is fine and the wet end is not. The headline says which end it is talking about. */
+          news: { good: 'Good news', somewhat_bad: 'Somewhat bad news', bad: 'Bad news', somewhat_worse: 'Somewhat worse news', worse: 'Worse news', worst: 'Worst news' }[lwr.newsLevel],
+          newsF: { good: 'Magandang balita', somewhat_bad: 'Medyo hindi magandang balita', bad: 'Masamang balita', somewhat_worse: 'Medyo mas masamang balita', worse: 'Mas masamang balita', worst: 'Pinakamasamang balita' }[lwr.newsLevel],
+          scope: lwr.straddlesBlast ? ' for the wetter parts of your area' : '',
+          scopeF: lwr.straddlesBlast ? ' para sa mas basang bahagi ng inyong lugar' : '', rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
         lines: lwr.straddlesBlast ? [[bi({ en: 'Your area is split', fil: 'Hati ang inyong lugar' }),
-          bi({ en: 'The drier parts stay under ' + A.BLAST_WET.germLoH + ' h, but the wetter parts reach ' + fmt(inp.lwHi, 1) + ' h. Which one your own field is, only your own field can say.',
-            fil: 'Ang mas tuyong bahagi ay wala pang ' + A.BLAST_WET.germLoH + ' oras, ngunit ang mas basang bahagi ay umaabot sa ' + fmt(inp.lwHi, 1) + ' oras. Kung alin doon ang bukid ninyo, ang bukid ninyo lamang ang makapagsasabi.' })]] : null,
+          bi({ en: 'The drier parts stay under ' + A.BLAST_WET.germLoH + ' h, but the wetter parts reach ' + fmt(inp.lwHi, 1) + ' h. Which one your own field is, only you can say.',
+            fil: 'Ang mas tuyong bahagi ay wala pang ' + A.BLAST_WET.germLoH + ' oras, ngunit ang mas basang bahagi ay umaabot sa ' + fmt(inp.lwHi, 1) + ' oras. Kung alin doon ang bukid ninyo, kayo lamang ang makapagsasabi.' })]] : null,
         why: ['Leaf wetness hours count how much of the day free water sits on the leaf surface, from dew, rain or irrigation. It matters because fungi and bacteria need the leaf wet to germinate and get inside it, so the same weather that wets the crop for two hours and for twelve are not the same weather at all.',
           'This is PAGASA\'s own figure from the daily Farm Weather Forecast, reported back to you exactly as published. The app does not recompute it or convert it.',
           'The column is published as a range across a whole forecast area, in the same way the temperature and humidity columns beside it are. The low figure and the high figure describe different places inside that area, not the start and end of one night.',
@@ -1800,7 +1818,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 0bd02164. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 59903ad7. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1841,7 +1859,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 0bd02164)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 59903ad7)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1853,7 +1871,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 0bd02164).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 0bd02164 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 59903ad7).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 59903ad7 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1885,7 +1903,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 0bd02164.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 59903ad7.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

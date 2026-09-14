@@ -686,7 +686,19 @@ function leafWetnessReport(loH, hiH) {
   /* A range can straddle the germination figure: the drier parts of the area stay under it while the
      wetter parts reach it. One verdict cannot say that, so the card adds a line when it happens. */
   const straddlesBlast = loH < B.germLoH && hiH >= B.germLoH;
-  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, straddlesBlast: straddlesBlast,
+  /* How bad the news is, which is not the same question as how long the wet spell is. Two things set it:
+     which band the upper figure falls in, and whether the range starts below the germination figure. A
+     range that starts below it always leaves part of the area in the clear, so it is never the flat
+     verdict for its band, only the half-step below. The ladder is ordinal: longer wetness is worse for
+     infection, but nothing published says by how much. */
+  const NEWS = {
+    lw_under_blast:  ['good',           'good'],
+    lw_at_blast:     ['bad',            'somewhat_bad'],
+    lw_dew_night:    ['worse',          'somewhat_worse'],
+    lw_beyond_dew:   ['worst',          'worse']
+  };
+  const newsLevel = NEWS[code][straddlesBlast ? 1 : 0];
+  return { code: code, loH: loH, hiH: hiH, spanH: hiH - loH, straddlesBlast: straddlesBlast, newsLevel: newsLevel,
     germLoH: B.germLoH, germHiH: B.germHiH, refLoH: R.nightLoH, refHiH: R.nightHiH,
     sources: ['PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'LUO2000'] };
 }
