@@ -262,7 +262,7 @@ ok('daylight Bangkok 15 April (Ex17)', A.daylight(13.73, 105), 12.31, 0.01, 'h')
 console.log('\n== REFERENCES ==');
 { const used = new Set();
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
-  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA']
+  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
   eq('UNVERIFIED list names the six items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7'); }
 

@@ -712,20 +712,25 @@ CARDS.disease = function (root) {
     const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), fieldTz()), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), fieldTz());
     const nowH0 = fieldHourNow();  // compared against field-time sun times, so it must be field time too
     const hhmm0 = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
-    /* A forecast does not care what time the thermometer was read, so this is answered before the
-       reading-time gate below, which returns early. */
+    /* Built here, rendered last. A forecast does not depend on when the thermometer was read, so it must
+       survive the reading-time gate below, which returns early. But it must never lead: this card exists to
+       say that a reading from your own field beats a row covering a whole forecast area, and the order the
+       answers appear in is that argument. Local first, PAGASA underneath it. */
+    let lwPanel = null;
     if (inp.lwLo != null || inp.lwHi != null) {
       const lwr = A.leafWetnessReport(inp.lwLo, inp.lwHi);
-      show(out, result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
+      lwPanel = result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
         why: ['Leaf wetness hours count how much of the day free water sits on the leaf surface, from dew, rain or irrigation. It matters because fungi and bacteria need the leaf wet to germinate and get inside it, so the same weather that wets the crop for two hours and for twelve are not the same weather at all.',
           'This is PAGASA\'s own figure from the daily Farm Weather Forecast, reported back to you exactly as published. The app does not recompute it or convert it.',
           'The column is published as a range across a whole forecast area, in the same way the temperature and humidity columns beside it are. The low figure and the high figure describe different places inside that area, not the start and end of one night.',
+          '<table class="wet"><caption>Germination is the first step, not infection itself, and blast is the only disease in this app\'s range with a published wetness figure. Other diseases also need the leaf wet, but their hours are not established for Philippine conditions, so no risk level is attached to any row.</caption><tr><th>Hours the leaves stay wet</th><th>What is published about it</th></tr><tr><td>under 6 h</td><td>Short of what rice blast spores need. Jackson (2017): "the leaves need to be wet for 6-8 hours for spore germination".</td></tr><tr><td>6 to 8 h</td><td>Long enough for rice blast spores to germinate, with 24 to 28 &deg;C favourable and humidity close to 100% needed for infection (Jackson 2017).</td></tr><tr><td>9 to 12.8 h</td><td>What was actually measured on a clear, calm, dewing night on lowland rice at Los Ba&ntilde;os, dry season (Luo and Goudriaan 2000). Past the blast germination figure for several hours.</td></tr><tr><td>over 13 h</td><td>Longer than dew alone gave on any night in that record. Something else is keeping the crop wet, usually rain or fog.</td></tr></table>',
           'The yardstick it is set against is the only measured dew duration from a Philippine rice field: Luo and Goudriaan (2000) watched the leaves every 15 minutes for 16 rain-free nights at IRRI Los Baños in the 1994 dry season and recorded 9.0 to 12.8 hours on heavy dew nights. That is what a clear, calm, dewing night on lowland paddy looks like, so it tells you whether the forecast spell is short or long. Cloud and wind cut dew short, which is why a cloudy night can forecast far fewer hours.'],
-        limits: ['No disease risk is scored from these hours. Published infection thresholds in hours of leaf wetness exist for other crops and climates, and none is established for Philippine rice, so the card reports the length and stops there.',
+        limits: ['No disease risk is scored from these hours, and the table above is not a risk scale. It places the forecast beside two published figures and stops there.',
+          'The blast figure is for spore germination, which is the first step in infection and not the same as a diseased crop. Whether infection follows depends on the spores being present, on humidity near 100%, on the variety, and on the crop stage.',
           'A forecast covers an area, not your field. Where PAGASA and this card differ, follow PAGASA.',
           'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not put these numbers in the Hutton boxes below.',
           'The measured yardstick is lowland paddy rice at one site in one dry season, on clear rain-free nights.'],
-        sources: ['PAGASA_FWFA', 'LUO2000'] }));
+        sources: ['PAGASA_FWFA', 'LUO2000', 'PACIFICPESTS_BLAST'] });
     }
     /* Dew is a night question, so a reading taken while the air is still warming says nothing about it. */
     if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
@@ -734,6 +739,7 @@ CARDS.disease = function (root) {
         lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
         why: ['Dew forms as the surface cools through the night. Until the air has begun cooling, a reading carries no information about tonight: the air will warm further, peak, and only then start falling.'],
         sources: ['FAO56', 'FAO_FROST'] }));
+      if (lwPanel) show(out, lwPanel);
       return;
     }
     if (inp.T != null && inp.RH != null) {
@@ -763,6 +769,7 @@ CARDS.disease = function (root) {
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not calculated for your own field. The RH ≥ 90% method needs humidity recorded right through the night, not one evening reading, and its threshold has to be fitted locally: Sentelhas et al. (2008) fitted 83, 85, 90 and 92% at four sites on turfgrass. No Philippine fit is published.', 'The drying time above is your own sunrise plus a range measured on rice at one lowland site in the 1994 dry season (Luo and Goudriaan 2000). Sunrise is calculated for your location; the rest is measurement from elsewhere, not a prediction for your field, crop or season.', 'The start of the wet period is not given, because no published method gets the moment dew forms from a single evening reading.'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008', 'LUO2000'] }));
     }
+    if (lwPanel) show(out, lwPanel);
     if (inp.logger && inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
       const hcr = A.huttonCriteria([{ Tmin: inp.b1, hoursRH90: inp.b2 }, { Tmin: inp.a1, hoursRH90: inp.a2 }]);
       show(out, result({ level: hcr.code === 'hutton_high_risk' ? 'stop' : 'go', verdict: t(T.verdicts[hcr.code]), why: ['Hutton Criteria: "two consecutive days have a minimum temperature of 10°C, and at least six hours of relative humidity at or above 90%" (James Hutton Institute, via the IPM Decisions factsheet).'], limits: ['Developed and tested in the UK; "not tested yet in other countries" (IPM Decisions).'], sources: ['HUTTON'] }));

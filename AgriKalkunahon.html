@@ -122,6 +122,11 @@ dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px
 .haiku .romaji{font-style:italic}
 .haiku .en{color:var(--ink);margin-top:6px;display:block}
 .haiku .attrib{display:block;margin-top:8px;font-size:12px}
+table.wet{border-collapse:collapse;margin:8px 0 4px;font-size:13px;width:100%}
+table.wet th,table.wet td{border:1px solid var(--line,#ddd);padding:5px 8px;text-align:left;vertical-align:top}
+table.wet th{background:#f2f5f2;font-weight:600}
+table.wet td:first-child{white-space:nowrap;font-weight:600}
+table.wet caption{caption-side:bottom;font-size:12px;color:var(--muted);text-align:left;padding-top:6px}
 a{color:var(--green-dark)}
 </style>
 </head>
@@ -893,6 +898,7 @@ const REFS = {
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   PAGASA_FWFA: { cls: 'extension', cite: 'DOST-PAGASA daily Farm Weather Forecast and Advisories, among the agri-weather products: lowland and upland temperature and humidity, winds, leaf wetness in hours, soil moisture and farming advisories.', url: 'https://bagong.pagasa.dost.gov.ph/agri-weather' },
+  PACIFICPESTS_BLAST: { cls: 'extension', cite: 'Jackson, G. (2017). Rice blast (252). Pacific Pests and Pathogens fact sheet, produced under ACIAR project PC/2010/090 with the University of Queensland and the Secretariat of the Pacific Community: "the leaves need to be wet for 6-8 hours for spore germination. High humidity, close to 100%, is needed for infection", with 24-28 C favourable.', url: 'https://apps.lucidcentral.org/ppp/text/web_full/entities/rice_blast_252.htm' },
   LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
@@ -1655,20 +1661,25 @@ CARDS.disease = function (root) {
     const stT = A.sunTimes(L0.lat, L0.lon, todayJ(now0), fieldTz()), stN = A.sunTimes(L0.lat, L0.lon, todayJ(new Date(now0.getTime() + 86400000)), fieldTz());
     const nowH0 = fieldHourNow();  // compared against field-time sun times, so it must be field time too
     const hhmm0 = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
-    /* A forecast does not care what time the thermometer was read, so this is answered before the
-       reading-time gate below, which returns early. */
+    /* Built here, rendered last. A forecast does not depend on when the thermometer was read, so it must
+       survive the reading-time gate below, which returns early. But it must never lead: this card exists to
+       say that a reading from your own field beats a row covering a whole forecast area, and the order the
+       answers appear in is that argument. Local first, PAGASA underneath it. */
+    let lwPanel = null;
     if (inp.lwLo != null || inp.lwHi != null) {
       const lwr = A.leafWetnessReport(inp.lwLo, inp.lwHi);
-      show(out, result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
+      lwPanel = result({ level: 'info', verdict: t(T.verdicts[lwr.code], { lo: fmt(inp.lwLo, 1), hi: fmt(inp.lwHi, 1), rlo: fmt(A.DEW_RICE_LB.nightLoH, 1), rhi: fmt(A.DEW_RICE_LB.nightHiH, 1) }),
         why: ['Leaf wetness hours count how much of the day free water sits on the leaf surface, from dew, rain or irrigation. It matters because fungi and bacteria need the leaf wet to germinate and get inside it, so the same weather that wets the crop for two hours and for twelve are not the same weather at all.',
           'This is PAGASA\'s own figure from the daily Farm Weather Forecast, reported back to you exactly as published. The app does not recompute it or convert it.',
           'The column is published as a range across a whole forecast area, in the same way the temperature and humidity columns beside it are. The low figure and the high figure describe different places inside that area, not the start and end of one night.',
+          '<table class="wet"><caption>Germination is the first step, not infection itself, and blast is the only disease in this app\'s range with a published wetness figure. Other diseases also need the leaf wet, but their hours are not established for Philippine conditions, so no risk level is attached to any row.</caption><tr><th>Hours the leaves stay wet</th><th>What is published about it</th></tr><tr><td>under 6 h</td><td>Short of what rice blast spores need. Jackson (2017): "the leaves need to be wet for 6-8 hours for spore germination".</td></tr><tr><td>6 to 8 h</td><td>Long enough for rice blast spores to germinate, with 24 to 28 &deg;C favourable and humidity close to 100% needed for infection (Jackson 2017).</td></tr><tr><td>9 to 12.8 h</td><td>What was actually measured on a clear, calm, dewing night on lowland rice at Los Ba&ntilde;os, dry season (Luo and Goudriaan 2000). Past the blast germination figure for several hours.</td></tr><tr><td>over 13 h</td><td>Longer than dew alone gave on any night in that record. Something else is keeping the crop wet, usually rain or fog.</td></tr></table>',
           'The yardstick it is set against is the only measured dew duration from a Philippine rice field: Luo and Goudriaan (2000) watched the leaves every 15 minutes for 16 rain-free nights at IRRI Los Baños in the 1994 dry season and recorded 9.0 to 12.8 hours on heavy dew nights. That is what a clear, calm, dewing night on lowland paddy looks like, so it tells you whether the forecast spell is short or long. Cloud and wind cut dew short, which is why a cloudy night can forecast far fewer hours.'],
-        limits: ['No disease risk is scored from these hours. Published infection thresholds in hours of leaf wetness exist for other crops and climates, and none is established for Philippine rice, so the card reports the length and stops there.',
+        limits: ['No disease risk is scored from these hours, and the table above is not a risk scale. It places the forecast beside two published figures and stops there.',
+          'The blast figure is for spore germination, which is the first step in infection and not the same as a diseased crop. Whether infection follows depends on the spores being present, on humidity near 100%, on the variety, and on the crop stage.',
           'A forecast covers an area, not your field. Where PAGASA and this card differ, follow PAGASA.',
           'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not put these numbers in the Hutton boxes below.',
           'The measured yardstick is lowland paddy rice at one site in one dry season, on clear rain-free nights.'],
-        sources: ['PAGASA_FWFA', 'LUO2000'] }));
+        sources: ['PAGASA_FWFA', 'LUO2000', 'PACIFICPESTS_BLAST'] });
     }
     /* Dew is a night question, so a reading taken while the air is still warming says nothing about it. */
     if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
@@ -1677,6 +1688,7 @@ CARDS.disease = function (root) {
         lines: [[bi({ en: 'Read again after', fil: 'Magbasa uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
         why: ['Dew forms as the surface cools through the night. Until the air has begun cooling, a reading carries no information about tonight: the air will warm further, peak, and only then start falling.'],
         sources: ['FAO56', 'FAO_FROST'] }));
+      if (lwPanel) show(out, lwPanel);
       return;
     }
     if (inp.T != null && inp.RH != null) {
@@ -1706,6 +1718,7 @@ CARDS.disease = function (root) {
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
           'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not calculated for your own field. The RH ≥ 90% method needs humidity recorded right through the night, not one evening reading, and its threshold has to be fitted locally: Sentelhas et al. (2008) fitted 83, 85, 90 and 92% at four sites on turfgrass. No Philippine fit is published.', 'The drying time above is your own sunrise plus a range measured on rice at one lowland site in the 1994 dry season (Luo and Goudriaan 2000). Sunrise is calculated for your location; the rest is measurement from elsewhere, not a prediction for your field, crop or season.', 'The start of the wet period is not given, because no published method gets the moment dew forms from a single evening reading.'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008', 'LUO2000'] }));
     }
+    if (lwPanel) show(out, lwPanel);
     if (inp.logger && inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
       const hcr = A.huttonCriteria([{ Tmin: inp.b1, hoursRH90: inp.b2 }, { Tmin: inp.a1, hoursRH90: inp.a2 }]);
       show(out, result({ level: hcr.code === 'hutton_high_risk' ? 'stop' : 'go', verdict: t(T.verdicts[hcr.code]), why: ['Hutton Criteria: "two consecutive days have a minimum temperature of 10°C, and at least six hours of relative humidity at or above 90%" (James Hutton Institute, via the IPM Decisions factsheet).'], limits: ['Developed and tested in the UK; "not tested yet in other countries" (IPM Decisions).'], sources: ['HUTTON'] }));
@@ -1772,7 +1785,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 78476b56. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 18aeb00f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1813,7 +1826,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 78476b56)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 18aeb00f)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1825,7 +1838,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 78476b56).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 78476b56 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 18aeb00f).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 18aeb00f ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1857,7 +1870,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 78476b56.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 18aeb00f.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
