@@ -1047,9 +1047,9 @@ const T = {
     unlikely: { en: 'Frost unlikely tonight.', fil: 'Malabong mag-andap ngayong gabi.' },
     dew_very_likely_near_saturation: { en: 'Wet leaves at dawn very likely. The air only needs to cool {dep} °C, which happens on almost any night.', fil: 'Halos tiyak na basa ang dahon sa madaling-araw. Kailangan lang lumamig ng {dep} °C ang hangin, na nangyayari halos tuwing gabi.' },
     dew_likely_if_cools_to_dewpoint: { en: 'Dew likely by morning if the night cools to {td} °C, which is {dep} °C below now.', fil: 'Malamang magkaroon ng hamog sa umaga kung lalamig hanggang {td} °C, {dep} °C mas malamig kaysa ngayon.' },
-    lw_shorter_than_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. That is a short wet spell: on clear dry-season nights on lowland rice at Los Baños, dew kept the leaves wet for {rlo} to {rhi} hours (see "Sources" below).', fil: 'Ayon sa Farm Weather Forecast ng PAGASA, {lo} hanggang {hi} oras na basa ang dahon sa inyong forecast area. Maikling panahon ito: sa maaliwalas na gabi ng tag-araw sa palayan sa Los Baños, {rlo} hanggang {rhi} oras na basa ang dahon dahil sa hamog (tingnan ang "Sanggunian" sa ibaba).' },
-    lw_overlaps_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. That reaches the length of a dewing night: on clear dry-season nights on lowland rice at Los Baños, dew kept the leaves wet for {rlo} to {rhi} hours (see "Sources" below).', fil: 'Ayon sa Farm Weather Forecast ng PAGASA, {lo} hanggang {hi} oras na basa ang dahon sa inyong forecast area. Umaabot ito sa haba ng isang gabing may hamog: sa maaliwalas na gabi ng tag-araw sa palayan sa Los Baños, {rlo} hanggang {rhi} oras na basa ang dahon (tingnan ang "Sanggunian" sa ibaba).' },
-    lw_longer_than_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area, longer than a dewing night: on clear dry-season nights on lowland rice at Los Baños, dew kept the leaves wet for {rlo} to {rhi} hours (see "Sources" below). A spell this long usually means rain or fog, not dew alone.', fil: 'Ayon sa Farm Weather Forecast ng PAGASA, {lo} hanggang {hi} oras na basa ang dahon sa inyong forecast area, mas mahaba kaysa sa gabing may hamog: sa maaliwalas na gabi ng tag-araw sa palayan sa Los Baños, {rlo} hanggang {rhi} oras (tingnan ang "Sanggunian" sa ibaba). Ang ganitong haba ay karaniwang ulan o hamog-ulap, hindi hamog lamang.' },
+    lw_shorter_than_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. Good news, because that is a short wet spell (compared to the clear, dry-season nights over lowland rice at Los Baños, where dew kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Magandang balita, dahil maikli lang ang pagkabasa na iyan (kumpara sa maaliwalas at tuyong gabi sa kapatagan ng Los Baños, kung saan pinanatili ng hamog ang mga dahon na basa sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba).' },
+    lw_overlaps_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. That is as long as a dewing night (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below).', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Kasintagal ito ng isang gabing may hamog (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba).' },
+    lw_longer_than_measured: { en: 'The PAGASA Farm Weather Forecast gives {lo} to {hi} hours of leaf wetness for your forecast area. That is a long wet spell, longer than dew alone usually gives (over lowland rice at Los Baños, clear dry-season nights kept the leaves wet for {rlo} to {rhi} hours; see "Sources" below). Rain or fog is the usual reason.', fil: 'Ang PAGASA Farm Weather Forecast ay nagbibigay ng {lo} hanggang {hi} oras na basang dahon para sa iyong lugar sa kanilang ulat-panahon. Mahaba ang pagkabasa na iyan, mas mahaba kaysa sa karaniwang naidudulot ng hamog lamang (sa kapatagan ng Los Baños, sa maaliwalas at tuyong gabi ay nanatiling basa ang mga dahon sa loob ng {rlo} hanggang {rhi} oras; tingnan ang "Sanggunian" sa ibaba). Karaniwang ulan o hamog-ulap ang dahilan.' },
     lw_out_of_range: { en: 'Leaf wetness hours must be between 0 and 24, with the low figure first.', fil: 'Ang oras ng basang dahon ay dapat nasa 0 hanggang 24, at ang mas mababa ang mauuna.' },
     lw_need_both: { en: 'Enter both figures of the range, for example 0 and 4.', fil: 'Ilagay ang dalawang bilang ng saklaw, halimbawa 0 at 4.' },
     dew_less_likely: { en: 'Dry leaves by morning more likely: the air must cool {dep} °C, and cloud or wind slows the night cooling.', fil: 'Malamang tuyo ang dahon sa umaga: kailangang lumamig ng {dep} °C ang hangin, at nababawasan ng ulap o hangin ang paglamig.' },
@@ -1786,7 +1786,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build e4627bac. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 379263b5. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1827,7 +1827,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build e4627bac)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 379263b5)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1839,7 +1839,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build e4627bac).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build e4627bac ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 379263b5).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 379263b5 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1871,7 +1871,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build e4627bac.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 379263b5.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';
