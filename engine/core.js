@@ -648,11 +648,11 @@ function frostIndicator(inp) {
    point and prints no such number. */
 const DEW = { nearSaturationC: 2.0 };
 /* Luo & Goudriaan (2000), Agric. For. Meteorol. 104(4):303-313. Dew onset and drying on rice top leaves
-   checked visually every 15 min over 16 rain-free nights, February to April 1994, IR72, at IRRI Los Banos
+   checked visually every 15 min over 16 rain-free nights, February to April 1994, IR72, at IRRI Los Baños
    (14 deg 11' N, 121 deg 15' E, 20 m amsl). Section 3.1 gives the after-sunrise range; Table 3 gives the
    nightly totals for the 14 heavy dew nights. Measured values, not a model: nothing here is calculated. */
 const DEW_RICE_LB = { afterSunriseLoH: 1.4, afterSunriseHiH: 3.4, nightLoH: 9.0, nightHiH: 12.8, nights: 14,
-  shiftFromShieldingHiH: 2.0, site: 'IRRI Los Banos', variety: 'IR72', season: 'dry season, February to April' };
+  shiftFromShieldingHiH: 2.0, site: 'IRRI Los Baños', variety: 'IR72', season: 'dry season, February to April' };
 function dewTonight(T, RH, sky, wind) {
   const td = tdewFromEa(es0(T) * RH / 100);
   const depression = T - td;
