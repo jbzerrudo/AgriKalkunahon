@@ -110,6 +110,8 @@ code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px
 .authority .fil{color:var(--earth)}
 .locnote{font-size:13px;margin:6px 0;color:var(--earth);font-weight:600}
 .lochint{font-size:12px;margin:4px 0 8px;color:var(--muted)}
+.opt{font-size:12px;color:var(--muted);font-weight:400;margin-left:.35em}
+.opt .fil{font-style:italic}
 .locwarn{font-size:13px;margin:8px 0 0}
 dl.nums dt.alert{color:#8a4b00;font-weight:700}
 dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px solid #d98324;background:#fdf3e6;border-radius:6px}
@@ -954,7 +956,7 @@ const T = {
   },
   ui: {
     compute: { en: 'Answer', fil: 'Sagot' }, why: { en: 'Why', fil: 'Bakit' }, sources: { en: 'Sources', fil: 'Sanggunian' },
-    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, back: { en: 'Home', fil: 'Simula' },
+    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
     location: { en: 'Location', fil: 'Lokasyon' }, gps: { en: 'Use phone GPS', fil: 'Gamitin ang GPS ng smartphone' },
     lat: { en: 'Latitude (°N)', fil: 'Latitud (°H)' }, lon: { en: 'Longitude (°E)', fil: 'Longhitud (°S)' }, elev: { en: 'Elevation (m)', fil: 'Taas mula sa dagat (m)' },
     site: { en: 'Site', fil: 'Lugar' }, siteCoastal: { en: 'Near the sea (coastal)', fil: 'Malapit sa dagat' }, siteInterior: { en: 'Inland, far from the sea', fil: 'Malayo sa dagat' }, siteIsland: { en: 'Small island (20 km across or less)', fil: 'Maliit na isla (20 km o mas makitid)' },
@@ -1096,9 +1098,12 @@ function numInput(id, label, value, step, opts) {
   const input = el('input', { type: 'number', id: id, step: step || 'any', inputmode: 'decimal' });
   if (value != null && value !== '') input.value = value;
   if (opts && opts.placeholder) input.placeholder = opts.placeholder;
-  const row = el('label', { class: 'row' }, bi(label), input);
+  const row = el('label', { class: 'row' }, bi(label), optTag(opts), input);
   return { row, input };
 }
+/* Farmers were filling every box because nothing said which ones they could leave alone. Only the
+   inputs a card genuinely cannot answer without are unmarked. */
+function optTag(opts) { return (opts && opts.optional) ? el('span', { class: 'opt' }, bi({ en: '(optional)', fil: '(opsyonal)' })) : null; }
 function selectInput(id, label, options, value) {
   const input = el('select', { id: id });
   options.forEach(([v, lab]) => { const s = t(lab); input.appendChild(el('option', { value: v }, s.en + ' / ' + s.fil)); });
@@ -1168,13 +1173,13 @@ CARDS.water = function (root) {
   const zr = numInput('zr', T.ui.zr, prev.zr, 0.1);
   const date = dateInput('date', T.ui.date, prev.date);
   const tmax = numInput('tmax', T.ui.tmax, prev.tmax, 0.1), tmin = numInput('tmin', T.ui.tmin, prev.tmin, 0.1);
-  const rhmax = numInput('rhmax', T.ui.rhmax, prev.rhmax, 1), rhmin = numInput('rhmin', T.ui.rhmin, prev.rhmin, 1);
+  const rhmax = numInput('rhmax', T.ui.rhmax, prev.rhmax, 1, { optional: true }), rhmin = numInput('rhmin', T.ui.rhmin, prev.rhmin, 1, { optional: true });
   const wind = selectInput('wind', T.ui.wind, Object.keys(T.windClass).map(k => [k, T.windClass[k]]), prev.wind || 'unknown');
-  const sun = numInput('sun', T.ui.sun, prev.sun, 0.5);
+  const sun = numInput('sun', T.ui.sun, prev.sun, 0.5, { optional: true });
   const days = numInput('days', T.ui.daysSince, prev.days == null ? 5 : prev.days, 1);
-  const rainRows = [0, 1, 2].map(i => { const mm = numInput('rmm' + i, { en: 'Rain ' + (i + 1) + ' (mm)', fil: 'Ulan ' + (i + 1) + ' (mm)' }, prev['rmm' + i], 0.5), ago = numInput('rago' + i, { en: 'days ago', fil: 'araw na nakalipas' }, prev['rago' + i], 1); return { mm, ago }; });
+  const rainRows = [0, 1, 2].map(i => { const mm = numInput('rmm' + i, { en: 'Rain ' + (i + 1) + ' (mm)', fil: 'Ulan ' + (i + 1) + ' (mm)' }, prev['rmm' + i], 0.5, { optional: true }), ago = numInput('rago' + i, { en: 'days ago', fil: 'araw na nakalipas' }, prev['rago' + i], 1, { optional: true }); return { mm, ago }; });
   const method = selectInput('method', T.ui.method, Object.keys(T.methods).map(k => [k, T.methods[k]]), prev.method || 'surface');
-  const area = numInput('area', T.ui.area, prev.area == null ? 1 : prev.area, 0.01), pump = numInput('pump', T.ui.pump, prev.pump, 0.5);
+  const area = numInput('area', T.ui.area, prev.area == null ? 1 : prev.area, 0.01), pump = numInput('pump', T.ui.pump, prev.pump, 0.5, { optional: true });
   function setZr() { const c = A.CROPS[crop.input.value]; if (c && !zr.input.value) zr.input.value = c.zr[0]; }
   crop.input.addEventListener('change', () => { zr.input.value = ''; setZr(); }); setZr();
   const rainBox = el('div', { class: 'grid2' }); rainRows.forEach(r => rainBox.append(r.mm.row, r.ago.row));
@@ -1310,8 +1315,8 @@ CARDS.spray = function (root) {
   const RH = numInput('sRH', { en: 'Humidity now (%)', fil: 'Halumigmig ngayon (%)' }, prev.RH, 1);
   const bft = [['', { en: 'Choose from what you see', fil: 'Piliin mula sa nakikita' }], ['0.5', { en: 'Calm: smoke rises straight (under 1 km/h)', fil: 'Walang hangin: tuwid ang usok' }], ['4', { en: 'Smoke drifts, leaves still (2 to 5 km/h)', fil: 'Gumagalaw ang usok, tahimik ang dahon' }], ['9', { en: 'Leaves rustle, wind felt on face (7 to 11 km/h)', fil: 'Kumakaluskos ang dahon, ramdam sa mukha' }], ['16', { en: 'Leaves and twigs move all the time (13 to 19 km/h)', fil: 'Laging gumagalaw ang dahon at sanga' }], ['25', { en: 'Dust rises, small branches move (20 to 30 km/h)', fil: 'Tumataas ang alikabok, gumagalaw ang sanga' }]];
   const wsel = selectInput('sW', { en: 'Wind now', fil: 'Hangin ngayon' }, bft, prev.wsel || '');
-  const wkmh = numInput('sWk', { en: 'or wind in km/h at 2 m', fil: 'o hangin sa km/h sa 2 m' }, prev.wkmh, 1);
-  const label = numInput('sLbl', { en: 'Wind limit printed on the label, if any (km/h)', fil: 'Limitasyon ng hangin sa label, kung meron (km/h)' }, prev.label, 1);
+  const wkmh = numInput('sWk', { en: 'or wind in km/h at 2 m', fil: 'o hangin sa km/h sa 2 m' }, prev.wkmh, 1, { optional: true });
+  const label = numInput('sLbl', { en: 'Wind limit printed on the label, if any (km/h)', fil: 'Limitasyon ng hangin sa label, kung meron (km/h)' }, prev.label, 1, { optional: true });
   const mist = checkInput('sMist', { en: 'Mist, fog, dew or frost present', fil: 'May ambon, ulap sa lupa, hamog o andap' }, prev.mist);
   const smoke = checkInput('sSmoke', { en: 'Smoke or dust hangs and moves sideways near the ground', fil: 'Nakabitin ang usok o alikabok at pahalang ang galaw' }, prev.smoke);
   const timeRow = numInput('sHour', { en: 'Time now (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras ngayon (24 oras, hal. 15.5 para sa 3:30 ng hapon)' }, (new Date().getHours() + new Date().getMinutes() / 60).toFixed(1), 0.1);
@@ -1610,7 +1615,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.0, build d071534c. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 4d9d0a36. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1651,7 +1656,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build d071534c)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 4d9d0a36)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1663,7 +1668,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the home screen.', fil: 'Ang build na nasa ibaba ng unang pahina.' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 4d9d0a36).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 4d9d0a36 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1675,12 +1680,12 @@ CARDS.feedback = function (root) {
 /* What the farmer physically needs before starting. Shown above the inputs, because the commonest
    confusion reported is not knowing what to go and fetch. */
 const NEEDS = {
-  water:   { en: 'A thermometer in the shade, ideally one that keeps the day\'s highest and lowest. A rain gauge. Your location, which the phone can fill in. With no thermometer, a phone weather app\'s high and low for the nearest town will serve as a rough stand-in, but it is a forecast for somewhere else: expect error, and more of it if that town sits at a different elevation.', fil: 'Termometro sa lilim, mas mabuti kung may tanda ng pinakamataas at pinakamababa sa araw. Panukat ng ulan. Ang lokasyon ninyo, na kayang kunin ng smartphone. Kung walang termometro, puwedeng gamiting pahapyaw na panghalili ang mataas at mababang temperatura ng pinakamalapit na bayan sa weather app ng smartphone, ngunit hula iyon para sa ibang lugar: asahan ang pagkakamali, lalo na kung magkaiba ang taas ng lugar.' },
+  water:   { en: 'A maximum and minimum thermometer, the kind that holds the highest and lowest reading until you reset it, kept in the shade. The high comes in the afternoon and the low just before sunrise, so it must run through the night as well as the day. A rain gauge. Your location, which the phone can fill in. With no thermometer, a phone weather app\'s high and low for the nearest town will serve as a rough stand-in, but it is a forecast for somewhere else: expect error, and more of it if that town sits at a different elevation.', fil: 'Isang max-min na termometro, iyong kayang humawak ng pinakamataas at pinakamababang reading hanggang sa i-reset mo ito, na nakalagay sa lilim. Ang pinakamataas na temperatura ay nangyayari sa hapon at ang pinakamababa bago sumikat ang araw, kaya dapat itong tumagal sa buong gabi pati na rin sa araw. Panukat ng ulan. Ang lokasyon ninyo, na kayang kunin ng smartphone. Kung walang termometro, puwedeng gamiting pahapyaw na panghalili ang mataas at mababang temperatura ng pinakamalapit na bayan sa weather app ng smartphone, ngunit hula iyon para sa ibang lugar: asahan ang pagkakamali, lalo na kung magkaiba ang taas ng lugar.' },
   rice:    { en: 'A stick or ruler to measure the water. A field water tube as well, if you use safe AWD. No weather app can tell you the depth of water in your own field; this one has to be measured.', fil: 'Patpat o ruler na pansukat ng tubig. Tubo rin sa bukid, kung safe AWD ang ginagamit ninyo. Walang weather app na makapagsasabi ng lalim ng tubig sa bukid ninyo; kailangan itong sukatin mismo.' },
-  rain:    { en: 'A rain gauge, read at the same hour each day and added up for the whole month. If you have none, PAGASA publishes monthly rainfall for its stations: use the nearest one, remembering that rainfall can differ a great deal between your field and a station some distance away. A phone weather app is a weaker fallback than the station record, because the rainfall it shows is an estimate for a wide area rather than what fell on your field.', fil: 'Panukat ng ulan, basahin sa parehong oras araw-araw at ipunin sa buong buwan. Kung wala kayo nito, naglalathala ang PAGASA ng buwanang ulan sa mga istasyon nito: gamitin ang pinakamalapit, ngunit tandaan na malaki ang maaaring pagkakaiba ng ulan sa bukid ninyo at sa istasyong malayo. Mas mahina ang weather app sa smartphone kaysa sa talaan ng istasyon, dahil tantiya lamang iyon para sa malawak na lugar at hindi ang tunay na bumagsak sa bukid ninyo.' },
+  rain:    { en: 'A rain gauge, read at the same hour each day and added up for the whole month. If you have none, PAGASA publishes monthly rainfall for its stations: use the nearest one, remembering that rainfall can differ a great deal between your field and a station some distance away. A phone weather app is a weaker fallback than the station record, because the rainfall it shows is an estimate for a wide area rather than what fell on your field.', fil: 'Sa panukat ng ulan (ulansukod), basahin sa parehong oras araw-araw at ipunin sa buong buwan. Kung wala kayo nito, naglalathala ang PAGASA ng buwanang ulan sa mga istasyon nito: gamitin ang pinakamalapit, ngunit tandaan na malaki ang maaaring pagkakaiba ng ulan sa bukid ninyo at sa istasyong malayo. Mas mahina ang weather app sa smartphone kaysa sa talaan ng istasyon, dahil tantiya lamang iyon para sa malawak na lugar at hindi ang tunay na bumagsak sa bukid ninyo.' },
   spray:   { en: 'A thermometer and a hygrometer, taken at the spot you will spray. A watch, and some way to judge the wind. Do not take the wind from a phone weather app: drift is decided by the wind in your field at boom height, not at a station kilometres away and ten metres up, and the label holds you to the conditions where you spray.', fil: 'Termometro at hygrometer, sa mismong lugar na sisprayan. Relo, at paraan ng pagtantiya ng hangin. Huwag kunin sa weather app ng smartphone ang hangin: ang pag-anod ng spray ay nakasalalay sa hangin sa mismong bukid ninyo sa taas ng boom, hindi sa istasyong ilang kilometro ang layo at sampung metro ang taas, at ang label ang panagot ninyo sa kondisyon kung saan kayo nagsi-spray.' },
   dry:     { en: 'A thermometer and a hygrometer, shaded from direct sun but standing in the air beside the drying area. A weighing scale. A moisture meter if you have one; otherwise your usual way of judging the grain. A phone weather app\'s humidity is measured somewhere else entirely and will not match your drying floor; use it only if you have nothing at all.', fil: 'Termometro at hygrometer, may silong mula sa tuwirang araw ngunit nasa hangin sa tabi ng patuyuan. Timbangan. Moisture meter kung meron; kung wala, ang nakasanayan ninyong paraan ng pagtingin sa butil. Ang humidity na ipinapakita ng weather app sa smartphone ay sinukat sa ibang lugar at hindi tutugma sa bilaran ninyo; gamitin lamang kung talagang wala kayong ibang paraan.' },
-  stress:  { en: 'A thermometer in the shade that keeps the day\'s highest and lowest. With none, a phone weather app\'s high and low for the nearest town will serve as a rough stand-in, but it is a forecast for somewhere else: expect error, and more of it if that town sits at a different elevation.', fil: 'Termometro sa lilim na may tanda ng pinakamataas at pinakamababa sa araw. Kung wala nito, puwedeng gamiting pahapyaw na panghalili ang mataas at mababang temperatura ng pinakamalapit na bayan sa weather app ng smartphone, ngunit hula iyon para sa ibang lugar: asahan ang pagkakamali, lalo na kung magkaiba ang taas ng lugar.' },
+  stress:  { en: 'A maximum and minimum thermometer, the kind that holds the highest and lowest reading until you reset it, kept in the shade. The high comes in the afternoon and the low just before sunrise, so it must run through the night as well as the day. With none, a phone weather app\'s high and low for the nearest town will serve as a rough stand-in, but it is a forecast for somewhere else: expect error, and more of it if that town sits at a different elevation.', fil: 'Isang max-min na termometro, iyong kayang humawak ng pinakamataas at pinakamababang reading hanggang sa i-reset mo ito, na nakalagay sa lilim. Ang pinakamataas na temperatura ay nangyayari sa hapon at ang pinakamababa bago sumikat ang araw, kaya dapat itong tumagal sa buong gabi pati na rin sa araw. Kung wala nito, puwedeng gamiting pahapyaw na panghalili ang mataas at mababang temperatura ng pinakamalapit na bayan sa weather app ng smartphone, ngunit hula iyon para sa ibang lugar: asahan ang pagkakamali, lalo na kung magkaiba ang taas ng lugar.' },
   frost:   { en: 'A thermometer and a hygrometer, read outdoors away from walls, at about head height. If you have neither, a phone weather app for the nearest town can be used, but know which way it is wrong: cold air drains downhill and pools, so a field in a hollow gets colder than the town on a clear, calm night, and the app will read too warm. Treat its number as the warmest your field will be, not the coldest, and take a frost warning seriously even when the app looks safe.', fil: 'Basahin sa labas ang termometro at hygrometer na malayo sa pader, at mga kasintaas ng ulo. Kung wala kayo ng dalawa, puwedeng gamitin ang weather app ng smartphone para sa pinakamalapit na bayan, ngunit alamin kung saan ito nagkakamali: umaagos pababa at namumuo ang malamig na hangin, kaya mas lumalamig ang bukid sa lubak kaysa sa bayan kapag maaliwalas at walang hangin, at mas mainit ang ipapakita ng app. Ituring ninyong pinakamainit na posible ang bilang nito, hindi ang pinakamalamig, at seryosohin ang babala sa andap kahit mukhang ligtas sa app.' },
   disease: { en: 'A thermometer and a hygrometer, read outdoors near the crop in the evening. As with frost, a phone weather app is a poor substitute here, because dew depends on how your own field cools rather than on the town average. Use it only if you have nothing else.', fil: 'Basahin sa labas ang termometro at hygrometer malapit sa pananim kinagabihan. Tulad sa andap mahina ang weather app galing smartphone dito, dahil nakadepende ang hamog sa paglamig ng sarili ninyong bukid at hindi sa karaniwan ng bayan. Gamitin kung wala talaga.' },
   timing:  { en: 'Your planting or sowing dates, and a thermometer for a typical high and low. A phone weather app is acceptable here, because this card wants a typical value for the season rather than a particular day.', fil: 'Ang petsa ng pagtatanim o pagpupunla, at termometro para sa karaniwang mataas at mababa. Puwede ang weather app sa smartphone dito, dahil karaniwang halaga para sa panahon ang hinahanap ng card na ito at hindi ang isang tiyak na araw.' }
@@ -1695,7 +1700,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build d071534c.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 4d9d0a36.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

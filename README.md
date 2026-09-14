@@ -34,6 +34,23 @@ calculator for professionals. AgriKalkunahon is not an extension of it; Kalkunah
 The **Sources and limits** card lists every source by class (primary, regulatory, extension,
 secondary) and every item that could not be verified against a primary source.
 
+## What changed in 0.5.1
+
+Zenodo was down when v0.5.0 was released and dropped its archive webhook, so no DOI was minted for it.
+This tag exists so the archive has something to pick up. It also carries a small round of interface
+work done after v0.5.0 was tagged:
+
+Every input a card can answer without is now marked **(optional)**. On the water card that is the
+humidity, the sunshine hours, the three rain rows and the pump discharge: only the afternoon high and
+the morning low are required, because FAO-56 documents a fallback for each of the others.
+
+The thermometer the water and stress cards ask for is now named, along with when it reads: a maximum
+and minimum thermometer, held in the shade, running through the night as well as the day, because the
+high comes in the afternoon and the low just before sunrise.
+
+The back link reads **Main Menu** rather than Home, the rain gauge is *panukat ng ulan (ulansukod)* in
+the Filipino, and the feedback card shows the running build instead of telling you where to find it.
+
 ## What changed in 0.5.0
 
 **The app now works anywhere on Earth.** Sun times were computed with UTC+8 hardcoded at every call
