@@ -1102,23 +1102,43 @@ const inPH = () => { const L = store.loc; return isFinite(L.lat) && isFinite(L.l
    the FAO-56 Eq. 7 air pressure, where 50 m moves ETo by 0.06 per cent. */
 function gpsUncertainty() {
   const L = store.loc;
-  if (!isFinite(L.acc) || L.acc == null) return null;
+  const grid0 = Math.round(A.haversineKm(0, 0, 0.01, 0) * 1000);
+  const alt = ' Elevation enters only the air pressure in FAO-56, where being 50 m out moves the water answer by about 0.06 per cent.';
+  const altF = ' Pumapasok lamang ang taas sa presyon ng hangin sa FAO-56, at ang 50 m na pagkakamali ay 0.06 porsiyento lamang ang ibinabago sa sagot sa tubig.';
+  /* A typed coordinate has an uncertainty too: the app reads two decimal places and no more. Say it,
+     so the farmer is never looking at a number without one. */
+  if (typeof L.acc !== 'number' || !isFinite(L.acc)) return {
+    en: 'These coordinates were typed in, so the app knows of no satellite fix behind them. It reads them to a hundredth of a degree, about ' + grid0 + ' m across the ground, and works to no finer than that.' + alt,
+    fil: 'Itinipa ang mga koordinadang ito, kaya walang alam ang app na fix mula sa satellite. Binabasa ito hanggang sandaan ng digri lamang, mga ' + grid0 + ' m sa lupa, at hindi hihigit doon ang kanyang tinutukoy.' + altF
+  };
   const h = Math.round(L.acc);
   const v = (typeof L.altAcc === 'number' && isFinite(L.altAcc)) ? Math.round(L.altAcc) : null;
   const grid = Math.round(A.haversineKm(0, 0, 0.01, 0) * 1000);   // metres in the hundredth of a degree the app works in
   const coarse = L.acc >= grid;
+  /* The browser reports one radius in metres, not a figure per coordinate, so put it into the units of
+     the boxes above: degrees of latitude are the same everywhere, degrees of longitude shrink with
+     the cosine of the latitude, so the two are not equal. */
+  const mLat = A.haversineKm(0, 0, 1, 0) * 1000, mLon = A.haversineKm(L.lat, 0, L.lat, 1) * 1000;
+  const dLat = L.acc / mLat, dLon = mLon > 1 ? L.acc / mLon : null;
+  /* Below half a grid cell both figures round to 0.00, which tells the farmer nothing, so only show
+     the conversion when the circle is wide enough to move the second decimal place. */
+  const showDeg = dLat >= 0.005 || (dLon != null && dLon >= 0.005);
+  const inDeg = showDeg ? ' In the units of the boxes above that is about \u00b1' + fmt(dLat, 2) + ' \u00b0 of latitude and \u00b1' + (dLon != null ? fmt(dLon, 2) : '\u2013') + ' \u00b0 of longitude, one circle of that radius around the point rather than a separate figure for each.' : '';
+  const inDegF = showDeg ? ' Sa yunit ng mga kahon sa itaas, mga \u00b1' + fmt(dLat, 2) + ' \u00b0 iyon ng latitud at \u00b1' + (dLon != null ? fmt(dLon, 2) : '\u2013') + ' \u00b0 ng longhitud, isang bilog na ganoon ang lapad sa paligid ng punto at hindi magkahiwalay na bilang sa bawat isa.' : '';
   const en = 'Your device put this fix at about \u00b1' + h + ' m across the ground'
     + (v != null ? ' and \u00b1' + v + ' m in height' : (L.altFromGps ? ', and gave no figure for the height' : ', and gave no height at all'))
     + (coarse
-        ? '. That is as wide as the hundredth of a degree this app works in, about ' + grid + ' m, so the fix is too rough to trust. Check the numbers or type them in yourself.'
+        ? '. That is as wide as the hundredth of a degree this app works in, about ' + grid + ' m, so the fix is too rough to trust. A figure this wide usually means the browser located you from the network rather than from satellites, and a VPN will place you wherever it leaves the internet, not where your field is. Check the numbers against what you know, or type them in yourself.'
         : '. That is finer than the hundredth of a degree this app works in, about ' + grid + ' m, so it changes nothing.')
+    + inDeg
     + ' Height matters even less: it enters only the air pressure in FAO-56, where being 50 m out moves the water answer by about 0.06 per cent.'
     + (!L.altFromGps ? ' The elevation below is not from the satellite fix; type it in yourself if you know it.' : '');
   const fil = 'Ayon sa device ninyo, ang lokasyong ito ay may \u00b1' + h + ' m na kawalang-katiyakan sa lupa'
     + (v != null ? ' at \u00b1' + v + ' m sa taas' : (L.altFromGps ? ', at walang ibinigay na bilang para sa taas' : ', at walang ibinigay na taas'))
     + (coarse
-        ? '. Kasinlawak iyon ng sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya masyadong magaspang ang fix. Suriin ang mga numero o i-type na lamang ninyo.'
+        ? '. Kasinlawak iyon ng sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya masyadong magaspang ang fix. Kadalasan, ibig sabihin nito ay galing sa network ang lokasyon at hindi sa satellite; at kung may VPN kayo, ilalagay kayo nito kung saan lumalabas ang VPN, hindi kung nasaan ang bukid ninyo. Suriin ang mga numero o i-type na lamang ninyo.'
         : '. Mas maliit pa iyon kaysa sa sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya wala itong binabago.')
+    + inDegF
     + ' Mas maliit pa ang epekto ng taas: pumapasok lamang ito sa presyon ng hangin sa FAO-56, at ang 50 m na pagkakamali ay 0.06 porsiyento lamang ang ibinabago sa sagot sa tubig.'
     + (!L.altFromGps ? ' Hindi galing sa satellite ang taas sa ibaba; i-type na lamang ninyo kung alam ninyo.' : '');
   return { en: en, fil: fil };
@@ -1662,7 +1682,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 298 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build b52cc926. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 71351529. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -1703,7 +1723,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build b52cc926)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 71351529)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1715,7 +1735,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build b52cc926).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build b52cc926 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 71351529).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 71351529 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -1747,7 +1767,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, ICON[id]), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build b52cc926.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 71351529.'));
 }
 function renderCard(main, id) {
   main.innerHTML = '';

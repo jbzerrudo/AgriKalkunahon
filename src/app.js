@@ -186,23 +186,43 @@ const inPH = () => { const L = store.loc; return isFinite(L.lat) && isFinite(L.l
    the FAO-56 Eq. 7 air pressure, where 50 m moves ETo by 0.06 per cent. */
 function gpsUncertainty() {
   const L = store.loc;
-  if (!isFinite(L.acc) || L.acc == null) return null;
+  const grid0 = Math.round(A.haversineKm(0, 0, 0.01, 0) * 1000);
+  const alt = ' Elevation enters only the air pressure in FAO-56, where being 50 m out moves the water answer by about 0.06 per cent.';
+  const altF = ' Pumapasok lamang ang taas sa presyon ng hangin sa FAO-56, at ang 50 m na pagkakamali ay 0.06 porsiyento lamang ang ibinabago sa sagot sa tubig.';
+  /* A typed coordinate has an uncertainty too: the app reads two decimal places and no more. Say it,
+     so the farmer is never looking at a number without one. */
+  if (typeof L.acc !== 'number' || !isFinite(L.acc)) return {
+    en: 'These coordinates were typed in, so the app knows of no satellite fix behind them. It reads them to a hundredth of a degree, about ' + grid0 + ' m across the ground, and works to no finer than that.' + alt,
+    fil: 'Itinipa ang mga koordinadang ito, kaya walang alam ang app na fix mula sa satellite. Binabasa ito hanggang sandaan ng digri lamang, mga ' + grid0 + ' m sa lupa, at hindi hihigit doon ang kanyang tinutukoy.' + altF
+  };
   const h = Math.round(L.acc);
   const v = (typeof L.altAcc === 'number' && isFinite(L.altAcc)) ? Math.round(L.altAcc) : null;
   const grid = Math.round(A.haversineKm(0, 0, 0.01, 0) * 1000);   // metres in the hundredth of a degree the app works in
   const coarse = L.acc >= grid;
+  /* The browser reports one radius in metres, not a figure per coordinate, so put it into the units of
+     the boxes above: degrees of latitude are the same everywhere, degrees of longitude shrink with
+     the cosine of the latitude, so the two are not equal. */
+  const mLat = A.haversineKm(0, 0, 1, 0) * 1000, mLon = A.haversineKm(L.lat, 0, L.lat, 1) * 1000;
+  const dLat = L.acc / mLat, dLon = mLon > 1 ? L.acc / mLon : null;
+  /* Below half a grid cell both figures round to 0.00, which tells the farmer nothing, so only show
+     the conversion when the circle is wide enough to move the second decimal place. */
+  const showDeg = dLat >= 0.005 || (dLon != null && dLon >= 0.005);
+  const inDeg = showDeg ? ' In the units of the boxes above that is about \u00b1' + fmt(dLat, 2) + ' \u00b0 of latitude and \u00b1' + (dLon != null ? fmt(dLon, 2) : '\u2013') + ' \u00b0 of longitude, one circle of that radius around the point rather than a separate figure for each.' : '';
+  const inDegF = showDeg ? ' Sa yunit ng mga kahon sa itaas, mga \u00b1' + fmt(dLat, 2) + ' \u00b0 iyon ng latitud at \u00b1' + (dLon != null ? fmt(dLon, 2) : '\u2013') + ' \u00b0 ng longhitud, isang bilog na ganoon ang lapad sa paligid ng punto at hindi magkahiwalay na bilang sa bawat isa.' : '';
   const en = 'Your device put this fix at about \u00b1' + h + ' m across the ground'
     + (v != null ? ' and \u00b1' + v + ' m in height' : (L.altFromGps ? ', and gave no figure for the height' : ', and gave no height at all'))
     + (coarse
-        ? '. That is as wide as the hundredth of a degree this app works in, about ' + grid + ' m, so the fix is too rough to trust. Check the numbers or type them in yourself.'
+        ? '. That is as wide as the hundredth of a degree this app works in, about ' + grid + ' m, so the fix is too rough to trust. A figure this wide usually means the browser located you from the network rather than from satellites, and a VPN will place you wherever it leaves the internet, not where your field is. Check the numbers against what you know, or type them in yourself.'
         : '. That is finer than the hundredth of a degree this app works in, about ' + grid + ' m, so it changes nothing.')
+    + inDeg
     + ' Height matters even less: it enters only the air pressure in FAO-56, where being 50 m out moves the water answer by about 0.06 per cent.'
     + (!L.altFromGps ? ' The elevation below is not from the satellite fix; type it in yourself if you know it.' : '');
   const fil = 'Ayon sa device ninyo, ang lokasyong ito ay may \u00b1' + h + ' m na kawalang-katiyakan sa lupa'
     + (v != null ? ' at \u00b1' + v + ' m sa taas' : (L.altFromGps ? ', at walang ibinigay na bilang para sa taas' : ', at walang ibinigay na taas'))
     + (coarse
-        ? '. Kasinlawak iyon ng sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya masyadong magaspang ang fix. Suriin ang mga numero o i-type na lamang ninyo.'
+        ? '. Kasinlawak iyon ng sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya masyadong magaspang ang fix. Kadalasan, ibig sabihin nito ay galing sa network ang lokasyon at hindi sa satellite; at kung may VPN kayo, ilalagay kayo nito kung saan lumalabas ang VPN, hindi kung nasaan ang bukid ninyo. Suriin ang mga numero o i-type na lamang ninyo.'
         : '. Mas maliit pa iyon kaysa sa sandaan ng digri na ginagamit ng app, mga ' + grid + ' m, kaya wala itong binabago.')
+    + inDegF
     + ' Mas maliit pa ang epekto ng taas: pumapasok lamang ito sa presyon ng hangin sa FAO-56, at ang 50 m na pagkakamali ay 0.06 porsiyento lamang ang ibinabago sa sagot sa tubig.'
     + (!L.altFromGps ? ' Hindi galing sa satellite ang taas sa ibaba; i-type na lamang ninyo kung alam ninyo.' : '');
   return { en: en, fil: fil };
