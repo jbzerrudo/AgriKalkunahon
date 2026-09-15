@@ -148,36 +148,112 @@ eq('spray refuses to say good without wind', A.sprayWindow({ T: 25, RH: 60, P: 1
 eq('spray still says do-not-spray without wind when conditions are bad', A.sprayWindow({ T: 25, RH: 10, P: 101.3, hoursToSunset: 5, hoursAfterSunrise: 5 }).code, 'do_not_spray');
 eq('spray is good once wind is given', A.sprayWindow({ T: 25, RH: 60, P: 101.3, windKmh: 8, hoursToSunset: 5, hoursAfterSunrise: 5 }).code, 'good');
 
-/* three water-management methods */
-eq('CF early, shallow: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 10, pondedCm: 1 }).code, 'cf_top_up');
-eq('CF mid season, 7 cm: fine', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, pondedCm: 7 }).code, 'cf_ok');
-eq('CF mid season, 2 cm: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, pondedCm: 2 }).code, 'cf_top_up');
-eq('CF drains 7-10 days before harvest (IRRI RKB)', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 100, daysToHarvest: 8, pondedCm: 5 }).code, 'cf_drain_now');
-eq('CF flowering needs 5 cm', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 60, daysToFlowering: 2, pondedCm: 2 }).code, 'cf_flowering_top_up');
+/* three water-management methods, all on one datum: negative is below the soil surface, 0 is level
+   with it, positive is water standing above it. */
+eq('CF early, 1 cm standing: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 10, levelCm: 1 }).code, 'cf_top_up');
+eq('CF mid season, 7 cm standing: fine', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, levelCm: 7 }).code, 'cf_ok');
+eq('CF mid season, 2 cm standing: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, levelCm: 2 }).code, 'cf_top_up');
+eq('CF level with the surface is not flooded: top up', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, levelCm: 0 }).code, 'cf_top_up');
+ok('CF top-up from the surface is the whole target depth', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, levelCm: 0 }).shortCm, 5, 1e-9, 'cm');
+ok('CF top-up from below the surface spans the surface too', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 50, levelCm: -2 }).shortCm, 7, 1e-9, 'cm');
+eq('CF drains 7-10 days before harvest (IRRI RKB)', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 100, daysToHarvest: 8, levelCm: 5 }).code, 'cf_drain_now');
+eq('CF flowering needs 5 cm', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 60, daysToFlowering: 2, levelCm: 2 }).code, 'cf_flowering_top_up');
 eq('CF target depths are the IRRI values', A.AWD.continuous.afterTransplantCm + '/' + A.AWD.continuous.laterCm.join('-') + '/' + A.AWD.continuous.drainBeforeHarvestDays.join('-'), '3/5-10/7-10');
 eq('no tube: no re-flood threshold is returned', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).code, 'intermittent_no_threshold');
 eq('no tube: the answer is flagged as unsourced', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).flags.indexOf('no_tube_no_published_threshold') >= 0, true);
-eq('no tube: flowering rule still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 60, daysToFlowering: 2, pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
+eq('no tube: flowering rule still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 60, daysToFlowering: 2, levelCm: 2 }).code, 'flowering_top_up_to_5cm');
 eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 100, daysToHarvest: 5, soil: 'light' }).code, 'drain_stop_irrigating');
+eq('no tube: no threshold, so no loss rate is projected', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50, levelCm: -5, levelPrevCm: -1 }).dropCmPerDay, undefined);
 eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
-eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
-eq('reflood now at 16 cm dry season', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
-eq('no transplanting date: start window flagged, tube still answers', A.awdDecision({ season: 'dry', tubeBelowSurfaceCm: 16 }).flags.join(','), 'awd_start_window_unknown');
-eq('negative tube reading is flagged', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: -15 }).flags.join(','), 'tube_reading_negative');
-ok('two stick readings give the loss under continuous flooding', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 76, pondedCm: 8, pondPrevCm: 10 }).dropCmPerDay, 2, 1e-9, 'cm/d');
-ok('and the days until it falls below target', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 76, pondedCm: 8, pondPrevCm: 10 }).daysLeft, 1.5, 1e-9, 'd');
-ok('two well readings give the daily loss', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 9, tubePrevCm: 5 }).dropCmPerDay, 4, 1e-9, 'cm/d');
-ok('and the days to the trigger from it', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 9, tubePrevCm: 5 }).daysLeft, 1.5, 1e-9, 'd');
-eq('a level that rose is flagged as a net gain, with no loss rate', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 5, tubePrevCm: 9 }).flags.join(','), 'tube_net_gain');
-ok('and the gain is reported', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 5, tubePrevCm: 9 }).gainCm, 4, 1e-9, 'cm');
-ok('re-flood rise is the reading plus the re-flood depth', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).riseCm, 21, 1e-9, 'cm');
-eq('a negative tube reading is read as that depth below, not doubled', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: -15 }).code, 'reflood_now');
-eq('not yet at 16 cm wet season', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'not_yet');
-ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
-eq('flowering window keeps 5 cm', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
-eq('before day 21: shallow water', A.awdDecision({ daysAfterEstablish: 10, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'before_awd_keep_shallow');
+
+console.log('\n-- the sign carries the meaning: one reading, one datum --');
+eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -16 }).code, 'reflood_now');
+eq('16 cm below the surface in the dry season: re-flood', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -16 }).code, 'reflood_now');
+eq('the trigger is reached, not passed: exactly -15 re-floods', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -15 }).code, 'reflood_now');
+eq('one centimetre short of it does not', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -14 }).code, 'not_yet');
+ok('re-flood rise spans the surface: 16 below plus 5 above', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -16 }).riseCm, 21, 1e-9, 'cm');
+ok('and it reports the depth it starts from', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -16 }).fromCm, 16, 1e-9, 'cm');
+eq('no dry season uses the dry-season depth, 15 cm (this app\'s assumption)', A.awdDecision({ daysAfterEstablish: 40, season: 'nodry', levelCm: -15 }).code, 'reflood_now');
+eq('16 cm below in the wet season is not yet: the DA depth is 20', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', levelCm: -16 }).code, 'not_yet');
+eq('no transplanting date: start window flagged, the tube still answers', A.awdDecision({ season: 'dry', levelCm: -16 }).flags.join(','), 'awd_start_window_unknown');
+eq('flowering window keeps 5 cm standing', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', levelCm: 2 }).code, 'flowering_top_up_to_5cm');
+eq('and 5 cm standing satisfies it', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', levelCm: 5 }).code, 'flowering_keep_flooded');
+eq('before day 21: shallow water', A.awdDecision({ daysAfterEstablish: 10, season: 'dry', levelCm: -16 }).code, 'before_awd_keep_shallow');
 eq('drain 14 days before harvest on clay', A.awdDecision({ daysAfterEstablish: 100, daysToHarvest: 12, soil: 'clay', season: 'wet' }).code, 'drain_stop_irrigating');
-eq('no drain 12 days before harvest on light soil', A.awdDecision({ daysAfterEstablish: 100, daysToHarvest: 12, soil: 'light', season: 'wet', tubeBelowSurfaceCm: 5 }).code, 'not_yet');
+eq('no drain 12 days before harvest on light soil', A.awdDecision({ daysAfterEstablish: 100, daysToHarvest: 12, soil: 'light', season: 'wet', levelCm: -5 }).code, 'not_yet');
+
+console.log('\n-- water loss from two readings, and the date it gives --');
+{ const r = A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, levelPrevCm: -1, daysBetween: 2 });
+  ok('the rate is the fall divided by the span', r.dropCmPerDay, 2, 1e-9, 'cm/d');
+  eq('and it is reported as measured', r.dropFrom, 'measured');
+  ok('still to go, on the same datum', r.remainingCm, 10, 1e-9, 'cm');
+  ok('days to the trigger', r.daysLeft, 5, 1e-9, 'd');
+  ok('the rate carries sqrt(2) cm over the span', r.dropSigma, Math.SQRT2 / 2, 1e-12, 'cm/d');
+  ok('the date window is widened by both reading errors', r.projections[0].lo, 5 * (1 - Math.sqrt(0.135)), 1e-9, 'd');
+  ok('and on the far side too', r.projections[0].hi, 5 * (1 + Math.sqrt(0.135)), 1e-9, 'd');
+  eq('a fall of 4 cm is enough to project from', r.flags.indexOf('readings_too_close'), -1); }
+{ const r = A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, levelPrevCm: -3, daysBetween: 1 });
+  ok('the same rate from a 1-day pair', r.dropCmPerDay, 2, 1e-9, 'cm/d');
+  eq('but a fall under 2 sqrt(2) cm is flagged as too close to read', r.flags.indexOf('readings_too_close') >= 0, true);
+  ok('and its window is nearly as wide as the answer', r.projections[0].hi - r.projections[0].lo, 2 * 5 * Math.sqrt(0.5 + 0.01), 1e-9, 'd'); }
+eq('the minimum useful fall is two sigma of the difference', A.MIN_FALL_CM, 2 * Math.SQRT2, 1e-12);
+{ /* averaging the daily falls inside one drawdown is the same number as first minus last: they telescope */
+  const daily = [1, 4, 1], mean = daily.reduce((a, b) => a + b, 0) / daily.length;
+  ok('daily falls telescope to the endpoints', A.lossRate({ levelCm: -7, levelPrevCm: -1, daysBetween: 3 }).drop, mean, 1e-12, 'cm/d'); }
+
+console.log('\n-- the wet season carries two dates, DA and IRRI --');
+{ const r = A.awdDecision({ daysAfterEstablish: 40, season: 'wet', levelCm: -5, levelPrevCm: -1, daysBetween: 2 });
+  eq('the DA depth leads, because it is the policy', r.projections[0].which, 'da');
+  eq('DA trigger in the wet season is 20 cm', r.projections[0].triggerCm, 20);
+  eq('the IRRI depth follows as a caveat', r.projections[1].which, 'irri');
+  eq('IRRI safe AWD is 15 cm in every season', r.projections[1].triggerCm, 15);
+  eq('and its date comes first', r.projections[1].days < r.projections[0].days, true);
+  eq('past a week the card gives no date', r.projections[0].beyondHorizon, true);
+  eq('the horizon is one week', A.PROJECT_HORIZON_DAYS, 7); }
+eq('in the dry season the two depths agree, so there is one date', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, levelPrevCm: -1, daysBetween: 2 }).projections.length, 1);
+
+console.log('\n-- rain between the readings, and the field\'s own history --');
+{ const r = A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -3, levelPrevCm: -8, daysBetween: 1 });
+  eq('a level that rose is flagged as a net gain', r.flags.indexOf('level_net_gain') >= 0, true);
+  ok('and the gain is reported', r.gainCm, 5, 1e-9, 'cm');
+  eq('no loss rate can be read from those two', r.dropCmPerDay, null); }
+eq('a net gain with no history says so instead of leaving the date blank',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -3, levelPrevCm: -8, daysBetween: 1 }).flags.indexOf('no_history_yet') >= 0, true);
+eq('once the field has a history that is no longer true',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -3, levelPrevCm: -8, daysBetween: 1, fieldDropCmPerDay: 2 }).flags.indexOf('no_history_yet'), -1);
+{ const r = A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -3, levelPrevCm: -8, daysBetween: 1, fieldDropCmPerDay: 2 });
+  ok('but the field\'s past average still dates the next irrigation', r.daysLeft, 6, 1e-9, 'd');
+  eq('and the card says where that rate came from', r.dropFrom, 'field_average'); }
+eq('a rate typed in is used only when there is no reading pair and no history',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, dropCmPerDay: 1 }).dropFrom, 'entered');
+ok('days left at 1 cm a day', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, dropCmPerDay: 1 }).daysLeft, 10, 1e-9, 'd');
+eq('a drawdown far above the field average is flagged',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -9, levelPrevCm: -1, daysBetween: 2, fieldDropCmPerDay: 1, fieldDropSigma: 0.2 }).flags.indexOf('loss_above_field_average') >= 0, true);
+eq('a drawdown far below it is flagged the other way',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -4, levelPrevCm: -1, daysBetween: 6, fieldDropCmPerDay: 3, fieldDropSigma: 0.2 }).flags.indexOf('loss_below_field_average') >= 0, true);
+eq('a drawdown in line with the field is not flagged',
+   A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -9, levelPrevCm: -1, daysBetween: 4, fieldDropCmPerDay: 2, fieldDropSigma: 0.2 }).flags.indexOf('loss_above_field_average'), -1);
+eq('no projection without a rate', A.project(-5, -15, null, null), null);
+eq('no projection once the target is already reached', A.project(-15, -15, 2, 0.7), null);
+eq('no reading, no answer', A.awdDecision({ daysAfterEstablish: 40, season: 'dry' }).code, 'need_tube_reading');
+
+console.log('\n-- seepage and percolation against Bouman et al. (1994), measured at IRRI --');
+eq('class I is 0 to 0.5 cm a day', A.SP.classes[0].loCm + '-' + A.SP.classes[0].hiCm, '0-0.5');
+eq('class IIa is 1 to 1.5', A.SP.classes[1].loCm + '-' + A.SP.classes[1].hiCm, '1-1.5');
+eq('class IIb is 1 to 5 and higher', A.SP.classes[2].loCm + '-' + A.SP.classes[2].hiCm, '1-5');
+eq('their four field readings', A.SP.fieldMeasuredCmPerDay.join(','), '3.62,0.4,1.46,3.26');
+eq('0.4 cm a day is class I, the intact plow sole', A.spClassify(0.4).classes.join(','), 'I');
+eq('and a steady rate, so the straight line holds', A.spClassify(0.4).flags.length, 0);
+eq('1.46 matches both overlapping bands', A.spClassify(1.46).classes.join(','), 'IIa,IIb');
+eq('3.26 is class IIb alone', A.spClassify(3.26).classes.join(','), 'IIb');
+eq('class IIb is flagged because percolation there follows the ponded depth', A.spClassify(3.26).flags.indexOf('sp_may_not_be_steady') >= 0, true);
+eq('their fixed-rate book-keeping drifted 2 to 3 cm in that class', A.SP.bookkeepingErrorCm.join('-'), '2-3');
+eq('0.7 falls in the gap between the published bands', A.spClassify(0.7).flags.join(','), 'sp_between_bands');
+eq('above every band they measured is said so', A.spClassify(6).flags.indexOf('sp_above_published') >= 0, true);
+eq('a negative remainder is impossible and is flagged', A.spClassify(-0.2).flags.join(','), 'sp_negative');
+eq('no figure, no classification', A.spClassify(null), null);
+eq('the rice card cites the 1994 paper', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5 }).sources.indexOf('BOUMAN1994') >= 0, true);
+eq('and the reference is on file', A.REFS.BOUMAN1994.cite.indexOf('Agricultural Water Management 26') >= 0, true);
 
 console.log('\n== EFFECTIVE RAINFALL (FAO Training Manual 3 worked table) ==');
 [[35, 11], [90, 47], [116, 68], [5, 0], [260, 183], [75, 35]].forEach(([P, w]) => ok('TM3 Pe(' + P + ')', A.effectiveRainMonthly(P), w, 0.5, 'mm'));
@@ -274,7 +350,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the nine items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,STRESS_NO_ACTION'); }
+  eq('UNVERIFIED list names the ten items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,READING_PRECISION,STRESS_NO_ACTION'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
