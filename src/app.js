@@ -32,17 +32,36 @@ const LOG_MAX = 500;
    days the card said to re-flood. This is what lets the card describe the field rather than only
    today's reading: its usual loss rate, its usual gap between irrigations, and whether this drawdown
    is behaving like the others. Same device, same limits as the log above. */
-store.riceField = (store.riceField && typeof store.riceField === 'object') ? store.riceField : {};
-store.riceField.rates = Array.isArray(store.riceField.rates) ? store.riceField.rates : [];
-store.riceField.refloods = Array.isArray(store.riceField.refloods) ? store.riceField.refloods : [];
+/* A farmer commonly works more than one paddy, and they do not behave alike: a leaky one and a tight
+   one averaged together describe neither. Worse, without a name the reading typed for one paddy was
+   recorded against whichever paddy was looked at last. So every record is filed under a paddy, and a
+   farmer with a single paddy never has to name it: blank is a paddy like any other. */
+store.riceFields = (store.riceFields && typeof store.riceFields === 'object') ? store.riceFields : {};
+const RICE_PLOT_DEFAULT = '(one paddy)';
+const ricePlotKey = name => (name || '').trim() || RICE_PLOT_DEFAULT;
+function ricePlot(name) {
+  const k = ricePlotKey(name);
+  const p = store.riceFields[k] && typeof store.riceFields[k] === 'object' ? store.riceFields[k] : {};
+  p.rates = Array.isArray(p.rates) ? p.rates : [];
+  p.refloods = Array.isArray(p.refloods) ? p.refloods : [];
+  store.riceFields[k] = p; return p;
+}
+const ricePlotNames = () => Object.keys(store.riceFields).filter(k => k !== RICE_PLOT_DEFAULT).sort();
+/* Anything recorded before paddies had names belongs to the unnamed one. Nobody loses a record. */
+if (store.riceField && (Array.isArray(store.riceField.rates) || Array.isArray(store.riceField.refloods))) {
+  const d = ricePlot('');
+  d.rates = d.rates.concat(store.riceField.rates || []);
+  d.refloods = d.refloods.concat(store.riceField.refloods || []);
+  delete store.riceField; save();
+}
 const RICE_LOG_MAX = 60;
 /* The field's loss rate combined from past drawdowns, weighted by the square of each span. A pair n
    days apart carries an error of sqrt(2)/n cm/day, so the weight is inverse variance: a five-day
    pair counts twenty-five times a one-day pair, which is exactly right. The spread is the plain
    standard deviation of the rates, because a new drawdown is judged against the whole scatter, not
    against the precision of the mean. It carries reading error and real seasonal change together. */
-function riceFieldStats() {
-  const rs = store.riceField.rates;
+function riceFieldStats(plot) {
+  const rs = ricePlot(plot).rates;
   if (!rs.length) return null;
   let sw = 0, swx = 0;
   rs.forEach(r => { const w = r.days * r.days; sw += w; swx += w * r.rate; });
@@ -55,21 +74,21 @@ function riceFieldStats() {
   return { mean: swx / sw, sd: sd, n: rs.length, lo: Math.min.apply(null, v), hi: Math.max.apply(null, v) };
 }
 const today10 = () => new Date().toISOString().slice(0, 10);
-function riceRecordRate(rate, days, onDate) {
-  const rs = store.riceField.rates, d = onDate || today10(), rec = { d: d, rate: rate, days: days };
+function riceRecordRate(plot, rate, days, onDate) {
+  const rs = ricePlot(plot).rates, d = onDate || today10(), rec = { d: d, rate: rate, days: days };
   let i = -1; rs.forEach((r, k) => { if (r.d === d) i = k; });     // one record a day: the latest wins
   if (i >= 0) rs[i] = rec; else rs.push(rec);
   if (rs.length > RICE_LOG_MAX) rs.splice(0, rs.length - RICE_LOG_MAX);
   save();
 }
-function riceRecordReflood(onDate) {
-  const f = store.riceField.refloods, d = onDate || today10();
+function riceRecordReflood(plot, onDate) {
+  const f = ricePlot(plot).refloods, d = onDate || today10();
   if (f.indexOf(d) < 0) { f.push(d); if (f.length > RICE_LOG_MAX) f.shift(); save(); }
 }
 /* Mean days between re-floods: the farmer's own irrigation interval, read straight off the dates.
    The mean of the gaps is (last - first)/(n-1), so it needs no more than the two end dates. */
-function riceInterval() {
-  const r = store.riceField.refloods.slice().sort();
+function riceInterval(plot) {
+  const r = ricePlot(plot).refloods.slice().sort();
   if (r.length < 2) return null;
   const a = new Date(r[0] + 'T00:00:00'), b = new Date(r[r.length - 1] + 'T00:00:00');
   return { days: (b - a) / 86400000 / (r.length - 1), n: r.length, first: r[0] };
@@ -513,8 +532,17 @@ CARDS.water = function (root) {
 
 /* RICE AWD */
 CARDS.rice = function (root) {
-  const prev = recall('rice');
+  /* Inputs are remembered per paddy too. Carrying one paddy's levels into another is how a reading
+     ends up in the wrong record, so switching paddies reloads that paddy's own last entries. */
+  let plotName = store.ricePlotLast || '';
+  let prev = recall('rice:' + ricePlotKey(plotName));
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
+  const plot = el('input', { type: 'text', id: 'rplot', list: 'rplots', autocomplete: 'off', placeholder: '' });
+  plot.value = plotName;
+  const plotList = el('datalist', { id: 'rplots' });
+  const syncPlotList = () => { plotList.innerHTML = ''; ricePlotNames().forEach(n => plotList.appendChild(el('option', { value: n }))); };
+  syncPlotList();
+  const plotRow = el('label', { class: 'row' }, bi({ en: 'Which paddy is this? (leave blank if you work only one. Each paddy keeps its own readings, its own usual water loss and its own irrigation interval)', fil: 'Aling palayan ito? (iwanang blangko kung isa lang ang inyong palayan. Bawat palayan ay may sariling talaan ng pagbasa, sariling karaniwang pagbaba ng tubig, at sariling agwat ng pagpapatubig)' }), optTag({ optional: true }), plot, plotList);
   const method = selectInput('rmethod', { en: 'How you manage the water', fil: 'Paraan ng pamamahala ng tubig' }, [
     ['continuous', { en: 'Continuous flooding: the field is kept flooded', fil: 'Laging nakababad ang bukid' }],
     ['awd', { en: 'Safe AWD: you have an AWD tube (pani tube) and read it', fil: 'Safe AWD: may AWD tube (pani tube) sa bukid at binabasa mo ito' }],
@@ -562,25 +590,26 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
-  const clear = el('button', { type: 'button', class: 'btn' }, bi({ en: 'Forget this field\'s past readings', fil: 'Burahin ang mga naunang pagbasa sa bukid na ito' }));
+  const clear = el('button', { type: 'button', class: 'btn' }, bi({ en: 'Forget this paddy\'s past readings', fil: 'Burahin ang mga naunang pagbasa sa palayang ito' }));
   clear.addEventListener('click', () => {
-    if (!confirm(t({ en: 'Forget every past reading from this field? The card will go back to using only the two readings you type in.', fil: 'Burahin lahat ng naunang pagbasa sa bukid na ito? Babalik ang card sa paggamit lamang ng dalawang pagbasang ita-type mo.' }).en)) return;
-    store.riceField.rates.length = 0; store.riceField.refloods.length = 0; save(); syncForget();
+    if (!confirm(t({ en: 'Forget every past reading from this paddy? The card will go back to using only the two readings you type in.', fil: 'Burahin lahat ng naunang pagbasa sa palayang ito? Babalik ang card sa paggamit lamang ng dalawang pagbasang ita-type mo.' }).en)) return;
+    const P = ricePlot(plot.value); P.rates.length = 0; P.refloods.length = 0; save(); syncForget();
   });
   const syncForget = () => {
-    const n = store.riceField.rates.length, rf = store.riceField.refloods.length;
+    const P = ricePlot(plot.value), n = P.rates.length, rf = P.refloods.length;
+    const named = ricePlotKey(plot.value) !== RICE_PLOT_DEFAULT ? ' "' + ricePlotKey(plot.value) + '"' : '';
     memo.innerHTML = '';
     if (!n && !rf) {
-      memo.append(bi({ en: 'This card remembers each pair of readings you give it, on this phone only. From them it works out your field\'s usual water loss and your usual gap between irrigations.',
-                       fil: 'Naitatala ng card na ito ang bawat pares ng pagbasang ibibigay mo, sa telepono na ito lamang. Mula rito, matutuya ang karaniwang pagbaba ng tubig sa bukid mo at ang karaniwang agwat ng pagpapatubig.' }));
+      memo.append(bi({ en: 'This card remembers each pair of readings you give it for this paddy, on this phone only. From them it works out your field\'s usual water loss and your usual gap between irrigations.',
+                       fil: 'Naitatala ng card na ito ang bawat pares ng pagbasang ibibigay mo para sa palayang ito, sa telepono na ito lamang. Mula rito, matutuya ang karaniwang pagbaba ng tubig sa bukid mo at ang karaniwang agwat ng pagpapatubig.' }));
       return;
     }
-    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, the latest one included, on this phone only.',
-                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, kasama ang pinakahuli, sa telepono na ito lamang.' }), ' ', clear);
+    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from paddy' + (named || ' (unnamed)') + ', the latest one included, on this phone only.',
+                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa palayang' + (named || ' walang pangalan') + ', kasama ang pinakahuli, sa telepono na ito lamang.' }), ' ', clear);
   };
   /* A row is shown only where the chosen method actually reads it. The pair of readings drives the
      date under safe AWD and under continuous flooding; without a tube there is no published
@@ -598,12 +627,24 @@ CARDS.rice = function (root) {
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : cont ? LEVEL_LABEL.cont : LEVEL_LABEL.int), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
   };
+  const loadPlot = () => {
+    plotName = plot.value; store.ricePlotLast = plotName; save();
+    prev = recall('rice:' + ricePlotKey(plotName));
+    method.input.value = prev.method || 'awd'; season.input.value = prev.season || 'dry'; soil.input.value = prev.soil || 'clay';
+    est.input.value = prev.est || ''; flower.input.value = prev.flower || ''; harvest.input.value = prev.harvest || '';
+    level.input.value = prev.level != null ? prev.level : ''; levelPrev.input.value = prev.levelPrev != null ? prev.levelPrev : '';
+    levelDate.input.value = prev.levelDate || new Date().toISOString().slice(0, 10); levelPrevDate.input.value = prev.levelPrevDate || '';
+    tmax.input.value = prev.tmax != null ? prev.tmax : ''; tmin.input.value = prev.tmin != null ? prev.tmin : '';
+    etc.input.value = prev.etc != null ? prev.etc : ''; weeds.input.checked = prev.weeds !== false;
+    syncMethod(); syncForget();
+  };
+  plot.addEventListener('change', loadPlot);
   method.input.addEventListener('change', syncMethod); syncMethod();
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
-    const inp = { method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
+    const inp = { plot: plot.value, method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
                   soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
-    remember('rice', inp); out.innerHTML = '';
+    store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
     /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
        was read; span is the gap between the two readings, in whole days. */
@@ -616,14 +657,18 @@ CARDS.rice = function (root) {
       if (span <= 0) { dateFlags.push('reading_dates_out_of_order'); span = null; }
     } else if (inp.levelPrev != null) dateFlags.push('earlier_reading_date_missing');
     if (D(inp.levelDate) && (D(inp.levelDate) - new Date()) / dayMs > 1) dateFlags.push('reading_date_in_future');
-    const F = riceFieldStats();
+    const F = riceFieldStats(inp.plot);
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
       season: inp.season, levelCm: inp.level, levelPrevCm: span != null ? inp.levelPrev : null, daysBetween: span,
       fieldDropCmPerDay: F ? F.mean : null, fieldDropSigma: F ? F.sd : null, weedsManaged: inp.weeds, soil: inp.soil });
     /* The field only learns from a drawdown it actually measured. A rate carried over from its own
        history is not a new observation and must not be fed back in. */
-    if (r.dropFrom === 'measured' && r.dropCmPerDay > 0) riceRecordRate(r.dropCmPerDay, r.daysBetween || 1, inp.levelDate);
-    if (r.code === 'reflood_now') riceRecordReflood(inp.levelDate);
+    if (r.dropFrom === 'measured' && r.dropCmPerDay > 0) riceRecordRate(inp.plot, r.dropCmPerDay, r.daysBetween || 1, inp.levelDate);
+    if (r.code === 'reflood_now') riceRecordReflood(inp.plot, inp.levelDate);
+    /* F is the record BEFORE this pair, which is what the engine compares against and what a far-out
+       date leans on: a measurement cannot corroborate itself. Fall is the whole record including the
+       pair just entered, which is what "this field's usual loss" means to the person reading it. */
+    const Fall = riceFieldStats(inp.plot);
     syncForget();
     const level2 = { reflood_now: 'stop', flowering_top_up_to_5cm: 'stop', cf_flowering_top_up: 'stop', cf_top_up: 'stop', cf_too_deep: 'caution', drain_stop_irrigating: 'caution', cf_drain_now: 'caution', need_tube_reading: 'info', cf_need_depth: 'info', intermittent_no_threshold: 'info', before_awd_keep_shallow: 'caution' }[r.code] || 'go';
     const depthText = Array.isArray(r.targetCm) ? (r.targetCm[0] === r.targetCm[1] ? String(r.targetCm[0]) : r.targetCm[0] + ' to ' + r.targetCm[1]) : (r.targetCm != null ? String(r.targetCm) : '');
@@ -670,10 +715,10 @@ CARDS.rice = function (root) {
     if (r.targetCm && Array.isArray(r.targetCm)) lines.push([bi({ en: 'Target depth now', fil: 'Dapat na lalim ngayon' }), depthText + ' cm above the soil']);
     /* What this field has told the card so far. Its own rate, its own interval: the traits of the
        field rather than of rice in general. */
-    if (F) {
-      lines.push([bi({ en: 'This field\'s usual loss, from earlier readings', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito, mula sa naunang pagbasa' }),
-        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' earlier measurement' : ' earlier measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')
-        + '. The pair you have just entered is not counted in it, because a measurement cannot be part of the average it is being judged against']);
+    if (Fall) {
+      lines.push([bi({ en: 'This paddy\'s usual loss', fil: 'Karaniwang pagbaba ng tubig sa palayang ito' }),
+        fmt(Fall.mean, 1) + ' cm/day, from ' + Fall.n + (Fall.n === 1 ? ' measurement' : ' measurements') + (Fall.n > 1 ? ' ranging ' + fmt(Fall.lo, 1) + ' to ' + fmt(Fall.hi, 1) + ' cm/day' : '')
+        + (Fall.n > 1 ? '. Not a plain average: each pair is weighted by how many days apart the two readings were, squared, because a pair n days apart carries a rate error of about ' + fmt(Math.SQRT2, 1) + '/n cm/day. A five-day pair therefore counts twenty-five times a one-day pair' : '')]);
     }
     /* The measured loss is crop water use plus seepage plus percolation. Give the watering card's
        crop water use and the remainder separates out, measured rather than modelled, and can be set
@@ -708,9 +753,9 @@ CARDS.rice = function (root) {
       lines.push([bi({ en: 'Against Philippine paddies', fil: 'Kumpara sa palayan sa Pilipinas' }),
         'Bouman et al. (1994), measured at IRRI: ' + band + (sp.flags.indexOf('sp_negative') >= 0 ? '' : '. Their own four field readings were ' + A.SP.fieldMeasuredCmPerDay.join(', ') + ' cm/day, the lowest with the plow sole intact and the highest after it was damaged') + '.']);
     }
-    const iv = riceInterval();
+    const iv = riceInterval(inp.plot);
     if (iv) lines.push([bi({ en: 'Usual gap between irrigations', fil: 'Karaniwang agwat ng pagpapatubig' }), fmt(iv.days, 0) + ' days, from ' + iv.n + ' re-floods since ' + iv.first]);
-    else if (store.riceField.refloods.length === 1) lines.push([bi({ en: 'Re-floods recorded', fil: 'Naitalang pagpapatubig' }), '1 so far. After the next one this card can give your usual gap between irrigations.']);
+    else if (ricePlot(inp.plot).refloods.length === 1) lines.push([bi({ en: 'Re-floods recorded', fil: 'Naitalang pagpapatubig' }), '1 so far. After the next one this card can give your usual gap between irrigations.']);
     if (r.tube) {
       lines.push([bi({ en: 'How to make an AWD tube (pani tube)', fil: 'Paano gumawa ng AWD tube (pani tube)' }),
         r.tube.lengthCm + ' cm of plastic pipe or bamboo, ' + r.tube.diameterCm[0] + ' to ' + r.tube.diameterCm[1] + ' cm across, hammered in so ' + r.tube.aboveSoilCm + ' cm stands above the soil (IRRI)']);
