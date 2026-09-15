@@ -117,7 +117,7 @@ const T = {
   ui: {
     saveReading: { en: 'Save this reading', fil: 'Itala ang pagbása na ito' },
     saved: { en: 'Saved on this phone', fil: 'Naitala sa telepono na ito' },
-    savedTitle: { en: 'Your saved suggestions', fil: 'Mga naitalang mungkahi para sa inyo' },
+    savedTitle: { en: 'Your saved calculations', fil: 'Mga naitalang kalkulasyon para sa inyo' },
     savedNone: { en: 'Nothing saved yet. Use any card, then tap "Save this reading."', fil: 'Wala pang naitala. Gamitin ang alinmang card, pagkatapos pindutin ang "Itala ang pagbása na ito."' },
     savedCount: { en: 'saved readings', fil: 'naitalang pagbása' },
     csv: { en: 'Download as CSV', fil: 'I-download bilang CSV' },
