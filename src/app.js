@@ -579,8 +579,8 @@ CARDS.rice = function (root) {
                        fil: 'Naitatala ng card na ito ang bawat pares ng pagbasang ibibigay mo, sa telepono na ito lamang. Mula rito, matutuya ang karaniwang pagbaba ng tubig sa bukid mo at ang karaniwang agwat ng pagpapatubig.' }));
       return;
     }
-    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, on this phone only.',
-                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, sa telepono na ito lamang.' }), ' ', clear);
+    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, the latest one included, on this phone only.',
+                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, kasama ang pinakahuli, sa telepono na ito lamang.' }), ' ', clear);
   };
   /* A row is shown only where the chosen method actually reads it. The pair of readings drives the
      date under safe AWD and under continuous flooding; without a tube there is no published
@@ -651,10 +651,13 @@ CARDS.rice = function (root) {
          field has a history to lean on, the card says so instead, and says whether the two agree. */
       let far = '';
       if (p.beyondHorizon) {
+        const mine = fmt(r.dropCmPerDay, 1);
         far = F && F.n >= 2
-          ? '. That is more than a week out, so it leans on this field\'s own record: ' + F.n + ' measurements averaging ' + fmt(F.mean, 1) + ' cm/day, ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1)
-              + (r.dropFrom === 'measured' ? (Math.abs(r.dropCmPerDay - F.mean) <= (F.sd || 0) ? ', and today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits inside that' : ', while today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits outside it, so treat the date as the rougher of the two') : '')
-          : '. That is more than a week out, and this field has no record yet, so the date assumes the ' + fmt(r.dropCmPerDay, 1) + ' cm/day you measured is your field\'s average water loss per day. Read again in a few days and it will tighten';
+          ? '. That is more than a week out, so it leans on this field\'s earlier readings: ' + F.n + ' measurements averaging ' + fmt(F.mean, 1) + ' cm/day, ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1)
+              + (r.dropFrom === 'measured' ? (Math.abs(r.dropCmPerDay - F.mean) <= (F.sd || 0) ? ', and your ' + mine + ' sits inside that' : ', while your ' + mine + ' sits outside it, so treat the date as the rougher of the two') : '')
+          : F && F.n === 1
+          ? '. That is more than a week out, and this field has only one earlier measurement to lean on, ' + fmt(F.mean, 1) + ' cm/day, so the date rests mostly on the ' + mine + ' cm/day you have just given. One more reading and it will tighten'
+          : '. That is more than a week out, and this field has no earlier readings yet, so the date assumes the ' + mine + ' cm/day you measured is your field\'s average water loss per day. Read again in a few days and it will tighten';
       }
       const val = due < Date.now() - dayMs ? 'already due: that date, ' + on(p.days) + ', has passed. Read the tube again now.'
                 : on(p.days) + (p.lo != null ? ' (between ' + on(p.lo) + ' and ' + on(p.hi) + ', from the reading error)' : '') + ', if no rain falls' + far;
@@ -668,8 +671,9 @@ CARDS.rice = function (root) {
     /* What this field has told the card so far. Its own rate, its own interval: the traits of the
        field rather than of rice in general. */
     if (F) {
-      lines.push([bi({ en: 'This field\'s usual loss', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito' }),
-        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' measurement' : ' measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')]);
+      lines.push([bi({ en: 'This field\'s usual loss, from earlier readings', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito, mula sa naunang pagbasa' }),
+        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' earlier measurement' : ' earlier measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')
+        + '. The pair you have just entered is not counted in it, because a measurement cannot be part of the average it is being judged against']);
     }
     /* The measured loss is crop water use plus seepage plus percolation. Give the watering card's
        crop water use and the remainder separates out, measured rather than modelled, and can be set

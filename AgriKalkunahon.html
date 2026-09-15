@@ -1505,7 +1505,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '83a6b84f' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '599e57a1' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1697,8 +1697,8 @@ CARDS.rice = function (root) {
                        fil: 'Naitatala ng card na ito ang bawat pares ng pagbasang ibibigay mo, sa telepono na ito lamang. Mula rito, matutuya ang karaniwang pagbaba ng tubig sa bukid mo at ang karaniwang agwat ng pagpapatubig.' }));
       return;
     }
-    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, on this phone only.',
-                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, sa telepono na ito lamang.' }), ' ', clear);
+    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, the latest one included, on this phone only.',
+                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, kasama ang pinakahuli, sa telepono na ito lamang.' }), ' ', clear);
   };
   /* A row is shown only where the chosen method actually reads it. The pair of readings drives the
      date under safe AWD and under continuous flooding; without a tube there is no published
@@ -1769,10 +1769,13 @@ CARDS.rice = function (root) {
          field has a history to lean on, the card says so instead, and says whether the two agree. */
       let far = '';
       if (p.beyondHorizon) {
+        const mine = fmt(r.dropCmPerDay, 1);
         far = F && F.n >= 2
-          ? '. That is more than a week out, so it leans on this field\'s own record: ' + F.n + ' measurements averaging ' + fmt(F.mean, 1) + ' cm/day, ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1)
-              + (r.dropFrom === 'measured' ? (Math.abs(r.dropCmPerDay - F.mean) <= (F.sd || 0) ? ', and today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits inside that' : ', while today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits outside it, so treat the date as the rougher of the two') : '')
-          : '. That is more than a week out, and this field has no record yet, so the date assumes the ' + fmt(r.dropCmPerDay, 1) + ' cm/day you measured is your field\'s average water loss per day. Read again in a few days and it will tighten';
+          ? '. That is more than a week out, so it leans on this field\'s earlier readings: ' + F.n + ' measurements averaging ' + fmt(F.mean, 1) + ' cm/day, ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1)
+              + (r.dropFrom === 'measured' ? (Math.abs(r.dropCmPerDay - F.mean) <= (F.sd || 0) ? ', and your ' + mine + ' sits inside that' : ', while your ' + mine + ' sits outside it, so treat the date as the rougher of the two') : '')
+          : F && F.n === 1
+          ? '. That is more than a week out, and this field has only one earlier measurement to lean on, ' + fmt(F.mean, 1) + ' cm/day, so the date rests mostly on the ' + mine + ' cm/day you have just given. One more reading and it will tighten'
+          : '. That is more than a week out, and this field has no earlier readings yet, so the date assumes the ' + mine + ' cm/day you measured is your field\'s average water loss per day. Read again in a few days and it will tighten';
       }
       const val = due < Date.now() - dayMs ? 'already due: that date, ' + on(p.days) + ', has passed. Read the tube again now.'
                 : on(p.days) + (p.lo != null ? ' (between ' + on(p.lo) + ' and ' + on(p.hi) + ', from the reading error)' : '') + ', if no rain falls' + far;
@@ -1786,8 +1789,9 @@ CARDS.rice = function (root) {
     /* What this field has told the card so far. Its own rate, its own interval: the traits of the
        field rather than of rice in general. */
     if (F) {
-      lines.push([bi({ en: 'This field\'s usual loss', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito' }),
-        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' measurement' : ' measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')]);
+      lines.push([bi({ en: 'This field\'s usual loss, from earlier readings', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito, mula sa naunang pagbasa' }),
+        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' earlier measurement' : ' earlier measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')
+        + '. The pair you have just entered is not counted in it, because a measurement cannot be part of the average it is being judged against']);
     }
     /* The measured loss is crop water use plus seepage plus percolation. Give the watering card's
        crop water use and the remainder separates out, measured rather than modelled, and can be set
@@ -2268,7 +2272,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 402 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 83a6b84f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 599e57a1. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2357,7 +2361,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 83a6b84f)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 599e57a1)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2369,7 +2373,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 83a6b84f).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 83a6b84f ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 599e57a1).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 599e57a1 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2416,7 +2420,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 83a6b84f.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 599e57a1.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
