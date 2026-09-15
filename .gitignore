@@ -2,3 +2,6 @@ node_modules/
 shots/
 dist/
 references/
+paper/
+cards_icons/
+*.zip
