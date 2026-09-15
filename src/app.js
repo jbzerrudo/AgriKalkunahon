@@ -112,7 +112,7 @@ const T = {
     timing: { en: 'When is harvest? Heat units, day length', fil: 'Kailan ang ani? Init na naipon, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
     feedback: { en: 'Comments and suggestions', fil: 'Puna at mungkahi' },
-    about: { en: 'About this app and saved suggestions', fil: 'Tungkol sa app na ito at mga naitalang mungkahi' }
+    about: { en: 'About this app and saved calculations', fil: 'Tungkol sa app na ito at mga naitalang kalkulasyon' }
   },
   ui: {
     saveReading: { en: 'Save this reading', fil: 'Itala ang pagbása na ito' },
