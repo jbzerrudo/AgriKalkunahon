@@ -139,7 +139,7 @@ eq('Table 19 clay theta FC range', A.SOILS.clay.fc.join('-'), '0.32-0.4');
 eq('FAO TM4 efficiencies 60/75/90 encoded in UI (engine takes a number)', typeof A.irrigationDecision, 'function');
 
 console.log('\n== RICE AWD RULES (IRRI, DA AO 25-09, PhilRice) ==');
-eq('trigger dry season 15 cm', A.AWD.triggerCm.dry, 15); eq('trigger wet season 20 cm', A.AWD.triggerCm.wet, 20);
+eq('safe AWD trigger 15 cm, every season', A.AWD.triggerCm, 15); eq('DA AO 25-09 wet-season depth kept as a caveat only', A.AWD.triggerDaWetCm, 20);
 { const b = { Tmax: 33, Tmin: 24, RHmax: 90, RHmin: 55, u2: 2, lat: 15.5, elev: 40, J: 250, site: 'interior' };
   eq('sunshine within daylight raises no flag', A.eto(Object.assign({}, b, { n: 6 })).flags.length, 0);
   eq('sunshine above daylight is clamped and reported', A.eto(Object.assign({}, b, { n: 24 })).flags.indexOf('sunshine_clamped_0_N') >= 0, true);
@@ -162,8 +162,8 @@ eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 
 eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
 eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
 eq('reflood now at 16 cm dry season', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
-eq('not yet at 16 cm wet season', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'not_yet');
-ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
+eq('reflood now at 16 cm in the wet season too', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
+ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 11, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
 eq('flowering window keeps 5 cm', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
 eq('before day 21: shallow water', A.awdDecision({ daysAfterEstablish: 10, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'before_awd_keep_shallow');
 eq('drain 14 days before harvest on clay', A.awdDecision({ daysAfterEstablish: 100, daysToHarvest: 12, soil: 'clay', season: 'wet' }).code, 'drain_stop_irrigating');

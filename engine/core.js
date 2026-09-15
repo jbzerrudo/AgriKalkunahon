@@ -357,7 +357,8 @@ function irrigationDecision(inp) {
    6. LOWLAND RICE: SAFE AWD AND CONTINUOUS FLOODING  [IRRI_AWD, BOUMAN2007, DA_AO25, PHILRICE_AWD, PALAYCHECK]
    ===================================================================== */
 const AWD = {
-  triggerCm: { dry: 15, wet: 20 },          // DA AO 25-09; PhilRice observation well (IRRI: 15 cm all season)
+  triggerCm: 15,                             // IRRI safe AWD: 15 cm below the surface, every season. 15 cm is what "safe" is defined by.
+  triggerDaWetCm: 20,                        // DA AO 25-09 and the PhilRice observation well allow 20 cm in the wet season; carried as a caveat, not applied
   refloodCm: 5,                              // IRRI RKB, Bouman 2007, PhilRice
   startDays: [21, 30],                       // PhilRice: 21-30 days after transplanting or sowing (IRRI: 1-2 weeks)
   floweringFloodCm: 5,                       // IRRI, PhilRice (PalayCheck: 5-7 cm)
@@ -413,7 +414,7 @@ function riceWaterDecision(inp) {
 /* inp: {daysAfterEstablish, daysToFlowering (negative after), daysToHarvest, season:'wet'|'dry', tubeBelowSurfaceCm (positive = below), pondedCm, weedsManaged, soil:'light'|'clay', pondDropCmPerDay} */
 function awdDecision(inp) {
   const flags = [], src = ['IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK'];
-  const trig = AWD.triggerCm[inp.season === 'wet' ? 'wet' : 'dry'];
+  const trig = AWD.triggerCm;
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, sources: src };
   if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays) {
