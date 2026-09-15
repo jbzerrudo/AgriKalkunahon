@@ -1173,15 +1173,15 @@ function riceFieldStats() {
   return { mean: swx / sw, sd: sd, n: rs.length, lo: Math.min.apply(null, v), hi: Math.max.apply(null, v) };
 }
 const today10 = () => new Date().toISOString().slice(0, 10);
-function riceRecordRate(rate, days) {
-  const rs = store.riceField.rates, d = today10(), rec = { d: d, rate: rate, days: days };
+function riceRecordRate(rate, days, onDate) {
+  const rs = store.riceField.rates, d = onDate || today10(), rec = { d: d, rate: rate, days: days };
   let i = -1; rs.forEach((r, k) => { if (r.d === d) i = k; });     // one record a day: the latest wins
   if (i >= 0) rs[i] = rec; else rs.push(rec);
   if (rs.length > RICE_LOG_MAX) rs.splice(0, rs.length - RICE_LOG_MAX);
   save();
 }
-function riceRecordReflood() {
-  const f = store.riceField.refloods, d = today10();
+function riceRecordReflood(onDate) {
+  const f = store.riceField.refloods, d = onDate || today10();
   if (f.indexOf(d) < 0) { f.push(d); if (f.length > RICE_LOG_MAX) f.shift(); save(); }
 }
 /* Mean days between re-floods: the farmer's own irrigation interval, read straight off the dates.
@@ -1322,6 +1322,10 @@ const CODES = {
   sp_above_published: 'This field is losing more through seepage and percolation than any of the four soil classes Bouman et al. (1994) measured at IRRI, where the highest band reaches 5 cm a day. Walk the bunds: seepage through ill-maintained bunds can be considerable, and it is the loss a farmer can actually stop.',
   sp_between_bands: 'This field sits between the published bands, which run 0 to 0.5 cm a day where the plow sole is intact and 1 to 1.5 cm a day where the subsoil is what limits percolation (Bouman et al. 1994). Nothing is wrong with the reading; the bands simply do not meet.',
   sp_may_not_be_steady: 'At this rate the field behaves like Bouman et al.\'s class IIb, where percolation follows the depth of water standing on the field instead of holding steady. Two things follow. The date above is less dependable: their own fixed-rate book-keeping drifted 2 to 3 cm in this class. And there is something you can do, which they state plainly: in a field like this, losses fall considerably if the ponded water is kept low, close to zero. Check the bunds as well.',
+  rice_kc_stage_unknown: 'No transplanting date, so the crop coefficient could not be taken from the growth stage and the mid-season value was used. That is the largest one rice reaches, so crop water use is at its highest here and the seepage-and-percolation remainder is at its lowest. Give the transplanting date and both become stage-specific.',
+  reading_dates_out_of_order: 'The earlier reading is dated on or after the one you called today, so no span can be worked out and no loss rate is taken from the pair. Check the two dates.',
+  earlier_reading_date_missing: 'You gave an earlier reading but no date for it, so the card cannot tell how far apart the two are and will not guess. Put the date in and the loss rate and the irrigation date follow.',
+  reading_date_in_future: 'The reading is dated in the future. Every date below is counted forward from it, so they will all be wrong by the same amount.',
   readings_too_close: 'The level fell less than about 3 cm between your two readings. A reading off a hand-marked tube is good to about a centimetre, so a fall that small is close to the reading error itself and the daily loss taken from it is unreliable. Leave more days between readings: the further apart they are, the tighter the date.',
   loss_above_field_average: 'This drawdown is losing water faster than this field usually does. Check the bunds for a leak, check that both readings were taken at the same hour, and check that no water came in between them.',
   loss_below_field_average: 'This drawdown is losing water more slowly than this field usually does. That can be a cooler or cloudier spell, a fuller canopy shading the water, or rain you did not count.',
@@ -1501,7 +1505,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'ef481a5f' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'd8bdf2b5' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1645,35 +1649,57 @@ CARDS.rice = function (root) {
   /* ONE measurement, on one datum. The AWD tube and a stick in the field read the same thing: where
      the water stands relative to the soil surface. Asking for it twice made the farmer discard the
      sign and type it again, so the card asks once and the sign carries the meaning. */
-  const level = numInput('level', { en: 'Water level today, cm', fil: 'Lalim ng tubig ngayon, cm' }, prev.level, 'any');
+  const level = numInput('level', { en: 'Water level, cm', fil: 'Lalim ng tubig, cm' }, prev.level, 'any');
   const LEVEL_LABEL = {
-    awd: { en: 'Water level in the AWD tube (pani tube) today, cm. Minus below the soil surface: -16 is 16 cm down. 0 is level with the soil. Plus is water standing on top: +5 is 5 cm.',
-           fil: 'Lalim ng tubig sa AWD tube (pani tube) ngayon, cm. Minus kung nasa ilalim ng lupa: -16 ay 16 cm pababa. 0 kung kapantay ng lupa. Plus kung may tubig sa ibabaw: +5 ay 5 cm.' },
-    cont: { en: 'Water level in the field today, cm, by stick or ruler. Plus is water standing on the soil: +5 is 5 cm. 0 is level with the soil. Minus if it has dried below the surface.',
-            fil: 'Lalim ng tubig sa bukid ngayon, cm, sa patpat o ruler. Plus kung may tubig sa ibabaw ng lupa: +5 ay 5 cm. 0 kung kapantay ng lupa. Minus kung natuyo na sa ilalim ng lupa.' },
-    int: { en: 'Water level in the field today, cm (used only in the week either side of flowering). Plus is water on top, 0 is level with the soil, minus is below it.',
-           fil: 'Lalim ng tubig sa bukid ngayon, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Plus kung may tubig sa ibabaw, 0 kung kapantay ng lupa, minus kung nasa ilalim.' }
+    awd: { en: 'Water level in the AWD tube (pani tube), cm. Minus below the soil surface: -16 is 16 cm down. 0 is level with the soil. Plus is water standing on top: +5 is 5 cm.',
+           fil: 'Lalim ng tubig sa AWD tube (pani tube), cm. Minus kung nasa ilalim ng lupa: -16 ay 16 cm pababa. 0 kung kapantay ng lupa. Plus kung may tubig sa ibabaw: +5 ay 5 cm.' },
+    cont: { en: 'Water level in the field, cm, by stick or ruler. Plus is water standing on the soil: +5 is 5 cm. 0 is level with the soil. Minus if it has dried below the surface.',
+            fil: 'Lalim ng tubig sa bukid, cm, sa patpat o ruler. Plus kung may tubig sa ibabaw ng lupa: +5 ay 5 cm. 0 kung kapantay ng lupa. Minus kung natuyo na sa ilalim ng lupa.' },
+    int: { en: 'Water level in the field, cm (used only in the week either side of flowering). Plus is water on top, 0 is level with the soil, minus is below it.',
+           fil: 'Lalim ng tubig sa bukid, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Plus kung may tubig sa ibabaw, 0 kung kapantay ng lupa, minus kung nasa ilalim.' }
   };
   const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm (same minus and plus)', fil: 'Ang naunang pagbasa sa parehong lugar, cm (parehong minus at plus)' }, prev.levelPrev, 'any', { optional: true });
-  /* Span is the whole game. Two readings a day apart give a rate of (fall +/- 1.4) cm a day, which
-     dates nothing; the same pair five days apart gives (fall/5 +/- 0.28). Asking how many days ago
-     costs one number and turns a useless projection into a usable one. */
-  const daysBetween = numInput('daysbetween', { en: 'How many days ago was that reading? (leave blank for yesterday. The further apart the two readings, the tighter the date: wait until the water has fallen at least about 3 cm)', fil: 'Ilang araw na ang nakalipas mula sa pagbasang iyon? (iwanang blangko kung kahapon. Mas malayo ang agwat ng dalawang pagbasa, mas tiyak ang petsa: hintayin munang bumaba ang tubig nang hindi bababa sa mga 3 cm)' }, prev.daysBetween, 1, { optional: true });
-  daysBetween.input.min = 1;
+  /* The two reading dates, not "how many days ago". They give the span without the farmer doing
+     arithmetic, and they anchor the answer on when the tube was actually read rather than on the
+     moment the button was pressed. Read at seven, entered at nine at night, and the old card was
+     already out; a reading entered two days late was two days wrong. Span is the whole game besides:
+     two readings a day apart give a rate of (fall +/- 1.4) cm a day, which dates nothing, while the
+     same pair five days apart gives (fall/5 +/- 0.28). */
+  const levelDate = dateInput('leveldate', { en: 'Date you took that reading', fil: 'Petsa ng pagbasa ngayon' }, prev.levelDate, { prefilled: true });
+  const levelPrevDate = dateInput('levelprevdate', { en: 'Date of the earlier reading (the further back it is, the tighter the date below: wait until the water has fallen at least about 3 cm)', fil: 'Petsa ng naunang pagbasa (mas malayo ito, mas tiyak ang petsa sa ibaba: hintayin munang bumaba ang tubig nang hindi bababa sa mga 3 cm)' }, prev.levelPrevDate, { optional: true });
+  /* Two thermometer readings are all FAO-56 needs to reach crop water use, and they are what a
+     farmer actually has. Given only temperature, FAO-56 fills in humidity from Eq. 48, sunlight from
+     Eq. 50 and wind from Table 4, and names each substitution in the answer. Without this the split
+     was only available to someone who had already worked through the watering card. */
+  const tmax = numInput('rtmax', { en: 'Afternoon high on the day of that reading, deg C (with the morning low, the card works out crop water use and can split your loss)', fil: 'Pinakamainit sa araw ng pagbasang iyon, deg C (kasama ang pinakamalamig sa umaga, matutuya ng card ang gamit na tubig ng pananim at mahahati ang pagbaba ng tubig)' }, prev.tmax, 0.1, { optional: true });
+  const tmin = numInput('rtmin', { en: 'Morning low on that same day, deg C', fil: 'Pinakamalamig sa umaga ng araw na iyon, deg C' }, prev.tmin, 0.1, { optional: true });
   /* One optional number splits the measured loss into its parts. The watering card already prints it
      for rice, so it is carried across rather than asked for again when it is recent. */
   const banked = (store.riceEtc && isFinite(store.riceEtc.mm) && (Date.now() - new Date(store.riceEtc.d + 'T00:00:00')) / 86400000 <= 7) ? store.riceEtc : null;
-  const etc = numInput('retc', { en: 'Crop water use today, mm a day (optional: the "Crop water use today" figure from the watering card. With it, the card can separate crop water use from seepage and percolation)', fil: 'Gamit na tubig ng pananim ngayon, mm kada araw (opsyonal: ang "Gamit na tubig ng pananim ngayon" mula sa card ng pagpapatubig. Dahil dito, mahihiwalay ng card ang gamit ng pananim sa tagas at tagimtim ng tubig)' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
+  const etc = numInput('retc', { en: 'Crop water use, mm a day (only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead)', fil: 'Gamit na tubig ng pananim, mm kada araw (kung mayroon ka na nito mula sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas)' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelPrev.row, daysBetween.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
-  const forget = el('button', { type: 'button', class: 'btn' }, bi({ en: 'Forget this field\'s past readings', fil: 'Burahin ang mga naunang pagbasa sa bukid na ito' }));
-  const syncForget = () => { forget.hidden = !store.riceField.rates.length && !store.riceField.refloods.length; };
-  forget.addEventListener('click', () => {
-    if (!confirm(t({ en: 'Forget every past reading from this field? The card will go back to using only today\'s two readings.', fil: 'Burahin lahat ng naunang pagbasa sa bukid na ito? Babalik ang card sa paggamit lamang ng dalawang pagbasa ngayon.' }).en)) return;
+  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
+     Answer button looking like the thing to press; remembering is what the card actually does. */
+  const memo = el('div', { class: 'hint' });
+  const clear = el('button', { type: 'button', class: 'btn' }, bi({ en: 'Forget this field\'s past readings', fil: 'Burahin ang mga naunang pagbasa sa bukid na ito' }));
+  clear.addEventListener('click', () => {
+    if (!confirm(t({ en: 'Forget every past reading from this field? The card will go back to using only the two readings you type in.', fil: 'Burahin lahat ng naunang pagbasa sa bukid na ito? Babalik ang card sa paggamit lamang ng dalawang pagbasang ita-type mo.' }).en)) return;
     store.riceField.rates.length = 0; store.riceField.refloods.length = 0; save(); syncForget();
   });
+  const syncForget = () => {
+    const n = store.riceField.rates.length, rf = store.riceField.refloods.length;
+    memo.innerHTML = '';
+    if (!n && !rf) {
+      memo.append(bi({ en: 'This card remembers each pair of readings you give it, on this phone only. From them it works out your field\'s usual water loss and your usual gap between irrigations.',
+                       fil: 'Naitatala ng card na ito ang bawat pares ng pagbasang ibibigay mo, sa telepono na ito lamang. Mula rito, matutuya ang karaniwang pagbaba ng tubig sa bukid mo at ang karaniwang agwat ng pagpapatubig.' }));
+      return;
+    }
+    memo.append(bi({ en: 'Remembering ' + n + (n === 1 ? ' reading' : ' readings') + ' and ' + rf + (rf === 1 ? ' re-flood' : ' re-floods') + ' from this field, on this phone only.',
+                     fil: 'Naitala: ' + n + ' pagbasa at ' + rf + ' pagpapatubig mula sa bukid na ito, sa telepono na ito lamang.' }), ' ', clear);
+  };
   /* A row is shown only where the chosen method actually reads it. The pair of readings drives the
      date under safe AWD and under continuous flooding; without a tube there is no published
      threshold to project a date to, so the card does not ask for a second reading at all. */
@@ -1683,26 +1709,39 @@ CARDS.rice = function (root) {
     soil.row.hidden = cont;
     weeds.row.hidden = cont;
     levelPrev.row.hidden = !(awd || cont);
-    daysBetween.row.hidden = !(awd || cont);
+    levelDate.row.hidden = !(awd || cont);
+    levelPrevDate.row.hidden = !(awd || cont);
+    tmax.row.hidden = !(awd || cont); tmin.row.hidden = !(awd || cont);
     etc.row.hidden = !(awd || cont);
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : cont ? LEVEL_LABEL.cont : LEVEL_LABEL.int), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
   };
   method.input.addEventListener('change', syncMethod); syncMethod();
-  const out = el('div'); root.append(form, forget, out); syncForget();
+  const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
     const inp = { method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
-                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), daysBetween: num(daysBetween.input), etc: num(etc.input), weeds: weeds.input.checked };
+                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
     remember('rice', inp); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
+    /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
+       was read; span is the gap between the two readings, in whole days. */
+    const dayMs = 86400000, D = s => s ? new Date(s + 'T00:00:00') : null;
+    const anchor = D(inp.levelDate) || new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
+    const prevDate = D(inp.levelPrevDate);
+    let span = null; const dateFlags = [];
+    if (prevDate) {
+      span = Math.round((anchor - prevDate) / dayMs);
+      if (span <= 0) { dateFlags.push('reading_dates_out_of_order'); span = null; }
+    } else if (inp.levelPrev != null) dateFlags.push('earlier_reading_date_missing');
+    if (D(inp.levelDate) && (D(inp.levelDate) - new Date()) / dayMs > 1) dateFlags.push('reading_date_in_future');
     const F = riceFieldStats();
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
-      season: inp.season, levelCm: inp.level, levelPrevCm: inp.levelPrev, daysBetween: inp.daysBetween,
+      season: inp.season, levelCm: inp.level, levelPrevCm: span != null ? inp.levelPrev : null, daysBetween: span,
       fieldDropCmPerDay: F ? F.mean : null, fieldDropSigma: F ? F.sd : null, weedsManaged: inp.weeds, soil: inp.soil });
     /* The field only learns from a drawdown it actually measured. A rate carried over from its own
        history is not a new observation and must not be fed back in. */
-    if (r.dropFrom === 'measured' && r.dropCmPerDay > 0) riceRecordRate(r.dropCmPerDay, r.daysBetween || 1);
-    if (r.code === 'reflood_now') riceRecordReflood();
+    if (r.dropFrom === 'measured' && r.dropCmPerDay > 0) riceRecordRate(r.dropCmPerDay, r.daysBetween || 1, inp.levelDate);
+    if (r.code === 'reflood_now') riceRecordReflood(inp.levelDate);
     syncForget();
     const level2 = { reflood_now: 'stop', flowering_top_up_to_5cm: 'stop', cf_flowering_top_up: 'stop', cf_top_up: 'stop', cf_too_deep: 'caution', drain_stop_irrigating: 'caution', cf_drain_now: 'caution', need_tube_reading: 'info', cf_need_depth: 'info', intermittent_no_threshold: 'info', before_awd_keep_shallow: 'caution' }[r.code] || 'go';
     const depthText = Array.isArray(r.targetCm) ? (r.targetCm[0] === r.targetCm[1] ? String(r.targetCm[0]) : r.targetCm[0] + ' to ' + r.targetCm[1]) : (r.targetCm != null ? String(r.targetCm) : '');
@@ -1710,7 +1749,7 @@ CARDS.rice = function (root) {
     /* The loss rate leads: it is the one number that decides when the farmer must act. */
     if (r.gainCm != null) lines.push([bi({ en: 'Net gain since your earlier reading', fil: 'Naidagdag mula sa naunang pagbasa' }), fmt(r.gainCm, 1) + ' cm: the water rose instead of falling']);
     if (r.dropCmPerDay != null) {
-      const src = r.dropFrom === 'measured' ? ', from your two readings ' + fmt(r.fallCm, 1) + ' cm apart over ' + (r.daysBetween || 1) + (r.daysBetween === 1 ? ' day' : ' days')
+      const src = r.dropFrom === 'measured' ? ', from your two readings ' + fmt(r.fallCm, 1) + ' cm apart, ' + dmy(prevDate) + ' to ' + dmy(anchor) + ', ' + (r.daysBetween || 1) + (r.daysBetween === 1 ? ' day' : ' days') + ' apart'
                 : r.dropFrom === 'field_average' ? ', this field\'s usual rate, because these two readings cannot give one'
                 : ', the rate you entered';
       lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm a day' + src]);
@@ -1722,8 +1761,11 @@ CARDS.rice = function (root) {
       const lab = p.which === 'irri' ? { en: 'Or, on IRRI safe AWD at ' + p.triggerCm + ' cm, irrigate on or before', fil: 'O, sa IRRI safe AWD na ' + p.triggerCm + ' cm, magpatubig sa o bago ang' }
                 : p.which === 'cf' ? { en: 'Top up on or before', fil: 'Dagdagan ang tubig sa o bago ang' }
                 : { en: 'Irrigate on or before', fil: 'Magpatubig sa o bago ang' };
-      const val = p.beyondHorizon ? 'more than a week away at this rate, so no date is given. Read again in a few days.'
-                : dmy(dayFrom(p.days)) + (p.lo != null ? ' (between ' + dmy(dayFrom(p.lo)) + ' and ' + dmy(dayFrom(p.hi)) + ', from the reading error)' : '') + ', if no rain falls';
+      const on = n => dmy(new Date(anchor.getTime() + n * dayMs));
+      const due = anchor.getTime() + p.days * dayMs;
+      const val = p.beyondHorizon ? 'more than a week after your reading at this rate, so no date is given. Read again in a few days.'
+                : (due < Date.now() - dayMs ? 'already due: that date, ' + on(p.days) + ', has passed. Read the tube again now.'
+                   : on(p.days) + (p.lo != null ? ' (between ' + on(p.lo) + ' and ' + on(p.hi) + ', from the reading error)' : '') + ', if no rain falls');
       lines.push([bi(lab), val]);
     });
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm before the trigger']);
@@ -1740,11 +1782,27 @@ CARDS.rice = function (root) {
     /* The measured loss is crop water use plus seepage plus percolation. Give the watering card's
        crop water use and the remainder separates out, measured rather than modelled, and can be set
        beside the Philippine figures of Bouman et al. (1994). */
+    /* Crop water use: what you already have from the watering card if you gave it, otherwise worked
+       out here from the two temperatures. Kc follows the crop stage when the transplanting date is
+       known and sits at the mid-season value when it is not, which is said rather than hidden. */
+    let etcMm = inp.etc, etcNote = 'as you entered it', etoFlags = [];
+    if (etcMm == null && inp.tmax != null && inp.tmin != null && inp.tmax >= inp.tmin) {
+      const L2 = store.loc, e2 = A.eto({ Tmax: inp.tmax, Tmin: inp.tmin, lat: L2.lat, elev: L2.elev, J: todayJ(anchor), site: L2.site });
+      if (!e2.error) {
+        const k2 = A.cropKc('rice', { u2: e2.u2, Tmin: inp.tmin, Tmax: inp.tmax, riceHumidity: 'subhumid', riceWind: e2.u2 <= 1 ? 'light' : (e2.u2 >= 4 ? 'strong' : 'moderate') });
+        const stages = A.CROPS.rice.stages[0].L, dae = inp.est ? -dd(inp.est) : null;
+        const kcNow = dae != null ? A.kcOnDay(dae, stages, k2.kcIni, k2.kcMid, k2.kcEnd) : k2.kcMid;
+        if (dae == null) etoFlags.push('rice_kc_stage_unknown');
+        etcMm = e2.eto * kcNow;
+        etcNote = 'ETo ' + fmt(e2.eto, 1) + ' mm from your two temperatures, times Kc ' + fmt(kcNow, 2) + ' for rice';
+        etoFlags = etoFlags.concat(e2.flags || []);
+      }
+    }
     let sp = null;
-    if (r.dropCmPerDay != null && inp.etc != null && inp.etc >= 0) {
-      const etcCm = inp.etc / 10;
+    if (r.dropCmPerDay != null && etcMm != null && etcMm >= 0) {
+      const etcCm = etcMm / 10;
       sp = A.spClassify(r.dropCmPerDay - etcCm);
-      lines.push([bi({ en: 'Crop water use', fil: 'Gamit na tubig ng pananim' }), fmt(etcCm, 2) + ' cm a day (' + fmt(inp.etc, 1) + ' mm), as you entered it']);
+      lines.push([bi({ en: 'Crop water use', fil: 'Gamit na tubig ng pananim' }), fmt(etcCm, 2) + ' cm a day (' + fmt(etcMm, 1) + ' mm), ' + etcNote]);
       lines.push([bi({ en: 'Seepage and percolation', fil: 'Tagas at tagimtim (seepage at percolation)' }), fmt(sp.spCm, 2) + ' cm a day, what is left of your measured loss after crop water use']);
       const band = sp.classes.length
         ? 'class ' + sp.classes.join(' or ') + ' (' + sp.match.map(c => c.what).join('; or ') + '), ' + sp.match.map(c => c.loCm + ' to ' + c.hiCm).join(' and ') + ' cm a day'
@@ -1778,7 +1836,7 @@ CARDS.rice = function (root) {
       'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).',
       'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).',
       'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
-    const flags = (r.flags || []).concat(sp ? sp.flags : []).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);
+    const flags = (r.flags || []).concat(sp ? sp.flags : []).concat(dateFlags).concat(etoFlags).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);
     const limits = ['Safe AWD assumes heavy soils with a shallow water table; on loamy and sandy soils with deep water tables, IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).',
       'No percolation or seepage rate is assumed. Every loss figure here was measured in your field, not modelled, and none appears until you have given two readings or the field has a history. The published rates of Bouman et al. (1994) are used only to say which band your own measurement falls in.',
       'Those published rates were measured on ponded fields at IRRI. Once the water is below the soil surface, where it sits through most of an AWD cycle, their relation between percolation and ponded depth no longer applies directly, and this app does not carry it there.',
@@ -2200,7 +2258,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 402 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build ef481a5f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build d8bdf2b5. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2289,7 +2347,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build ef481a5f)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build d8bdf2b5)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2301,7 +2359,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build ef481a5f).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build ef481a5f ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build d8bdf2b5).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build d8bdf2b5 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2348,7 +2406,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build ef481a5f.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build d8bdf2b5.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
