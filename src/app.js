@@ -21,6 +21,12 @@ try { store = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {
 function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
 store.loc = store.loc || { lat: 14.6, lon: 121.0, elev: 20, site: 'coastal', set: false };
 store.inputs = store.inputs || {};
+/* Saved readings. Kept on this device only and never sent anywhere. localStorage is not durable: it
+   goes when browsing data is cleared, and iOS evicts it after about a week of not opening the app, so
+   the CSV export in the About card is the farmer's real copy, not a convenience. Capped so a long
+   season cannot fill the quota and start losing writes silently. */
+store.log = Array.isArray(store.log) ? store.log : [];
+const LOG_MAX = 500;
 
 /* ---------- bilingual strings ---------- */
 const T = {
@@ -38,9 +44,17 @@ const T = {
     timing: { en: 'When is harvest? Heat units, day length', fil: 'Kailan ang ani? Init na naipon, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
     feedback: { en: 'Comments and suggestions', fil: 'Puna at mungkahi' },
-    about: { en: 'About this app', fil: 'Tungkol sa app na ito' }
+    about: { en: 'About this app and saved suggestions', fil: 'Tungkol sa app na ito at mga naitalang mungkahi' }
   },
   ui: {
+    saveReading: { en: 'Save this reading', fil: 'Itala ang pagbasa na ito' },
+    saved: { en: 'Saved on this phone', fil: 'Naitala sa telepono na ito' },
+    savedTitle: { en: 'Your saved suggestions', fil: 'Mga naitala ninyong mungkahi' },
+    savedNone: { en: 'Nothing saved yet. Answer any card, then tap Save this reading.', fil: 'Wala pang naitala. Sagutan ang alinmang card, pagkatapos pindutin ang Itala ang pagbasa na ito.' },
+    savedCount: { en: 'saved readings', fil: 'naitalang pagbasa' },
+    csv: { en: 'Download as CSV', fil: 'I-download bilang CSV' },
+    clearLog: { en: 'Delete all saved readings', fil: 'Burahin lahat ng naitala' },
+    clearAsk: { en: 'Delete every saved reading? This cannot be undone.', fil: 'Burahin lahat ng naitala? Hindi na ito maibabalik.' },
     compute: { en: 'Answer', fil: 'Sagot' }, why: { en: 'Why', fil: 'Bakit' }, sources: { en: 'Sources', fil: 'Sanggunian' },
     assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
     location: { en: 'Location', fil: 'Lokasyon' }, gps: { en: 'Use phone GPS', fil: 'Gamitin ang GPS ng smartphone' },
@@ -295,7 +309,37 @@ function checkInput(id, label, value) {
 }
 const num = inp => { const v = parseFloat(inp.value); return isFinite(v) ? v : null; };
 function remember(card, obj) { store.inputs[card] = obj; save(); }
-function show(out, node) { out.appendChild(node); try { node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+/* A save button on every answer. The record is built from the rendered box rather than from the spec,
+   so whatever the farmer actually saw is what gets stored, labels and units included. */
+function saveRecord(node, card) {
+  const spec = node.__spec || {};
+  const items = [];
+  node.querySelectorAll('dl.nums dt').forEach((dt, i) => {
+    const dd = node.querySelectorAll('dl.nums dd')[i];
+    const label = (dt.querySelector('.en') || dt).textContent.trim();
+    const value = dd ? (dd.querySelector('.en') || dd).textContent.trim() : '';
+    if (label || value) items.push([label, value]);
+  });
+  const L = store.loc;
+  store.log.push({ t: new Date().toISOString(), card: card,
+    title: T.cards[card] ? T.cards[card].en : card,
+    level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '__BUILD__' });
+  if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
+  save();
+}
+function show(out, node) {
+  out.appendChild(node);
+  if (node.__spec && currentCard && T.cards[currentCard]) {
+    const btn = el('button', { type: 'button', class: 'btn small save' }, bi(T.ui.saveReading));
+    btn.addEventListener('click', () => {
+      saveRecord(node, currentCard);
+      btn.disabled = true; btn.innerHTML = ''; btn.appendChild(bi(T.ui.saved));
+    });
+    node.appendChild(btn);
+  }
+  try { node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+}
 const recall = (card) => store.inputs[card] || {};
 
 /* ---------- result rendering ---------- */
@@ -310,6 +354,7 @@ function refLinks(r) {
 function result(spec) {
   // spec: {level:'go'|'caution'|'stop'|'info', verdict:{en,fil}, lines:[[label, value]], why:[str], flags:[str], assumptions:[str], limits:[str], sources:[id]}
   const box = el('section', { class: 'result ' + spec.level });
+  box.__spec = spec;
   box.appendChild(el('h3', { class: 'verdict' }, el('span', { class: 'en' }, spec.verdict.en), el('span', { class: 'fil' }, spec.verdict.fil)));
   if (spec.lines && spec.lines.length) { const dl = el('dl', { class: 'nums' }); spec.lines.forEach(([k, v, cls]) => { dl.append(el('dt', { class: cls || '' }, k), el('dd', { class: cls || '' }, v)); }); box.appendChild(dl); }
   const det = (title, items, cls) => { if (!items || !items.length) return; const d = el('details', { class: cls || '' }, el('summary', null, bi(title))); const ul = el('ul'); items.forEach(x => ul.appendChild(el('li', { html: x }))); d.appendChild(ul); box.appendChild(d); };
@@ -856,6 +901,54 @@ CARDS.about = function (root) {
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with __ASSERTIONS__ numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
   root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version __VERSION__, build __BUILD__. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
+     a variable-width row per reading would need the farmer to unpick it first. */
+  root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
+  const logBox = el('div');
+  root.appendChild(logBox);
+  const csvEscape = v => '"' + String(v == null ? '' : v).split('"').join('""') + '"';
+  function toCsv() {
+    const head = ['saved_at', 'card', 'verdict', 'item', 'value', 'lat', 'lon', 'elev_m', 'build'];
+    const rows = [head.join(',')];
+    store.log.forEach(r => {
+      const base = [r.t, r.title, r.verdict];
+      const tail = [r.lat, r.lon, r.elev, r.build];
+      if (!r.items || !r.items.length) rows.push(base.concat(['', '']).concat(tail).map(csvEscape).join(','));
+      else r.items.forEach(it => rows.push(base.concat(it).concat(tail).map(csvEscape).join(',')));
+    });
+    return rows.join('\r\n');
+  }
+  function drawLog() {
+    logBox.innerHTML = '';
+    if (!store.log.length) { logBox.appendChild(el('p', { class: 'hint' }, bi(T.ui.savedNone))); return; }
+    logBox.appendChild(el('p', { class: 'hint' }, store.log.length + ' ', bi(T.ui.savedCount)));
+    const tb = el('table', { class: 'wet log' });
+    tb.appendChild(el('tr', null, el('th', null, 'Date'), el('th', null, 'Card'), el('th', null, 'Answer')));
+    store.log.slice().reverse().forEach(r => {
+      tb.appendChild(el('tr', null,
+        el('td', null, (r.t || '').slice(0, 16).replace('T', ' ')),
+        el('td', null, r.title || r.card),
+        el('td', null, r.verdict || '')));
+    });
+    logBox.appendChild(el('div', { class: 'tablewrap' }, tb));
+    const dl = el('button', { type: 'button', class: 'btn small' }, bi(T.ui.csv));
+    dl.addEventListener('click', () => {
+      try {
+        const blob = new Blob(['\ufeff' + toCsv()], { type: 'text/csv;charset=utf-8' });
+        const a = el('a', { href: URL.createObjectURL(blob), download: 'agrikalkunahon-readings.csv' });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      } catch (e) { alert('Could not save the file on this browser.'); }
+    });
+    const rm = el('button', { type: 'button', class: 'btn small danger' }, bi(T.ui.clearLog));
+    rm.addEventListener('click', () => { if (confirm(t(T.ui.clearAsk).en)) { store.log.length = 0; save(); drawLog(); } });
+    logBox.appendChild(el('p', null, dl, ' ', rm));
+  }
+  drawLog();
+  root.appendChild(el('p', { class: 'warn' }, bi({
+    en: 'Saved readings stay on this phone and are never sent anywhere. They are also not safe from being lost: clearing your browsing data deletes them, and an iPhone clears them after about a week of not opening the app. Download the CSV whenever the record matters to you.',
+    fil: 'Ang mga naitalang pagbasa ay nananatili sa telepono na ito at hindi ipinapadala kahit saan. Hindi rin ito ligtas sa pagkawala: mabubura ito kapag nilinis ninyo ang browsing data, at buburahin ito ng iPhone pagkalipas ng mga isang linggong hindi pagbukas ng app. I-download ang CSV tuwing mahalaga sa inyo ang talaan.'
+  })));
   const h = el('div', { class: 'haiku' });
   h.appendChild(el('div', { class: 'jp' }, '\u540d\u6708\u306b\u8fb2\u6a5f\u4ed5\u7acb\u3066\u308b\u8001\u723a\u54c9'));
   h.appendChild(el('div', { class: 'romaji' }, 'meigetsu ni / nouki shitateru / rouya kana'));
@@ -942,7 +1035,9 @@ function renderHome(main) {
   main.appendChild(grid);
   main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build __BUILD__.'));
 }
+let currentCard = null;
 function renderCard(main, id) {
+  currentCard = id;
   main.innerHTML = '';
   main.appendChild(el('a', { class: 'back', href: '#/' }, '← ', bi(T.ui.back)));
   main.appendChild(el('h2', null, bi(T.cards[id])));
