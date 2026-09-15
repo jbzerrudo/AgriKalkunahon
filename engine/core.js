@@ -375,7 +375,7 @@ const AWD = {
    "gradually increase to 5-10 cm (with increasing plant height)", 5 cm "from heading to the end of
    flowering", "drained 7-10 days before harvest". */
 function continuousFloodDecision(inp) {
-  const C = AWD.continuous, src = ['IRRI_AWD', 'PALAYCHECK'];
+  const C = AWD.continuous, src = ['IRRI_AWD', 'PALAYCHECK'], flags = [];
   const d = C.drainBeforeHarvestDays;
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= d[1]) return { code: 'cf_drain_now', drainDays: d, sources: src };
   if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays) {
@@ -386,12 +386,19 @@ function continuousFloodDecision(inp) {
   const target = early ? [C.afterTransplantCm, C.afterTransplantCm] : C.laterCm;
   if (!isNum(inp.pondedCm)) return { code: 'cf_need_depth', targetCm: target, sources: src };
   if (inp.pondedCm < target[0]) return { code: 'cf_top_up', targetCm: target, shortCm: target[0] - inp.pondedCm, sources: src };
-  if (inp.pondedCm > target[1] + 5) return { code: 'cf_too_deep', targetCm: target, sources: src };
-  /* Days until the depth falls below the target, from the farmer's own observed drop rate. No
-     percolation rate is assumed: without that reading there is no countdown. */
-  let daysLeft = null;
-  if (isNum(inp.pondDropCmPerDay) && inp.pondDropCmPerDay > 0) daysLeft = (inp.pondedCm - target[0]) / inp.pondDropCmPerDay;
-  return { code: 'cf_ok', targetCm: target, daysLeft: daysLeft, sources: src };
+  if (inp.pondedCm > target[1] + 5) return { code: 'cf_too_deep', targetCm: target, flags: flags, sources: src };
+  /* Two stick readings give the daily loss for this field, the same way the well does under AWD: crop
+     water use, percolation and seepage together, measured rather than modelled. A rate the farmer types
+     is used only when there is no second reading. No percolation rate is assumed either way. */
+  let drop = isNum(inp.pondDropCmPerDay) && inp.pondDropCmPerDay > 0 ? inp.pondDropCmPerDay : null;
+  let dropFrom = drop != null ? 'entered' : null, gainCm = null;
+  if (isNum(inp.pondPrevCm)) {
+    const fall = inp.pondPrevCm - inp.pondedCm;
+    if (fall > 0) { drop = fall; dropFrom = 'measured'; }
+    else { gainCm = inp.pondedCm - inp.pondPrevCm; flags.push('pond_net_gain'); }
+  }
+  const daysLeft = drop != null ? (inp.pondedCm - target[0]) / drop : null;
+  return { code: 'cf_ok', targetCm: target, daysLeft: daysLeft, dropCmPerDay: drop, dropFrom: dropFrom, gainCm: gainCm, flags: flags, sources: src };
 }
 /* INTERMITTENT DRYING WITHOUT A TUBE  [IRRI_AWD]. Returns no dry-down threshold, deliberately. Safe AWD
    is defined by reading the water table in a tube; the IRRI fact sheet gives no guidance for a farmer
@@ -430,13 +437,31 @@ function awdDecision(inp) {
      stated as a flag instead. The app must not act on a date it filled in itself. */
   if (!isNum(inp.daysAfterEstablish)) flags.push('awd_start_window_unknown');
   if (inp.weedsManaged === false) { flags.push('postpone_awd_weeds'); }
-  const reading = inp.tubeBelowSurfaceCm;
-  if (isNum(reading) && reading < 0) flags.push('tube_reading_negative');
+  /* The box asks for centimetres BELOW the surface, so a negative is a sign slip, not a real value:
+     water standing above the soil is the separate ponded-depth input. Read the magnitude and say so,
+     rather than computing a drawdown twice the true one. */
+  const raw = inp.tubeBelowSurfaceCm;
+  const reading = isNum(raw) ? Math.abs(raw) : raw;
+  if (isNum(raw) && raw < 0) flags.push('tube_reading_negative');
+  /* The well is the meter. Yesterday's reading and today's give the daily loss for THIS field: the sum
+     of crop water use, percolation and seepage, measured rather than modelled. A farmer-entered rate is
+     used only when there is no second reading. */
+  const prev = isNum(inp.tubePrevCm) ? Math.abs(inp.tubePrevCm) : null;
+  let drop = isNum(inp.pondDropCmPerDay) && inp.pondDropCmPerDay > 0 ? inp.pondDropCmPerDay : null;
+  let dropFrom = drop != null ? 'entered' : null, gainCm = null;
+  if (prev != null && isNum(reading)) {
+    const fall = reading - prev;                       // positive when the level fell
+    if (fall > 0) { drop = fall; dropFrom = 'measured'; }
+    /* The level rose, so rain or irrigation came in between: a net gain, and no loss rate can be read
+       from these two. The farmer waits for it to fall again. */
+    else { gainCm = prev - reading; flags.push('tube_net_gain'); }
+  }
   if (!isNum(reading)) return { code: 'need_tube_reading', triggerCm: trig, flags: flags, sources: src };
-  if (reading >= trig) return { code: 'reflood_now', triggerCm: trig, refloodCm: AWD.refloodCm, flags: flags, sources: src };
-  let daysLeft = null;
-  if (isNum(inp.pondDropCmPerDay) && inp.pondDropCmPerDay > 0) daysLeft = (trig - reading) / inp.pondDropCmPerDay;
-  return { code: 'not_yet', triggerCm: trig, remainingCm: trig - reading, daysLeft: daysLeft, flags: flags, sources: src };
+  /* The farmer needs the rise, not just the target: from the tube reading up to the surface, then the
+     re-flood depth on top of it. */
+  if (reading >= trig) return { code: 'reflood_now', triggerCm: trig, refloodCm: AWD.refloodCm, riseCm: reading + AWD.refloodCm, fromCm: reading, dropCmPerDay: drop, dropFrom: dropFrom, gainCm: gainCm, flags: flags, sources: src };
+  const daysLeft = drop != null ? (trig - reading) / drop : null;
+  return { code: 'not_yet', triggerCm: trig, remainingCm: trig - reading, daysLeft: daysLeft, dropCmPerDay: drop, dropFrom: dropFrom, gainCm: gainCm, flags: flags, sources: src };
 }
 
 /* =====================================================================

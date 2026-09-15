@@ -79,8 +79,8 @@ const T = {
     bad_rh: { en: 'Humidity must be between 1 and 100%.', fil: 'Ang halumigmig ay dapat nasa 1 hanggang 100%.' },
     bad_minmax: { en: 'The afternoon high must be above the morning low.', fil: 'Dapat mas mataas ang pinakamainit sa hapon kaysa pinakamalamig sa umaga.' },
     cf_ok: { en: 'Water level is right. Keep it there.', fil: 'Tama ang lalim ng tubig. Panatilihin ito.' },
-    cf_top_up: { en: 'Top up. Bring the water to {lo} to {hi} cm.', fil: 'Dagdagan ang tubig. Iangat sa {lo} hanggang {hi} cm.' },
-    cf_too_deep: { en: 'Too deep. Let it down to {lo} to {hi} cm.', fil: 'Masyadong malalim. Pababain sa {lo} hanggang {hi} cm.' },
+    cf_top_up: { en: 'Top up. Bring the water to {depth} cm.', fil: 'Dagdagan ang tubig. Iangat sa {depth} cm.' },
+    cf_too_deep: { en: 'Too deep. Let it down to {depth} cm.', fil: 'Masyadong malalim. Pababain sa {depth} cm.' },
     cf_need_depth: { en: 'Measure the water depth in the field first.', fil: 'Sukatin muna ang lalim ng tubig sa bukid.' },
     cf_flowering_ok: { en: 'Flowering: the water is deep enough. Keep it flooded.', fil: 'Namumulaklak: sapat ang tubig. Panatilihing nakababad.' },
     cf_flowering_top_up: { en: 'Flowering: top up to 5 cm now.', fil: 'Namumulaklak: dagdagan ang tubig hanggang 5 cm ngayon.' },
@@ -149,8 +149,10 @@ const CODES = {
   u2_floor_0_5: 'Wind below 0.5 m/s raised to 0.5 m/s (FAO-56 rule).', kc_ini_is_group_value: 'The initial-stage crop coefficient is a group value that FAO-56 calls a planning approximation (Table 12, footnote 1).', rhmin_default_45: 'Afternoon humidity assumed 45% (FAO-56 Table 12 standard) because no temperatures were given.',
   sunshine_clamped_0_N: 'Sunshine hours were outside the possible range and have been limited to between zero and the daylight hours for your latitude and date. Check what you entered: the field wants hours of bright sunshine for the whole day, not minutes.',
   u2_clamped_1_6: 'Wind clamped to the 1 to 6 m/s range of FAO-56 Eq. 62.', rhmin_clamped_20_80: 'Afternoon humidity clamped to the 20 to 80% range of FAO-56 Eq. 62.', h_clamped_10: 'Crop height clamped to 10 m (FAO-56 Eq. 62).', kc_end_below_0_45_no_adjust: 'End-season coefficient below 0.45 is not climate-adjusted (FAO-56 Eq. 65 rule).', h_below_0_1_no_adjust: 'Crop shorter than 0.1 m: no climate adjustment (FAO-56).',
+  pond_net_gain: 'The water is higher than yesterday, so rain or irrigation came in between. No daily loss can be read from these two. Wait for the level to fall again, then measure on two days with neither.',
+  tube_net_gain: 'The water in the tube is higher than yesterday, so rain or irrigation came in between. No daily loss can be read from these two. Wait for the level to fall back below today\'s mark, then read again on two days with neither.',
   awd_start_window_unknown: 'No transplanting date given, so this card cannot check the start window. AWD should not begin until 21 to 30 days after transplanting or sowing (PhilRice; DA AO 25-09: 20 to 30 days). Before that, keep 2 to 3 cm of water.',
-  tube_reading_negative: 'The tube reading was entered as a negative number. That box asks for centimetres below the soil surface, and 0 when the field is flooded, so a negative has been read as water standing above the soil.',
+  tube_reading_negative: 'The tube reading was entered as a negative number. That box asks for centimetres below the soil surface, so it has been read as that many centimetres below. Water standing above the soil goes in the depth box instead.',
   postpone_awd_weeds: 'Weeds not yet managed: IRRI and PhilRice say postpone AWD 2 to 3 weeks.', rh_outside_corroborated_table: 'Humidity outside the 25 to 90% range of the corroborating EMC table.', temp_outside_corroborated_range: 'Temperature outside the 10 to 50 °C range covered by the corroborating data.',
   deltaT_below_2: 'Delta T below 2: very moist air, droplets survive and drift further; inversion risk (GRDC).', deltaT_8_10: 'Delta T 8 to 10: fast droplet evaporation, spray with caution (GRDC 2025).', deltaT_10_12: 'Delta T 10 to 12: only very coarse droplets (GRDC 2025).', deltaT_above_12: 'Delta T above 12: avoid spraying (GRDC 2025).',
   wind_below_3: 'Wind below 3 km/h: too still, direction unpredictable, inversion likely (BOM, Agriculture Victoria, APVMA label 3 to 20 km/h).', wind_3_5_variable: 'Wind 3 to 5 km/h: direction may shift (GRDC 2022 prefers above 5 km/h).', wind_above_max: 'Wind above the limit (15 km/h, or the label limit up to 20 km/h).', wind_unknown: 'Wind not entered: the wind checks were skipped.',
@@ -464,45 +466,57 @@ CARDS.rice = function (root) {
   const flower = dateInput('flower', { en: 'Expected flowering date (to keep the field flooded through flowering)', fil: 'Inaasahang petsa ng pamumulaklak (upang manatiling may tubig sa panahon ng pamumulaklak)' }, prev.flower, { optional: true });
   const harvest = dateInput('harvest', { en: 'Expected harvest date (to know when to drain before harvest)', fil: 'Inaasahang petsa ng ani (upang malaman kung kailan patutuyuin bago mag-ani)' }, prev.harvest, { optional: true });
   const soil = selectInput('rsoil', T.ui.soil, [['light', { en: 'Sandy or light', fil: 'Mabuhangin o magaan' }], ['clay', { en: 'Clay or heavy', fil: 'Luwad o mabigat' }]], prev.soil || 'clay');
-  const tube = numInput('tube', { en: 'Water level in the field tube, cm below the soil surface (0 if the field is flooded)', fil: 'Lalim ng tubig sa AWD tube (pani tube), cm mula sa ibabaw ng lupa (0 kung may tubig sa bukid)' }, prev.tube, 1);
+  const tube = numInput('tube', { en: 'Water level in the field tube, cm below the soil surface (15 or -15 both mean 15 cm below; 0 if flooded)', fil: 'Lalim ng tubig sa AWD tube (pani tube), cm sa ilalim ng ibabaw ng lupa (15 o -15, pareho itong 15 cm sa ilalim; 0 kung may tubig)' }, prev.tube, 1);
+  const tubePrev = numInput('tubeprev', { en: 'Yesterday\'s reading in the same tube, cm below the soil surface', fil: 'Kahapong pagbasa sa parehong tube, cm sa ilalim ng ibabaw ng lupa' }, prev.tubePrev, 1, { optional: true });
   const pond = numInput('pond', { en: 'Water depth above the soil, cm (if flooded)', fil: 'Lalim ng tubig sa ibabaw ng lupa, cm (kung may tubig)' }, prev.pond, 1);
   const POND_LABEL = {
     flowering: { en: 'Water depth above the soil, cm (only used in the week either side of flowering)', fil: 'Lalim ng tubig sa ibabaw ng lupa, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak)' },
     always:    { en: 'Water depth above the soil, cm (if flooded)', fil: 'Lalim ng tubig sa ibabaw ng lupa, cm (kung may tubig)' }
   };
+  const pondPrev = numInput('pondprev', { en: 'Yesterday\'s water depth above the soil, cm', fil: 'Kahapong lalim ng tubig sa ibabaw ng lupa, cm' }, prev.pondPrev, 1, { optional: true });
   const drop = numInput('drop', { en: 'How fast the water level drops, cm per day (if you have watched it)', fil: 'Gaano kabilis bumaba ang tubig, cm kada araw (kung napansin mo)' }, prev.drop, 0.5, { optional: true });
   const DROP_LABEL = {
     used: { en: 'How fast the water level drops, cm per day (to work out how many days you have)', fil: 'Gaano kabilis bumaba ang tubig, cm kada araw (upang malaman kung ilang araw pa)' },
     none: { en: 'How fast the water level drops, cm per day (recorded only: no drying threshold is published for this method)', fil: 'Gaano kabilis bumaba ang tubig, cm kada araw (itinatala lamang: walang nailathalang hangganan ng pagpapatuyo para sa paraang ito)' }
   };
+  pond.input.min = 0; drop.input.min = 0;   // a depth and a rate cannot be negative
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, tube.row, pond.row, drop.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, tube.row, tubePrev.row, pond.row, pondPrev.row, drop.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* A row is shown only where the chosen method actually reads it. The tube and the drop rate mean
      something only under safe AWD; the season sets the re-flood depth and only safe AWD has one; and
      continuous flooding drains on a fixed 7 to 10 days, so it reads neither the soil nor the weeds. */
   const syncMethod = () => {
     const m = method.input.value, awd = m === 'awd', cont = m === 'continuous';
     tube.row.hidden = !awd;
+    tubePrev.row.hidden = !awd;
+    pondPrev.row.hidden = !cont;
+    drop.row.hidden = awd || cont;   // both of those measure the loss from two readings instead   // under AWD the well gives the loss; no need to ask for it
     season.row.hidden = !awd;
     soil.row.hidden = cont;
     weeds.row.hidden = cont;
     pond.row.replaceChild(bi(cont ? POND_LABEL.always : POND_LABEL.flowering), pond.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
-    drop.row.replaceChild(bi(m === 'intermittent' ? DROP_LABEL.none : DROP_LABEL.used), drop.row.firstChild);
   };
   method.input.addEventListener('change', syncMethod); syncMethod();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value, soil: soil.input.value, tube: num(tube.input), pond: num(pond.input), drop: num(drop.input), weeds: weeds.input.checked };
+    const inp = { method: method.input.value, season: season.input.value, tubePrev: num(tubePrev.input), pondPrev: num(pondPrev.input), est: est.input.value, flower: flower.input.value, harvest: harvest.input.value, soil: soil.input.value, tube: num(tube.input), pond: num(pond.input), drop: num(drop.input), weeds: weeds.input.checked };
     remember('rice', inp); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
-    const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest), season: inp.season, tubeBelowSurfaceCm: inp.tube, pondedCm: inp.pond, weedsManaged: inp.weeds, soil: inp.soil, pondDropCmPerDay: inp.drop });
+    const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest), season: inp.season, tubeBelowSurfaceCm: inp.tube, tubePrevCm: inp.tubePrev, pondedCm: inp.pond, pondPrevCm: inp.pondPrev, weedsManaged: inp.weeds, soil: inp.soil, pondDropCmPerDay: inp.drop });
     const level = { reflood_now: 'stop', flowering_top_up_to_5cm: 'stop', cf_flowering_top_up: 'stop', cf_top_up: 'stop', cf_too_deep: 'caution', drain_stop_irrigating: 'caution', cf_drain_now: 'caution', need_tube_reading: 'info', cf_need_depth: 'info', intermittent_no_threshold: 'info', before_awd_keep_shallow: 'caution' }[r.code] || 'go';
+    /* A target of 3 to 3 is just 3. */
+    const depthText = Array.isArray(r.targetCm) ? (r.targetCm[0] === r.targetCm[1] ? String(r.targetCm[0]) : r.targetCm[0] + ' to ' + r.targetCm[1]) : (r.targetCm != null ? String(r.targetCm) : '');
     const lines = [];
+    /* The loss rate leads: it is the one number that decides when the farmer must act. */
+    if (r.gainCm != null) lines.push([bi({ en: 'Net gain since your last reading', fil: 'Naidagdag mula sa huling pagbasa' }), fmt(r.gainCm, 1) + ' cm: the water rose instead of falling']);
+    if (r.dropCmPerDay != null) lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm a day' + (r.dropFrom === 'measured' ? ', from your two readings' : ', the rate you entered')]);
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || 5) + ' cm above it']);
-    if (r.code === 'cf_ok' && r.daysLeft != null) lines.push([bi({ en: 'Before it drops below target', fil: 'Bago bumaba sa dapat na lalim' }), 'about ' + fmt(r.daysLeft, 0) + ' days at your drop rate']);
-    if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm' + (r.daysLeft != null ? ', about ' + fmt(r.daysLeft, 0) + ' days at your drop rate' : '')]);
+    if ((r.code === 'not_yet' || r.code === 'cf_ok') && r.daysLeft != null) { const d = new Date(Date.now() + r.daysLeft * 86400000);
+      lines.push([bi({ en: 'Irrigate on or before', fil: 'Magpatubig sa o bago ang' }), String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear()]); }
+    if (r.riseCm != null) lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.riseCm, 0) + ' cm: ' + fmt(r.fromCm, 0) + ' cm up to the soil surface, then ' + r.refloodCm + ' cm above it'      + (inp.drop != null && inp.drop > 0 ? ', and it keeps falling at your ' + inp.drop + ' cm a day while you fill' : '')]);
+        if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm']);
     if (r.drainDays) lines.push([bi({ en: 'Drain', fil: 'Patuyuin' }), Array.isArray(r.drainDays) ? r.drainDays[0] + ' to ' + r.drainDays[1] + ' days before harvest' : r.drainDays + ' days before harvest for this soil']);
     const whyByMethod = {
       continuous: ['Continuous flooding, as the IRRI Rice Knowledge Bank describes it: "After transplanting, water levels should be around 3 cm initially" and "gradually increase to 5-10 cm (with increasing plant height) and remain there until the field is drained". Keep 5 cm "at all times from heading to the end of flowering", and drain "7-10 days before harvest".'],
@@ -516,7 +530,7 @@ CARDS.rice = function (root) {
       lines.push([bi({ en: 'How to make an AWD tube (pani tube)', fil: 'Paano gumawa ng AWD tube (pani tube)' }),
         r.tube.lengthCm + ' cm of plastic pipe or bamboo, ' + r.tube.diameterCm[0] + ' to ' + r.tube.diameterCm[1] + ' cm across, hammered in so ' + r.tube.aboveSoilCm + ' cm stands above the soil (IRRI)']);
     }
-    show(out, result({ level, verdict: t(T.verdicts[r.code], { trig: r.triggerCm, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags, assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot.', 'Any days-left figure assumes the drop rate you observed keeps going at the same speed. It will not: drawdown slows as the water table is approached, and changes again once the soil surface is exposed.'], limits, sources: r.sources }));
+    show(out, result({ level, verdict: t(T.verdicts[r.code], { trig: r.triggerCm, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags, assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot.', 'Any days-left figure assumes the drop rate you observed keeps going at the same speed. It will not: drawdown slows as the water table is approached, and changes again once the soil surface is exposed.'], limits, sources: r.sources }));
   }
 };
 

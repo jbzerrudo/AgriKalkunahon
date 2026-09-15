@@ -162,6 +162,16 @@ eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 
 eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
 eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
 eq('reflood now at 16 cm dry season', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
+eq('no transplanting date: start window flagged, tube still answers', A.awdDecision({ season: 'dry', tubeBelowSurfaceCm: 16 }).flags.join(','), 'awd_start_window_unknown');
+eq('negative tube reading is flagged', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: -15 }).flags.join(','), 'tube_reading_negative');
+ok('two stick readings give the loss under continuous flooding', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 76, pondedCm: 8, pondPrevCm: 10 }).dropCmPerDay, 2, 1e-9, 'cm/d');
+ok('and the days until it falls below target', A.riceWaterDecision({ method: 'continuous', daysAfterEstablish: 76, pondedCm: 8, pondPrevCm: 10 }).daysLeft, 1.5, 1e-9, 'd');
+ok('two well readings give the daily loss', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 9, tubePrevCm: 5 }).dropCmPerDay, 4, 1e-9, 'cm/d');
+ok('and the days to the trigger from it', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 9, tubePrevCm: 5 }).daysLeft, 1.5, 1e-9, 'd');
+eq('a level that rose is flagged as a net gain, with no loss rate', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 5, tubePrevCm: 9 }).flags.join(','), 'tube_net_gain');
+ok('and the gain is reported', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 5, tubePrevCm: 9 }).gainCm, 4, 1e-9, 'cm');
+ok('re-flood rise is the reading plus the re-flood depth', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).riseCm, 21, 1e-9, 'cm');
+eq('a negative tube reading is read as that depth below, not doubled', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: -15 }).code, 'reflood_now');
 eq('not yet at 16 cm wet season', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'not_yet');
 ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
 eq('flowering window keeps 5 cm', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
