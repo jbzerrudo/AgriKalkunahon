@@ -387,7 +387,11 @@ function continuousFloodDecision(inp) {
   if (!isNum(inp.pondedCm)) return { code: 'cf_need_depth', targetCm: target, sources: src };
   if (inp.pondedCm < target[0]) return { code: 'cf_top_up', targetCm: target, shortCm: target[0] - inp.pondedCm, sources: src };
   if (inp.pondedCm > target[1] + 5) return { code: 'cf_too_deep', targetCm: target, sources: src };
-  return { code: 'cf_ok', targetCm: target, sources: src };
+  /* Days until the depth falls below the target, from the farmer's own observed drop rate. No
+     percolation rate is assumed: without that reading there is no countdown. */
+  let daysLeft = null;
+  if (isNum(inp.pondDropCmPerDay) && inp.pondDropCmPerDay > 0) daysLeft = (inp.pondedCm - target[0]) / inp.pondDropCmPerDay;
+  return { code: 'cf_ok', targetCm: target, daysLeft: daysLeft, sources: src };
 }
 /* INTERMITTENT DRYING WITHOUT A TUBE  [IRRI_AWD]. Returns no dry-down threshold, deliberately. Safe AWD
    is defined by reading the water table in a tube; the IRRI fact sheet gives no guidance for a farmer
@@ -422,8 +426,12 @@ function awdDecision(inp) {
     return { code: ok ? 'flowering_keep_flooded' : 'flowering_top_up_to_5cm', targetCm: AWD.floweringFloodCm, sources: src };
   }
   if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, sources: src };
+  /* Without the date the start window cannot be checked, so the tube drives the answer and the rule is
+     stated as a flag instead. The app must not act on a date it filled in itself. */
+  if (!isNum(inp.daysAfterEstablish)) flags.push('awd_start_window_unknown');
   if (inp.weedsManaged === false) { flags.push('postpone_awd_weeds'); }
   const reading = inp.tubeBelowSurfaceCm;
+  if (isNum(reading) && reading < 0) flags.push('tube_reading_negative');
   if (!isNum(reading)) return { code: 'need_tube_reading', triggerCm: trig, flags: flags, sources: src };
   if (reading >= trig) return { code: 'reflood_now', triggerCm: trig, refloodCm: AWD.refloodCm, flags: flags, sources: src };
   let daysLeft = null;
