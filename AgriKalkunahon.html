@@ -508,7 +508,7 @@ const AWD = {
   floweringFloodCm: 5,                       // IRRI, PhilRice (PalayCheck: 5-7 cm)
   floweringWindowDays: 7,                    // one week before to one week after flowering (IRRI, Bouman)
   drainBeforeHarvestDays: { light: 7, clay: 14 },   // PhilRice, PalayCheck
-  preAwdDepthCm: [2, 3],                     // PhilRice (Saludez 2022): 2-3 cm before AWD starts
+  preAwdDepthCm: [2, 3],                     // DA-PhilRice news, Mendoza 2022 quoting Saludez: "irrigate the field with 2-3cm water depth" before AWD starts
   continuous: { afterTransplantCm: 3, laterCm: [5, 10], drainBeforeHarvestDays: [7, 10], headingCm: 5 },  // IRRI RKB, verbatim
   /* IRRI fact sheet: the tube is 30 cm of plastic pipe or bamboo, 10-15 cm across, hammered in so 15 cm
      stands above the soil. Quoted on the card, because a farmer without one can make one in an hour. */
@@ -673,7 +673,7 @@ function riceWaterDecision(inp) {
    levelCm (negative below the soil surface, 0 at it, positive standing above it), levelPrevCm,
    daysBetween, fieldDropCmPerDay, fieldDropSigma, dropCmPerDay, weedsManaged, soil:'light'|'clay'} */
 function awdDecision(inp) {
-  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK'];
+  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PHILRICE_NEWS', 'PALAYCHECK'];
   const trig = AWD.triggerCm[inp.season === 'wet' ? 'wet' : 'dry'];
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, sources: src };
@@ -1036,7 +1036,13 @@ const REFS = {
   BOUMAN2007: { cls: 'primary', cite: 'Bouman, B.A.M., Lampayan, R.M., Tuong, T.P. (2007). Water Management in Irrigated Rice: Coping with Water Scarcity. IRRI.', url: 'http://books.irri.org/9789712202193_content.pdf' },
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
   DA_AO25: { cls: 'regulatory', cite: 'Department of Agriculture (2009). Administrative Order No. 25 s. 2009, Guidelines for the adoption of water saving technologies in irrigated rice production systems in the Philippines, Section 5.', url: 'https://legaldex.com/laws/guidelines-for-the-adoption-of-water-saving-technologies-wst-in' },
-  PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD); Saludez (2022) in PhilRice news.', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
+  PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD).', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
+  /* The news item is a separate source from the Knowledge Bank page and carries different figures, so it is
+     cited separately. Fredierick Saludez is the DA-PhilRice agriculturist quoted, not the author. It gives the
+     2 to 3 cm pre-AWD depth, the 21 to 30 day start window, 5 cm through flowering and the 7 and 14 day
+     pre-harvest drainage. It gives NO re-flood depth and no observation well dimensions, so nothing in this
+     app may lean on it for either: the 15 and 20 cm come from DA AO 25-09, the tube recipe from IRRI. */
+  PHILRICE_NEWS: { cls: 'extension', cite: 'Mendoza, C.A. (2022). Expert recommends technique to conserve water in rice farming. DA-PhilRice, 18 April 2022, quoting F. Saludez, DA-PhilRice agriculturist.', url: 'https://www.philrice.gov.ph/expert-recommends-technique-to-conserve-water-in-rice-farming/' },
   PALAYCHECK: { cls: 'extension', cite: 'PhilRice (2022). PalayCheck System, 2022 Revised Edition (Key Check 6; Key Check 8, harvesting at the right time: 85 to 90 per cent golden-yellow grains for manual harvest and 90 to 95 per cent by combine, 18 to 21 per cent moisture in the dry season and 20 to 25 per cent in the wet, field drained 1 to 2 weeks before harvest; Key Check 9; cavan 50 kg).', url: 'https://www.philrice.gov.ph/wp-content/uploads/2023/02/PalayCheck-System-2022-Revised-Edition.pdf' },
   GRDC2025: { cls: 'extension', cite: 'GRDC (2025). Practical tips for spraying, revised January 2025.', url: 'https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf' },
   GRDC2022: { cls: 'extension', cite: 'GRDC (2022). Weather essentials for pesticide application, grower edition.', url: 'https://grdc.com.au/__data/assets/pdf_file/0033/579525/GRDC_WeatherEssen2205_Grower_Final.pdf' },
@@ -1524,7 +1530,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '6e0b3490' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'de6d1d69' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2316,8 +2322,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 402 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 6e0b3490. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 406 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build de6d1d69. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2406,7 +2412,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 6e0b3490)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build de6d1d69)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2418,7 +2424,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 6e0b3490).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 6e0b3490 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build de6d1d69).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build de6d1d69 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2465,7 +2471,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 6e0b3490.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build de6d1d69.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

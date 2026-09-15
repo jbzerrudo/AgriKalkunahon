@@ -364,7 +364,7 @@ const AWD = {
   floweringFloodCm: 5,                       // IRRI, PhilRice (PalayCheck: 5-7 cm)
   floweringWindowDays: 7,                    // one week before to one week after flowering (IRRI, Bouman)
   drainBeforeHarvestDays: { light: 7, clay: 14 },   // PhilRice, PalayCheck
-  preAwdDepthCm: [2, 3],                     // PhilRice (Saludez 2022): 2-3 cm before AWD starts
+  preAwdDepthCm: [2, 3],                     // DA-PhilRice news, Mendoza 2022 quoting Saludez: "irrigate the field with 2-3cm water depth" before AWD starts
   continuous: { afterTransplantCm: 3, laterCm: [5, 10], drainBeforeHarvestDays: [7, 10], headingCm: 5 },  // IRRI RKB, verbatim
   /* IRRI fact sheet: the tube is 30 cm of plastic pipe or bamboo, 10-15 cm across, hammered in so 15 cm
      stands above the soil. Quoted on the card, because a farmer without one can make one in an hour. */
@@ -529,7 +529,7 @@ function riceWaterDecision(inp) {
    levelCm (negative below the soil surface, 0 at it, positive standing above it), levelPrevCm,
    daysBetween, fieldDropCmPerDay, fieldDropSigma, dropCmPerDay, weedsManaged, soil:'light'|'clay'} */
 function awdDecision(inp) {
-  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK'];
+  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PHILRICE_NEWS', 'PALAYCHECK'];
   const trig = AWD.triggerCm[inp.season === 'wet' ? 'wet' : 'dry'];
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, sources: src };
@@ -892,7 +892,13 @@ const REFS = {
   BOUMAN2007: { cls: 'primary', cite: 'Bouman, B.A.M., Lampayan, R.M., Tuong, T.P. (2007). Water Management in Irrigated Rice: Coping with Water Scarcity. IRRI.', url: 'http://books.irri.org/9789712202193_content.pdf' },
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
   DA_AO25: { cls: 'regulatory', cite: 'Department of Agriculture (2009). Administrative Order No. 25 s. 2009, Guidelines for the adoption of water saving technologies in irrigated rice production systems in the Philippines, Section 5.', url: 'https://legaldex.com/laws/guidelines-for-the-adoption-of-water-saving-technologies-wst-in' },
-  PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD); Saludez (2022) in PhilRice news.', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
+  PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD).', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
+  /* The news item is a separate source from the Knowledge Bank page and carries different figures, so it is
+     cited separately. Fredierick Saludez is the DA-PhilRice agriculturist quoted, not the author. It gives the
+     2 to 3 cm pre-AWD depth, the 21 to 30 day start window, 5 cm through flowering and the 7 and 14 day
+     pre-harvest drainage. It gives NO re-flood depth and no observation well dimensions, so nothing in this
+     app may lean on it for either: the 15 and 20 cm come from DA AO 25-09, the tube recipe from IRRI. */
+  PHILRICE_NEWS: { cls: 'extension', cite: 'Mendoza, C.A. (2022). Expert recommends technique to conserve water in rice farming. DA-PhilRice, 18 April 2022, quoting F. Saludez, DA-PhilRice agriculturist.', url: 'https://www.philrice.gov.ph/expert-recommends-technique-to-conserve-water-in-rice-farming/' },
   PALAYCHECK: { cls: 'extension', cite: 'PhilRice (2022). PalayCheck System, 2022 Revised Edition (Key Check 6; Key Check 8, harvesting at the right time: 85 to 90 per cent golden-yellow grains for manual harvest and 90 to 95 per cent by combine, 18 to 21 per cent moisture in the dry season and 20 to 25 per cent in the wet, field drained 1 to 2 weeks before harvest; Key Check 9; cavan 50 kg).', url: 'https://www.philrice.gov.ph/wp-content/uploads/2023/02/PalayCheck-System-2022-Revised-Edition.pdf' },
   GRDC2025: { cls: 'extension', cite: 'GRDC (2025). Practical tips for spraying, revised January 2025.', url: 'https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf' },
   GRDC2022: { cls: 'extension', cite: 'GRDC (2022). Weather essentials for pesticide application, grower edition.', url: 'https://grdc.com.au/__data/assets/pdf_file/0033/579525/GRDC_WeatherEssen2205_Grower_Final.pdf' },

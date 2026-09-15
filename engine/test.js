@@ -254,6 +254,10 @@ eq('a negative remainder is impossible and is flagged', A.spClassify(-0.2).flags
 eq('no figure, no classification', A.spClassify(null), null);
 eq('the rice card cites the 1994 paper', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5 }).sources.indexOf('BOUMAN1994') >= 0, true);
 eq('and the reference is on file', A.REFS.BOUMAN1994.cite.indexOf('Agricultural Water Management 26') >= 0, true);
+eq('the PhilRice news item is cited to its author, not to the expert it quotes', A.REFS.PHILRICE_NEWS.cite.indexOf('Mendoza, C.A. (2022)') === 0, true);
+eq('and it names Saludez as the one quoted', A.REFS.PHILRICE_NEWS.cite.indexOf('quoting F. Saludez') >= 0, true);
+eq('the rice card cites it, since its depths come from there', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5 }).sources.indexOf('PHILRICE_NEWS') >= 0, true);
+eq('the 2 to 3 cm pre-AWD depth is the figure that item gives', A.AWD.preAwdDepthCm.join('-'), '2-3');
 
 console.log('\n== EFFECTIVE RAINFALL (FAO Training Manual 3 worked table) ==');
 [[35, 11], [90, 47], [116, 68], [5, 0], [260, 183], [75, 35]].forEach(([P, w]) => ok('TM3 Pe(' + P + ')', A.effectiveRainMonthly(P), w, 0.5, 'mm'));
