@@ -537,12 +537,12 @@ CARDS.rice = function (root) {
   let plotName = store.ricePlotLast || '';
   let prev = recall('rice:' + ricePlotKey(plotName));
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
-  const plot = el('input', { type: 'text', id: 'rplot', list: 'rplots', autocomplete: 'off', placeholder: '' });
+  const plot = el('input', { type: 'text', id: 'rplot', list: 'rplots', autocomplete: 'off', placeholder: 'Lupang Itaas, Tabing Ilog' });
   plot.value = plotName;
   const plotList = el('datalist', { id: 'rplots' });
   const syncPlotList = () => { plotList.innerHTML = ''; ricePlotNames().forEach(n => plotList.appendChild(el('option', { value: n }))); };
   syncPlotList();
-  const plotRow = el('label', { class: 'row' }, bi({ en: 'Which paddy is this? (leave blank if you work only one. Each paddy keeps its own readings, its own usual water loss and its own irrigation interval)', fil: 'Aling palayan ito? (iwanang blangko kung isa lang ang inyong palayan. Bawat palayan ay may sariling talaan ng pagbasa, sariling karaniwang pagbaba ng tubig, at sariling agwat ng pagpapatubig)' }), optTag({ optional: true }), plot, plotList);
+  const plotRow = el('label', { class: 'row' }, bi({ en: 'Which paddy is this? Leave it blank if you work only one. Each paddy keeps its own readings, its own usual water loss and its own irrigation interval. Examples: Lupang Itaas for an upland paddy, Tabing Ilog for one beside a river.', fil: 'Aling palayan ito? Iwanang blangko kung isa lang ang inyong palayan. Bawat palayan ay may sariling talaan ng pagbasa, sariling karaniwang pagbaba ng tubig, at sariling agwat ng pagpapatubig. Halimbawa: Lupang Itaas para sa palayang nasa mataas na lupa, Tabing Ilog para sa katabi ng ilog.' }), optTag({ optional: true }), plot, plotList);
   const method = selectInput('rmethod', { en: 'How you manage the water', fil: 'Paraan ng pamamahala ng tubig' }, [
     ['continuous', { en: 'Continuous flooding: the field is kept flooded', fil: 'Laging nakababad ang bukid' }],
     ['awd', { en: 'Safe AWD: you have an AWD tube (pani tube) and read it', fil: 'Safe AWD: may AWD tube (pani tube) sa bukid at binabasa mo ito' }],
@@ -568,25 +568,25 @@ CARDS.rice = function (root) {
     int: { en: 'Water level in the field, cm (used only in the week either side of flowering). Plus is water on top, 0 is level with the soil, minus is below it.',
            fil: 'Lalim ng tubig sa bukid, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Plus kung may tubig sa ibabaw, 0 kung kapantay ng lupa, minus kung nasa ilalim.' }
   };
-  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm (same minus and plus)', fil: 'Ang naunang pagbasa sa parehong lugar, cm (parehong minus at plus)' }, prev.levelPrev, 'any', { optional: true });
+  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm. Use the same minus and plus as above.', fil: 'Ang naunang pagbasa sa parehong lugar, cm. Gamitin ang parehong minus at plus tulad sa itaas.' }, prev.levelPrev, 'any', { optional: true });
   /* The two reading dates, not "how many days ago". They give the span without the farmer doing
      arithmetic, and they anchor the answer on when the tube was actually read rather than on the
      moment the button was pressed. Read at seven, entered at nine at night, and the old card was
      already out; a reading entered two days late was two days wrong. Span is the whole game besides:
      two readings a day apart give a rate of (fall +/- 1.4) cm/day, which dates nothing, while the
      same pair five days apart gives (fall/5 +/- 0.28). */
-  const levelDate = dateInput('leveldate', { en: 'Date you took that reading', fil: 'Petsa ng pagbasa ngayon' }, prev.levelDate, { prefilled: true });
-  const levelPrevDate = dateInput('levelprevdate', { en: 'Date of the earlier reading (the further back it is, the tighter the date below: wait until the water has fallen at least about 3 cm)', fil: 'Petsa ng naunang pagbasa (mas malayo ito, mas tiyak ang petsa sa ibaba: hintayin munang bumaba ang tubig nang hindi bababa sa mga 3 cm)' }, prev.levelPrevDate, { optional: true });
+  const levelDate = dateInput('leveldate', { en: 'Date you took that reading.', fil: 'Petsa ng pagbasang iyon.' }, prev.levelDate, { prefilled: true });
+  const levelPrevDate = dateInput('levelprevdate', { en: 'Date of the earlier reading. The further back it is, the tighter the date below. Wait until the water has fallen at least about 3 cm before reading again.', fil: 'Petsa ng naunang pagbasa. Mas malayo ito, mas tiyak ang petsa sa ibaba. Hintayin munang bumaba ang tubig nang hindi bababa sa mga 3 cm bago magbasa muli.' }, prev.levelPrevDate, { optional: true });
   /* Two thermometer readings are all FAO-56 needs to reach crop water use, and they are what a
      farmer actually has. Given only temperature, FAO-56 fills in humidity from Eq. 48, sunlight from
      Eq. 50 and wind from Table 4, and names each substitution in the answer. Without this the split
      was only available to someone who had already worked through the watering card. */
-  const tmax = numInput('rtmax', { en: 'Afternoon high on the day of that reading, deg C (with the morning low, the card works out crop water use and can split your loss)', fil: 'Pinakamainit sa araw ng pagbasang iyon, deg C (kasama ang pinakamalamig sa umaga, matutuya ng card ang gamit na tubig ng pananim at mahahati ang pagbaba ng tubig)' }, prev.tmax, 0.1, { optional: true });
-  const tmin = numInput('rtmin', { en: 'Morning low on that same day, deg C', fil: 'Pinakamalamig sa umaga ng araw na iyon, deg C' }, prev.tmin, 0.1, { optional: true });
+  const tmax = numInput('rtmax', { en: 'Afternoon high on the day of that reading, deg C. With the morning low, the card works out crop water use and can split your loss into its parts.', fil: 'Pinakamainit sa araw ng pagbasang iyon, deg C. Kasama ang pinakamalamig sa umaga, matutuya ng card ang gamit na tubig ng pananim at mahahati ang pagbaba ng tubig.' }, prev.tmax, 0.1, { optional: true });
+  const tmin = numInput('rtmin', { en: 'Morning low on that same day, deg C.', fil: 'Pinakamalamig sa umaga ng araw na iyon, deg C.' }, prev.tmin, 0.1, { optional: true });
   /* One optional number splits the measured loss into its parts. The watering card already prints it
      for rice, so it is carried across rather than asked for again when it is recent. */
   const banked = (store.riceEtc && isFinite(store.riceEtc.mm) && (Date.now() - new Date(store.riceEtc.d + 'T00:00:00')) / 86400000 <= 7) ? store.riceEtc : null;
-  const etc = numInput('retc', { en: 'Crop water use, mm/day (only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead)', fil: 'Gamit na tubig ng pananim, mm kada araw (kung mayroon ka na nito mula sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas)' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
+  const etc = numInput('retc', { en: 'Crop water use, mm/day. Fill this in only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead.', fil: 'Gamit na tubig ng pananim, mm/day. Punan lamang ito kung mayroon ka nang galing sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas.' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
