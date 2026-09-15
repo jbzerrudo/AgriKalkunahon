@@ -1087,7 +1087,7 @@ CARDS.disease = function (root) {
         limits: ['No disease risk is scored from these hours, and the table above is not a risk scale. It places the forecast beside two published figures and stops there.',
           'The blast figure is for spore germination, which is the first step in infection and not the same as a diseased crop. Whether infection follows depends on the spores being present, on humidity near 100%, on the variety, and on the crop stage.',
           'A forecast covers an area, not your field. Where PAGASA and this card differ, follow PAGASA.',
-          'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not put these numbers in the Hutton boxes below.',
+          'Leaf wetness hours and hours at or above 90% humidity are different quantities. Do not carry these numbers into the potato late blight boxes, which the form shows only when you tick the data logger option.',
           'The measured yardstick is lowland paddy rice at one site in one dry season, on clear rain-free nights.'],
         sources: ['PAGASA_FWFA', 'LUO2000', 'PACIFICPESTS_BLAST'] });
     }
