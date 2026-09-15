@@ -501,8 +501,8 @@ function irrigationDecision(inp) {
    6. LOWLAND RICE: SAFE AWD AND CONTINUOUS FLOODING  [IRRI_AWD, BOUMAN2007, DA_AO25, PHILRICE_AWD, PALAYCHECK]
    ===================================================================== */
 const AWD = {
-  triggerCm: 15,                             // IRRI safe AWD: 15 cm below the surface, every season. 15 cm is what "safe" is defined by.
-  triggerDaWetCm: 20,                        // DA AO 25-09 and the PhilRice observation well allow 20 cm in the wet season; carried as a caveat, not applied
+  triggerCm: { dry: 15, wet: 20 },           // DA AO 25-09 and the PhilRice observation well: the Philippine policy. IRRI safe AWD uses 15 cm all season.
+  irriTriggerCm: 15,                         // IRRI safe AWD, every season; the stricter figure, carried as a caveat
   refloodCm: 5,                              // IRRI RKB, Bouman 2007, PhilRice
   startDays: [21, 30],                       // PhilRice: 21-30 days after transplanting or sowing (IRRI: 1-2 weeks)
   floweringFloodCm: 5,                       // IRRI, PhilRice (PalayCheck: 5-7 cm)
@@ -558,7 +558,7 @@ function riceWaterDecision(inp) {
 /* inp: {daysAfterEstablish, daysToFlowering (negative after), daysToHarvest, season:'wet'|'dry', tubeBelowSurfaceCm (positive = below), pondedCm, weedsManaged, soil:'light'|'clay', pondDropCmPerDay} */
 function awdDecision(inp) {
   const flags = [], src = ['IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK'];
-  const trig = AWD.triggerCm;
+  const trig = AWD.triggerCm[inp.season === 'wet' ? 'wet' : 'dry'];
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, sources: src };
   if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays) {
@@ -926,6 +926,7 @@ const REFS = {
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   PAGASA_FWFA: { cls: 'extension', cite: 'DOST-PAGASA daily Farm Weather Forecast and Advisories, among the agri-weather products: lowland and upland temperature and humidity, winds, leaf wetness in hours, soil moisture and farming advisories.', url: 'https://bagong.pagasa.dost.gov.ph/agri-weather' },
+  PAGASA_CLIMATEMAP: { cls: 'extension', cite: 'DOST-PAGASA, CADS/IAAS CAD (2014). Climate Map of the Philippines (1951-2010), August 2014. Modified Coronas Climate Classification: "The modal of the yearly type of rainfall distribution during the 1951-2010 period in 45 synoptic and 66 climat stations were considered." Type I: two pronounced seasons, dry from November to April and wet during the rest of the year, maximum rain period from June to September. Type II: no dry season with a very pronounced maximum rain period from December to February; there is not a single dry month. Type III: no very pronounced maximum rain period, with a dry season lasting only from one to three months. Type IV: rainfall more or less evenly distributed throughout the year, no dry season.', url: 'https://www.pagasa.dost.gov.ph/information/climate-philippines' },
   PACIFICPESTS_BLAST: { cls: 'extension', cite: 'Jackson, G. (2017). Rice blast (252). Pacific Pests and Pathogens fact sheet, produced under ACIAR project PC/2010/090 with the University of Queensland and the Secretariat of the Pacific Community: "the leaves need to be wet for 6-8 hours for spore germination. High humidity, close to 100%, is needed for infection", with 24-28 C favourable.', url: 'https://apps.lucidcentral.org/ppp/text/web_full/entities/rice_blast_252.htm' },
   LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -941,6 +942,7 @@ const UNVERIFIED = [
   { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
   { id: 'LEAF_WETNESS_DURATION', text: 'Hours of leaf wetness are not calculated, because every published method needs an input this card does not have. The RH >= 90% estimator needs hourly humidity through the night (Sentelhas et al. 2008). The sigmoid on daily mean relative humidity used by Alsafadi et al. (2024), after Alvares et al. (2015) in Brazil, needs its three coefficients fitted locally, and no Philippine fit is published. Luo and Goudriaan (2000), the only Philippine study of dew duration on rice, drove its model with nocturnal net radiation measured by a net radiometer. What this card reports instead is their measured drying time.' },
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' },
+  { id: 'AWD_NO_DRY_SEASON', text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
   { id: 'VEGETABLE_TEMPERATURES', text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
   { id: 'STRESS_NO_ACTION', text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
 ];
@@ -1303,7 +1305,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'ebfc6bef' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '4464e493' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1433,7 +1435,6 @@ CARDS.rice = function (root) {
     ['awd', { en: 'Safe AWD: you have an AWD tube (pani tube) and read it', fil: 'Safe AWD: may AWD tube (pani tube) sa bukid at binabasa mo ito' }],
     ['intermittent', { en: 'You let the field dry, with no AWD tube (pani tube)', fil: 'Hinahayaang matuyo ang bukid, walang AWD tube (pani tube)' }]
   ], prev.method || 'awd');
-  const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }]], prev.season || 'dry');
   const est = dateInput('est', { en: 'Date transplanted or sown', fil: 'Petsa ng lipat-tanim o sabog-tanim' }, prev.est, { prefilled: true });
   const flower = dateInput('flower', { en: 'Expected flowering date (if known)', fil: 'Inaasahang petsa ng pamumulaklak (kung alam)' }, prev.flower, { optional: true });
   const harvest = dateInput('harvest', { en: 'Expected harvest date (if known)', fil: 'Inaasahang petsa ng ani (kung alam)' }, prev.harvest, { optional: true });
@@ -1442,6 +1443,7 @@ CARDS.rice = function (root) {
   const pond = numInput('pond', { en: 'Water depth above the soil, cm (if flooded)', fil: 'Lalim ng tubig sa ibabaw ng lupa, cm (kung may tubig)' }, prev.pond, 1);
   const drop = numInput('drop', { en: 'How fast the water level drops, cm per day (if you have watched it)', fil: 'Gaano kabilis bumaba ang tubig, cm kada araw (kung napansin mo)' }, prev.drop, 0.5, { optional: true });
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
+  const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-araw sa lugar namin' }]], prev.season || 'dry');
   form.append(method.row, season.row, est.row, flower.row, harvest.row, soil.row, tube.row, pond.row, drop.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* The tube reading only means anything under safe AWD; the drop rate is read from the tube too. */
   const syncMethod = () => { const awd = method.input.value === 'awd'; tube.row.hidden = !awd; drop.row.hidden = !awd; };
@@ -1461,8 +1463,7 @@ CARDS.rice = function (root) {
       continuous: ['Continuous flooding, as the IRRI Rice Knowledge Bank describes it: "After transplanting, water levels should be around 3 cm initially" and "gradually increase to 5-10 cm (with increasing plant height) and remain there until the field is drained". Keep 5 cm "at all times from heading to the end of flowering", and drain "7-10 days before harvest".'],
       intermittent: ['Safe AWD is defined by the AWD tube (pani tube). IRRI\'s fact sheet sets the re-flood depth by what the tube shows, and gives no depth for a field without one, so this app reports none rather than estimating one. Drying an unmonitored field risks taking the water table below the roots without the farmer seeing it.', 'What still holds whatever you do: keep the field flooded to 5 cm from one week before to one week after flowering, drain before harvest, and postpone drying for 2 to 3 weeks while weeds are uncontrolled (IRRI).']
     }[inp.method];
-    const why = whyByMethod || ['Safe AWD: let the water fall no further than 15 cm below the soil surface in the AWD tube (pani tube), then flood back to about 5 cm above it. The water stays between those two marks. The 15 cm is IRRI\'s safe AWD depth and this card uses it in every season, because 15 cm is what "safe" AWD is defined by and re-flooding a little early is the smaller mistake.', 'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).', 'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).', 'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
-    if (!whyByMethod && inp.season === 'wet') why.push('You chose the wet season. DA Administrative Order 25-09 and the PhilRice observation well allow the water to fall to 20 cm below the surface in the wet season. This card still re-floods at 15 cm. If DA or your local agriculturist tells you 20 cm, follow them.');
+    const why = whyByMethod || ['DA Administrative Order 25-09 and the PhilRice observation well set the Philippine rule: re-flood when the AWD tube (pani tube) shows 15 cm of water below the soil surface in the dry season and 20 cm in the wet. This card re-floods at 15 cm in both seasons, which is IRRI safe AWD and the stricter of the two: following it never lets the field dry past the DA depth, though in the wet season it saves less water than DA intends. Flood back to about 5 cm above the surface. The water stays between those two marks.', 'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app.', 'IRRI safe AWD uses 15 cm in every season, not 20. Re-flooding earlier than the DA depth is always allowed and is the safer error on light soils with a deep water table.', 'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).', 'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).', 'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
     const flags = (r.flags || []).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);   // the Why text already carries this one in full
     const limits = ['Safe AWD assumes heavy soils with a shallow water table; on loamy and sandy soils with deep water tables, IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).', 'No percolation rate is assumed; the "days left" line appears only when you enter your own observed drop rate.'];
     if (r.targetCm && Array.isArray(r.targetCm)) lines.push([bi({ en: 'Target depth now', fil: 'Dapat na lalim ngayon' }), r.targetCm[0] === r.targetCm[1] ? r.targetCm[0] + ' cm' : r.targetCm[0] + ' to ' + r.targetCm[1] + ' cm']);
@@ -1879,8 +1880,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 339 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build ebfc6bef. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 340 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 4464e493. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -1969,7 +1970,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build ebfc6bef)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 4464e493)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -1981,7 +1982,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build ebfc6bef).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build ebfc6bef ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 4464e493).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 4464e493 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2028,7 +2029,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build ebfc6bef.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 4464e493.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

@@ -139,7 +139,7 @@ eq('Table 19 clay theta FC range', A.SOILS.clay.fc.join('-'), '0.32-0.4');
 eq('FAO TM4 efficiencies 60/75/90 encoded in UI (engine takes a number)', typeof A.irrigationDecision, 'function');
 
 console.log('\n== RICE AWD RULES (IRRI, DA AO 25-09, PhilRice) ==');
-eq('safe AWD trigger 15 cm, every season', A.AWD.triggerCm, 15); eq('DA AO 25-09 wet-season depth kept as a caveat only', A.AWD.triggerDaWetCm, 20);
+eq('DA AO 25-09 trigger, dry season 15 cm', A.AWD.triggerCm.dry, 15); eq('DA AO 25-09 trigger, wet season 20 cm', A.AWD.triggerCm.wet, 20);
 { const b = { Tmax: 33, Tmin: 24, RHmax: 90, RHmin: 55, u2: 2, lat: 15.5, elev: 40, J: 250, site: 'interior' };
   eq('sunshine within daylight raises no flag', A.eto(Object.assign({}, b, { n: 6 })).flags.length, 0);
   eq('sunshine above daylight is clamped and reported', A.eto(Object.assign({}, b, { n: 24 })).flags.indexOf('sunshine_clamped_0_N') >= 0, true);
@@ -162,8 +162,8 @@ eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 
 eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
 eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
 eq('reflood now at 16 cm dry season', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
-eq('reflood now at 16 cm in the wet season too', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'reflood_now');
-ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 11, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
+eq('not yet at 16 cm wet season', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16 }).code, 'not_yet');
+ok('days left at 1 cm/day drop', A.awdDecision({ daysAfterEstablish: 40, season: 'wet', tubeBelowSurfaceCm: 16, pondDropCmPerDay: 1 }).daysLeft, 4, 1e-9, 'd');
 eq('flowering window keeps 5 cm', A.awdDecision({ daysAfterEstablish: 60, daysToFlowering: 3, season: 'dry', pondedCm: 2 }).code, 'flowering_top_up_to_5cm');
 eq('before day 21: shallow water', A.awdDecision({ daysAfterEstablish: 10, season: 'dry', tubeBelowSurfaceCm: 16 }).code, 'before_awd_keep_shallow');
 eq('drain 14 days before harvest on clay', A.awdDecision({ daysAfterEstablish: 100, daysToHarvest: 12, soil: 'clay', season: 'wet' }).code, 'drain_stop_irrigating');
@@ -262,9 +262,9 @@ ok('daylight Bangkok 15 April (Ex17)', A.daylight(13.73, 105), 12.31, 0.01, 'h')
 console.log('\n== REFERENCES ==');
 { const used = new Set();
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
-  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST']
+  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the eight items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,VEGETABLE_TEMPERATURES,STRESS_NO_ACTION'); }
+  eq('UNVERIFIED list names the nine items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,STRESS_NO_ACTION'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
