@@ -208,7 +208,7 @@ console.log('\n-- the wet season carries two dates, DA and IRRI --');
   eq('the IRRI depth follows as a caveat', r.projections[1].which, 'irri');
   eq('IRRI safe AWD is 15 cm in every season', r.projections[1].triggerCm, 15);
   eq('and its date comes first', r.projections[1].days < r.projections[0].days, true);
-  eq('past a week the card gives no date', r.projections[0].beyondHorizon, true);
+  eq('past a week the date is flagged so the card can say what it rests on', r.projections[0].beyondHorizon, true);
   eq('the horizon is one week', A.PROJECT_HORIZON_DAYS, 7); }
 eq('in the dry season the two depths agree, so there is one date', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, levelPrevCm: -1, daysBetween: 2 }).projections.length, 1);
 

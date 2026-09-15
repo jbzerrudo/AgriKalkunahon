@@ -37,7 +37,7 @@ store.riceField.rates = Array.isArray(store.riceField.rates) ? store.riceField.r
 store.riceField.refloods = Array.isArray(store.riceField.refloods) ? store.riceField.refloods : [];
 const RICE_LOG_MAX = 60;
 /* The field's loss rate combined from past drawdowns, weighted by the square of each span. A pair n
-   days apart carries an error of sqrt(2)/n cm a day, so the weight is inverse variance: a five-day
+   days apart carries an error of sqrt(2)/n cm/day, so the weight is inverse variance: a five-day
    pair counts twenty-five times a one-day pair, which is exactly right. The spread is the plain
    standard deviation of the rates, because a new drawdown is judged against the whole scatter, not
    against the precision of the mean. It carries reading error and real seasonal change together. */
@@ -201,8 +201,8 @@ const CODES = {
   level_net_gain: 'The water is higher than at your earlier reading, so rain or irrigation came in between. Those two readings cannot give a daily loss, and the rain has re-set the drawdown. Today\'s reading still decides whether to irrigate. Start your next pair from today.',
   no_history_yet: 'The water rose instead of falling, and this field has no past readings to fall back on, so there is not enough information yet to say when it will dry. Read again on two days with no rain between them, at the same hour, and the card can date the next irrigation from then on.',
   sp_negative: 'The crop water use you entered is larger than the whole loss you measured, which cannot be. Either the two readings were not a clean drying spell, or the crop water use came from a different day or a different field. The split below is not usable.',
-  sp_above_published: 'This field is losing more through seepage and percolation than any of the four soil classes Bouman et al. (1994) measured at IRRI, where the highest band reaches 5 cm a day. Walk the bunds: seepage through ill-maintained bunds can be considerable, and it is the loss a farmer can actually stop.',
-  sp_between_bands: 'This field sits between the published bands, which run 0 to 0.5 cm a day where the plow sole is intact and 1 to 1.5 cm a day where the subsoil is what limits percolation (Bouman et al. 1994). Nothing is wrong with the reading; the bands simply do not meet.',
+  sp_above_published: 'This field is losing more through seepage and percolation than any of the four soil classes Bouman et al. (1994) measured at IRRI, where the highest band reaches 5 cm/day. Walk the bunds: seepage through ill-maintained bunds can be considerable, and it is the loss a farmer can actually stop.',
+  sp_between_bands: 'This field sits between the published bands, which run 0 to 0.5 cm/day where the plow sole is intact and 1 to 1.5 cm/day where the subsoil is what limits percolation (Bouman et al. 1994). Nothing is wrong with the reading; the bands simply do not meet.',
   sp_may_not_be_steady: 'At this rate the field behaves like Bouman et al.\'s class IIb, where percolation follows the depth of water standing on the field instead of holding steady. Two things follow. The date above is less dependable: their own fixed-rate book-keeping drifted 2 to 3 cm in this class. And there is something you can do, which they state plainly: in a field like this, losses fall considerably if the ponded water is kept low, close to zero. Check the bunds as well.',
   rice_kc_stage_unknown: 'No transplanting date, so the crop coefficient could not be taken from the growth stage and the mid-season value was used. That is the largest one rice reaches, so crop water use is at its highest here and the seepage-and-percolation remainder is at its lowest. Give the transplanting date and both become stage-specific.',
   reading_dates_out_of_order: 'The earlier reading is dated on or after the one you called today, so no span can be worked out and no loss rate is taken from the pair. Check the two dates.',
@@ -545,7 +545,7 @@ CARDS.rice = function (root) {
      arithmetic, and they anchor the answer on when the tube was actually read rather than on the
      moment the button was pressed. Read at seven, entered at nine at night, and the old card was
      already out; a reading entered two days late was two days wrong. Span is the whole game besides:
-     two readings a day apart give a rate of (fall +/- 1.4) cm a day, which dates nothing, while the
+     two readings a day apart give a rate of (fall +/- 1.4) cm/day, which dates nothing, while the
      same pair five days apart gives (fall/5 +/- 0.28). */
   const levelDate = dateInput('leveldate', { en: 'Date you took that reading', fil: 'Petsa ng pagbasa ngayon' }, prev.levelDate, { prefilled: true });
   const levelPrevDate = dateInput('levelprevdate', { en: 'Date of the earlier reading (the further back it is, the tighter the date below: wait until the water has fallen at least about 3 cm)', fil: 'Petsa ng naunang pagbasa (mas malayo ito, mas tiyak ang petsa sa ibaba: hintayin munang bumaba ang tubig nang hindi bababa sa mga 3 cm)' }, prev.levelPrevDate, { optional: true });
@@ -558,7 +558,7 @@ CARDS.rice = function (root) {
   /* One optional number splits the measured loss into its parts. The watering card already prints it
      for rice, so it is carried across rather than asked for again when it is recent. */
   const banked = (store.riceEtc && isFinite(store.riceEtc.mm) && (Date.now() - new Date(store.riceEtc.d + 'T00:00:00')) / 86400000 <= 7) ? store.riceEtc : null;
-  const etc = numInput('retc', { en: 'Crop water use, mm a day (only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead)', fil: 'Gamit na tubig ng pananim, mm kada araw (kung mayroon ka na nito mula sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas)' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
+  const etc = numInput('retc', { en: 'Crop water use, mm/day (only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead)', fil: 'Gamit na tubig ng pananim, mm kada araw (kung mayroon ka na nito mula sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas)' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
@@ -634,7 +634,7 @@ CARDS.rice = function (root) {
       const src = r.dropFrom === 'measured' ? ', from your two readings ' + fmt(r.fallCm, 1) + ' cm apart, ' + dmy(prevDate) + ' to ' + dmy(anchor) + ', ' + (r.daysBetween || 1) + (r.daysBetween === 1 ? ' day' : ' days') + ' apart'
                 : r.dropFrom === 'field_average' ? ', this field\'s usual rate, because these two readings cannot give one'
                 : ', the rate you entered';
-      lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm a day' + src]);
+      lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm/day' + src]);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
@@ -645,9 +645,19 @@ CARDS.rice = function (root) {
                 : { en: 'Irrigate on or before', fil: 'Magpatubig sa o bago ang' };
       const on = n => dmy(new Date(anchor.getTime() + n * dayMs));
       const due = anchor.getTime() + p.days * dayMs;
-      const val = p.beyondHorizon ? 'more than a week after your reading at this rate, so no date is given. Read again in a few days.'
-                : (due < Date.now() - dayMs ? 'already due: that date, ' + on(p.days) + ', has passed. Read the tube again now.'
-                   : on(p.days) + (p.lo != null ? ' (between ' + on(p.lo) + ' and ' + on(p.hi) + ', from the reading error)' : '') + ', if no rain falls');
+      /* A date is always given, even far out. Withholding it left the farmer with nothing; the honest
+         course is to print it and say what it rests on. Past a week that is a real assumption: the
+         rate measured on one pair of days is being treated as this field's mean daily loss. Where the
+         field has a history to lean on, the card says so instead, and says whether the two agree. */
+      let far = '';
+      if (p.beyondHorizon) {
+        far = F && F.n >= 2
+          ? '. That is more than a week out, so it leans on this field\'s own record: ' + F.n + ' measurements averaging ' + fmt(F.mean, 1) + ' cm/day, ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1)
+              + (r.dropFrom === 'measured' ? (Math.abs(r.dropCmPerDay - F.mean) <= (F.sd || 0) ? ', and today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits inside that' : ', while today\'s ' + fmt(r.dropCmPerDay, 1) + ' sits outside it, so treat the date as the rougher of the two') : '')
+          : '. That is more than a week out, and this field has no record yet, so the date assumes the ' + fmt(r.dropCmPerDay, 1) + ' cm/day you measured is your field\'s average water loss per day. Read again in a few days and it will tighten';
+      }
+      const val = due < Date.now() - dayMs ? 'already due: that date, ' + on(p.days) + ', has passed. Read the tube again now.'
+                : on(p.days) + (p.lo != null ? ' (between ' + on(p.lo) + ' and ' + on(p.hi) + ', from the reading error)' : '') + ', if no rain falls' + far;
       lines.push([bi(lab), val]);
     });
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm before the trigger']);
@@ -659,7 +669,7 @@ CARDS.rice = function (root) {
        field rather than of rice in general. */
     if (F) {
       lines.push([bi({ en: 'This field\'s usual loss', fil: 'Karaniwang pagbaba ng tubig sa bukid na ito' }),
-        fmt(F.mean, 1) + ' cm a day, from ' + F.n + (F.n === 1 ? ' measurement' : ' measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm a day' : '')]);
+        fmt(F.mean, 1) + ' cm/day, from ' + F.n + (F.n === 1 ? ' measurement' : ' measurements') + (F.n > 1 ? ' ranging ' + fmt(F.lo, 1) + ' to ' + fmt(F.hi, 1) + ' cm/day' : '')]);
     }
     /* The measured loss is crop water use plus seepage plus percolation. Give the watering card's
        crop water use and the remainder separates out, measured rather than modelled, and can be set
@@ -684,15 +694,15 @@ CARDS.rice = function (root) {
     if (r.dropCmPerDay != null && etcMm != null && etcMm >= 0) {
       const etcCm = etcMm / 10;
       sp = A.spClassify(r.dropCmPerDay - etcCm);
-      lines.push([bi({ en: 'Crop water use', fil: 'Gamit na tubig ng pananim' }), fmt(etcCm, 2) + ' cm a day (' + fmt(etcMm, 1) + ' mm), ' + etcNote]);
-      lines.push([bi({ en: 'Seepage and percolation', fil: 'Tagas at tagimtim (seepage at percolation)' }), fmt(sp.spCm, 2) + ' cm a day, what is left of your measured loss after crop water use']);
+      lines.push([bi({ en: 'Crop water use', fil: 'Gamit na tubig ng pananim' }), fmt(etcCm, 2) + ' cm/day (' + fmt(etcMm, 1) + ' mm), ' + etcNote]);
+      lines.push([bi({ en: 'Seepage and percolation', fil: 'Tagas at tagimtim (seepage at percolation)' }), fmt(sp.spCm, 2) + ' cm/day, what is left of your measured loss after crop water use']);
       const band = sp.classes.length
-        ? 'class ' + sp.classes.join(' or ') + ' (' + sp.match.map(c => c.what).join('; or ') + '), ' + sp.match.map(c => c.loCm + ' to ' + c.hiCm).join(' and ') + ' cm a day'
-        : sp.flags.indexOf('sp_above_published') >= 0 ? 'above every band they measured, the highest of which reaches ' + A.SP.highestPublishedCm + ' cm a day'
+        ? 'class ' + sp.classes.join(' or ') + ' (' + sp.match.map(c => c.what).join('; or ') + '), ' + sp.match.map(c => c.loCm + ' to ' + c.hiCm).join(' and ') + ' cm/day'
+        : sp.flags.indexOf('sp_above_published') >= 0 ? 'above every band they measured, the highest of which reaches ' + A.SP.highestPublishedCm + ' cm/day'
         : sp.flags.indexOf('sp_negative') >= 0 ? 'below zero, which cannot happen: one of the two figures is wrong'
-        : 'between their bands, which run 0 to 0.5 and then 1 to 1.5 cm a day';
+        : 'between their bands, which run 0 to 0.5 and then 1 to 1.5 cm/day';
       lines.push([bi({ en: 'Against Philippine paddies', fil: 'Kumpara sa palayan sa Pilipinas' }),
-        'Bouman et al. (1994), measured at IRRI: ' + band + (sp.flags.indexOf('sp_negative') >= 0 ? '' : '. Their own four field readings were ' + A.SP.fieldMeasuredCmPerDay.join(', ') + ' cm a day, the lowest with the plow sole intact and the highest after it was damaged') + '.']);
+        'Bouman et al. (1994), measured at IRRI: ' + band + (sp.flags.indexOf('sp_negative') >= 0 ? '' : '. Their own four field readings were ' + A.SP.fieldMeasuredCmPerDay.join(', ') + ' cm/day, the lowest with the plow sole intact and the highest after it was damaged') + '.']);
     }
     const iv = riceInterval();
     if (iv) lines.push([bi({ en: 'Usual gap between irrigations', fil: 'Karaniwang agwat ng pagpapatubig' }), fmt(iv.days, 0) + ' days, from ' + iv.n + ' re-floods since ' + iv.first]);
@@ -711,7 +721,7 @@ CARDS.rice = function (root) {
     const why = whyByMethod || ['DA Administrative Order 25-09 and the PhilRice observation well set the Philippine rule, and this card follows it: re-flood when the AWD tube (pani tube) shows 15 cm of water below the soil surface in the dry season and 20 cm in the wet. Flood back to about 5 cm above the surface. The water stays between those two marks. The card acts when the level reaches the trigger, not after it has passed it.',
       'One number describes the water, on one datum: the soil surface. A minus is centimetres below it, which is what the tube shows; 0 is level with the soil; a plus is water standing on top. At -16 cm in the dry season the card asks for 21 cm of water: 16 cm back up to the surface, then 5 cm above it.',
       'The date comes from your own two readings. The fall between them, divided by the days between them, is this field\'s loss: crop water use, percolation and seepage together, measured rather than modelled. This app assumes no percolation rate and no seepage rate, because no Philippine value it could cite exists for your field.',
-      'Leave several days between the two readings. A reading off a hand-marked tube is good to about a centimetre, so a one-day pair gives a rate with an error of about 1.4 cm a day, and the date it produces can be out by days. The same pair five days apart cuts that error to about 0.3 cm a day. Averaging daily readings does not help: the daily falls telescope to the first and last reading, so span is the only thing that buys precision.',
+      'Leave several days between the two readings. A reading off a hand-marked tube is good to about a centimetre, so a one-day pair gives a rate with an error of about 1.4 cm/day, and the date it produces can be out by days. The same pair five days apart cuts that error to about 0.3 cm/day. Averaging daily readings does not help: the daily falls telescope to the first and last reading, so span is the only thing that buys precision.',
       'The date assumes no rain and assumes the loss rate holds. It is a planning aid. The decision rule is still the reading itself: if the tube is at the trigger, irrigate, whatever date this card printed.',
       'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app.',
       'IRRI safe AWD uses 15 cm in every season, not 20. Re-flooding earlier than the DA depth is always allowed, and on light soils with a deep water table it is the safer error. In the wet season the card therefore gives two dates: the DA one at 20 cm, which is the policy, and the earlier IRRI one at 15 cm.',
