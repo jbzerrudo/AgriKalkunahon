@@ -50,7 +50,7 @@ const T = {
     saveReading: { en: 'Save this reading', fil: 'Itala ang pagbasa na ito' },
     saved: { en: 'Saved on this phone', fil: 'Naitala sa telepono na ito' },
     savedTitle: { en: 'Your saved suggestions', fil: 'Mga naitalang mungkahi para sa inyo' },
-    savedNone: { en: 'Nothing saved yet. Answer any card, then tap Save this reading.', fil: 'Wala pang naitala. Sagutan ang alinmang card, pagkatapos pindutin ang Itala ang pagbasa na ito.' },
+    savedNone: { en: 'Nothing saved yet. Use any card, then tap Save this reading.', fil: 'Wala pang naitala. Gamitin ang alinmang card, pagkatapos pindutin ang Itala ang pagbasa na ito.' },
     savedCount: { en: 'saved readings', fil: 'naitalang pagbasa' },
     csv: { en: 'Download as CSV', fil: 'I-download bilang CSV' },
     clearLog: { en: 'Delete all saved readings', fil: 'Burahin lahat ng naitala' },
