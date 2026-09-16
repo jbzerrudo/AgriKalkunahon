@@ -594,9 +594,9 @@ CARDS.rice = function (root) {
     ['awd', { en: 'Safe AWD: the field is dried and re-flooded in turn', fil: 'Safe AWD: pinatutuyo at pinatutubigan nang salitan' }]
   ], prev.method === 'continuous' ? 'continuous' : 'awd');
   const instrument = selectInput('rinstr', { en: 'What do you use to read the water in the field?', fil: 'Ano ang ginagamit ninyo upang basáhin ang tubig sa bukid?' }, [
-    ['tube', { en: 'An AWD tube (pani tube)', fil: 'AWD tube (pani tube)' }],
+    ['tube', { en: 'An AWD tube (pani tube)', fil: 'AWD tube (pani tube)' }],   // relabelled for continuous flooding in syncMethod
     ['tensiometer', { en: 'A tensiometer', fil: 'Tensiometer' }],
-    ['both', { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }],
+    ['both', { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }],   // likewise
     ['none', { en: 'Neither, I go by what I see', fil: 'Wala, tinitingnan ko lang' }]
   ], prev.instrument || 'tube');
   const bothMode = selectInput('rboth', { en: 'You have both. Which should the card follow?', fil: 'Mayroon kayong pareho. Alin ang susundin ng card?' }, [
@@ -687,6 +687,17 @@ CARDS.rice = function (root) {
     const hasTens = ins === 'tensiometer' || (bothSel && mode === 'tensiometer');
     const hasTube = ins === 'tube' || (bothSel && mode === 'tube');
     instrument.row.hidden = false;
+    /* Under continuous flooding the water stands above the soil and is read off a stick or ruler
+       against the bund. A pani tube would work, since the level inside matches the level outside, but
+       it is not what anyone uses and it is the wrong thing to ask a farmer whether they own. The
+       reading and the rule are identical either way; only the name of the instrument changes. */
+    const INSTR = cont
+      ? [{ en: 'A stick or ruler', fil: 'Patpat o ruler' }, { en: 'Both a ruler and a tensiometer', fil: 'Parehong ruler at tensiometer' }]
+      : [{ en: 'An AWD tube (pani tube)', fil: 'AWD tube (pani tube)' }, { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }];
+    [0, 2].forEach((oi, k) => { const op = instrument.input.options[oi]; const L = t(INSTR[k]); op.textContent = L.en + ' / ' + L.fil; });
+    { const L = t(cont ? { en: 'The ruler, which is the IRRI target depth', fil: 'Ang ruler, na siyang target na lalim ng IRRI' }
+                       : { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' });
+      bothMode.input.options[1].textContent = L.en + ' / ' + L.fil; }
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
     bothMode.row.hidden = !bothSel;
