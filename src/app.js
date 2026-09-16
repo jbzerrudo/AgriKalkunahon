@@ -602,7 +602,7 @@ CARDS.rice = function (root) {
   const bothMode = selectInput('rboth', { en: 'You have both. Which should the card follow?', fil: 'Mayroon kayong pareho. Alin ang susundin ng card?' }, [
     ['tensiometer', { en: 'The tensiometer, which reads what the roots feel', fil: 'Ang tensiometer, na nagbabása ng nararamdaman ng ugat' }],
     ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }],
-    ['validate', { en: 'Both, and tell me whether they agree', fil: 'Pareho, at sabihin kung magkatugma sila' }]
+    ['validate', { en: 'Both: the tensiometer decides, the tube still gives the date, and tell me if they disagree', fil: 'Pareho: ang tensiometer ang magpapasya, ang tube ang magbibigay ng petsa, at sabihin kung hindi sila magkatugma' }]
   ], prev.bothMode || 'tensiometer');
   const tens = numInput('rtens', { en: 'Tensiometer reading now, centibars. Install it in the root zone, at about the depth the AWD tube watches.', fil: 'Pagbasa ng tensiometer ngayon, centibars. Ilagay ito sa lalim ng ugat, mga kasinglalim ng binabantayan ng AWD tube.' }, prev.tens, 1);
   tens.input.min = 0;
@@ -654,7 +654,7 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, method.row, instrument.row, surface.row, tens.row, bothMode.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, instrument.row, bothMode.row, surface.row, tens.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -680,11 +680,17 @@ CARDS.rice = function (root) {
      threshold to project a date to, so the card does not ask for a second reading at all. */
   const syncMethod = () => {
     const m = method.input.value, awd = m === 'awd', cont = m === 'continuous';
-    const ins = instrument.input.value, hasTube = ins === 'tube' || ins === 'both', hasTens = ins === 'tensiometer' || ins === 'both', bare = ins === 'none';
+    /* With both instruments to hand, the arbitration choice also settles which readings the card
+       needs. Asking for a tube reading it has been told to ignore is clutter, and worse, it invites
+       the farmer to walk out and take a measurement that will not be used. */
+    const ins = instrument.input.value, bothSel = ins === 'both', bare = ins === 'none';
+    const mode = bothMode.input.value;
+    const hasTens = ins === 'tensiometer' || (bothSel && (mode === 'tensiometer' || mode === 'validate'));
+    const hasTube = ins === 'tube' || (bothSel && (mode === 'tube' || mode === 'validate'));
     instrument.row.hidden = false;
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
-    bothMode.row.hidden = ins !== 'both';
+    bothMode.row.hidden = !bothSel;
     season.row.hidden = !awd || bare;   // with no reading there is no trigger depth to choose between
     soil.row.hidden = cont;
     weeds.row.hidden = cont;
@@ -712,6 +718,7 @@ CARDS.rice = function (root) {
   plot.addEventListener('change', loadPlot);
   method.input.addEventListener('change', syncMethod);
   instrument.input.addEventListener('change', syncMethod);
+  bothMode.input.addEventListener('change', syncMethod);
   syncMethod();
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {

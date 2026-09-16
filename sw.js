@@ -2,7 +2,7 @@
    VERSION is rewritten by build.js from a hash of the sources, so every build gets a new cache name.
    Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/AgriKalkunahon)
    PolyForm Noncommercial License 1.0.0 */
-const VERSION = 'agrikalkunahon-143b850e';
+const VERSION = 'agrikalkunahon-3b8d3bc6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
