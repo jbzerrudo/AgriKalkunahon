@@ -164,6 +164,10 @@ const T = {
     before_awd_keep_shallow: { en: 'Too early for AWD. Keep 2 to 3 cm of water.', fil: 'Maaga pa para sa AWD. Panatilihin ang 2 hanggang 3 cm na tubig.' },
     drain_stop_irrigating: { en: 'Stop irrigating and let the field drain before harvest.', fil: 'Ihinto na ang pagpapatubig at patuyuin ang bukid bago mag-ani.' },
     need_tube_reading: { en: 'Read the AWD tube (pani tube) first.', fil: 'Basáhin muna ang AWD tube (pani tube).' },
+    not_yet_tens: { en: 'Not yet. Re-flood when the tensiometer reads {cb} centibars.', fil: 'Hindi pa. Magpatubig kapag {cb} centibars na ang tensiometer.' },
+    surface_dry_irrigate: { en: 'The water has gone. Irrigate now.', fil: 'Wala na ang tubig. Magpatubig na ngayon.' },
+    surface_wet_wait: { en: 'There is still water. Look again tomorrow.', fil: 'May tubig pa. Tingnan uli bukas.' },
+    need_surface_check: { en: 'Go and look at the field: has the water gone?', fil: 'Tingnan ninyo ang bukid: wala na ba ang tubig?' },
     good: { en: 'Good conditions to spray now.', fil: 'Maganda ang kondisyon para mag-spray ngayon.' },
     caution: { en: 'Spray with caution.', fil: 'Mag-ingat kung mag-i-spray.' },
     do_not_spray: { en: 'Do not spray now.', fil: 'Huwag mag-spray ngayon.' },
@@ -224,6 +228,9 @@ const CODES = {
   sp_between_bands: 'This field sits between the published bands, which run 0 to 0.5 cm/day where the plow sole is intact and 1 to 1.5 cm/day where the subsoil is what limits percolation (Bouman et al. 1994). Nothing is wrong with the reading; the bands simply do not meet.',
   sp_may_not_be_steady: 'At this rate the field behaves like Bouman et al.\'s class IIb, where percolation follows the depth of water standing on the field instead of holding steady. Two things follow. The date above is less dependable: their own fixed-rate book-keeping drifted 2 to 3 cm in this class. And there is something you can do, which they state plainly: in a field like this, losses fall considerably if the ponded water is kept low, close to zero. Check the bunds as well.',
   rice_kc_stage_unknown: 'No transplanting date, so the crop coefficient could not be taken from the growth stage and the mid-season value was used. That is the largest one rice reaches, so crop water use is at its highest here and the seepage-and-percolation remainder is at its lowest. Give the transplanting date and both become stage-specific.',
+  no_instrument: 'Without a tube or a tensiometer this card cannot read your field, so the answer above rests on what you saw. A dry surface tells you the water has gone from the top and nothing about how far it has fallen underneath, so irrigating now is the safe call but an early one, and the water saving that makes AWD worth doing is given up. A tube is 30 cm of plastic pipe or bamboo and an hour of work, and it turns this card from a yes-or-no into a date.',
+  tensiometer_out_of_range: 'The tensiometer reads above 80 centibars. The water column inside breaks somewhere around 80 to 85, so past that the instrument has stopped reporting the soil and is reporting its own limit. Treat the field as needing water, re-set the instrument after you irrigate, and do not read anything into how far above 80 it went.',
+  tensiometer_negative: 'A tensiometer reading below zero is not possible. Check the gauge and the reading.',
   reading_dates_out_of_order: 'The earlier reading is dated on or after the one you called today, so no span can be worked out and no loss rate is taken from the pair. Check the two dates.',
   earlier_reading_date_missing: 'You gave an earlier reading but no date for it, so the card cannot tell how far apart the two are and will not guess. Put the date in and the loss rate and the irrigation date follow.',
   reading_date_in_future: 'The reading is dated in the future. Every date below is counted forward from it, so they will all be wrong by the same amount.',
@@ -577,11 +584,26 @@ CARDS.rice = function (root) {
   const syncPlotList = () => { plotList.innerHTML = ''; ricePlotNames().forEach(n => plotList.appendChild(el('option', { value: n }))); };
   syncPlotList();
   const plotRow = el('label', { class: 'row' }, bi({ en: 'Which paddy is this? Leave it blank if you work only one. Each paddy keeps its own readings, its own usual water loss and its own irrigation interval. Examples: Lupang Itaas for an upland paddy, Tabing Ilog for one beside a river.', fil: 'Aling palayan ito? Iwanang blangko kung isa lang ang inyong palayan. Bawat palayan ay may sariling talaan ng pagbása: paraan ng pagbaba ng tubig, at agwat ng pagpapatubig. Halimbawa: Lupang Itaas para sa palayang nasa mataas na lupa, Tabing Ilog para sa katabi ng ilog.' }), optTag({ optional: true }), plot, plotList);
+  /* Two questions, not one. What you are doing is a management choice; what you have to read the
+     field with is a fact about your equipment. Mixing them put "no tube" in the menu as if it were a
+     third method, and choosing it got you a refusal. */
   const method = selectInput('rmethod', { en: 'How you manage the water', fil: 'Paraan ng pamamahala ng tubig' }, [
     ['continuous', { en: 'Continuous flooding: the field is kept flooded', fil: 'Laging nakababad ang bukid' }],
-    ['awd', { en: 'Safe AWD: you have an AWD tube (pani tube) and read it', fil: 'Safe AWD: may AWD tube (pani tube) sa bukid at binabása mo ito' }],
-    ['intermittent', { en: 'You let the field dry, with no AWD tube (pani tube)', fil: 'Hinahayaang matuyo ang bukid, walang AWD tube (pani tube)' }]
-  ], prev.method || 'awd');
+    ['awd', { en: 'Safe AWD: the field is dried and re-flooded in turn', fil: 'Safe AWD: pinatutuyo at pinatutubigan nang salitan' }]
+  ], prev.method === 'continuous' ? 'continuous' : 'awd');
+  const instrument = selectInput('rinstr', { en: 'What do you use to read the water in the field?', fil: 'Ano ang ginagamit ninyo upang basáhin ang tubig sa bukid?' }, [
+    ['tube', { en: 'An AWD tube (pani tube)', fil: 'AWD tube (pani tube)' }],
+    ['tensiometer', { en: 'A tensiometer', fil: 'Tensiometer' }],
+    ['both', { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }],
+    ['none', { en: 'Neither, I go by what I see', fil: 'Wala, tinitingnan ko lang' }]
+  ], prev.instrument || 'tube');
+  const tens = numInput('rtens', { en: 'Tensiometer reading now, centibars. Install it in the root zone, at about the depth the AWD tube watches.', fil: 'Pagbasa ng tensiometer ngayon, centibars. Ilagay ito sa lalim ng ugat, mga kasinglalim ng binabantayan ng AWD tube.' }, prev.tens, 1);
+  tens.input.min = 0;
+  const surface = selectInput('rsurf', { en: 'Has the water gone from the field?', fil: 'Wala na ba ang tubig sa bukid?' }, [
+    ['unknown', { en: 'I have not looked today', fil: 'Hindi pa ako tumingin ngayon' }],
+    ['yes', { en: 'Yes, the surface is dry', fil: 'Oo, tuyo na ang ibabaw' }],
+    ['no', { en: 'No, there is still water', fil: 'Hindi, may tubig pa' }]
+  ], prev.surface || 'unknown');
   const est = dateInput('est', { en: 'Date transplanted or sown', fil: 'Petsa ng lipat-tanim o sabog-tanim' }, prev.est, { optional: true });
   const EST_LABEL = {
     awd:  { en: 'Date transplanted or sown (to check whether it is time to start AWD)', fil: 'Petsa ng lipat-tanim o sabog-tanim (upang malaman kung panahon nang simulan ang AWD)' },
@@ -625,7 +647,7 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, instrument.row, surface.row, tens.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -651,15 +673,21 @@ CARDS.rice = function (root) {
      threshold to project a date to, so the card does not ask for a second reading at all. */
   const syncMethod = () => {
     const m = method.input.value, awd = m === 'awd', cont = m === 'continuous';
-    season.row.hidden = !awd;
+    const ins = instrument.input.value, hasTube = ins === 'tube' || ins === 'both', hasTens = ins === 'tensiometer' || ins === 'both', bare = ins === 'none';
+    instrument.row.hidden = false;
+    surface.row.hidden = !bare;
+    tens.row.hidden = !hasTens;
+    season.row.hidden = !awd || bare;   // with no reading there is no trigger depth to choose between
     soil.row.hidden = cont;
     weeds.row.hidden = cont;
     levelPrev.row.hidden = !(awd || cont);
-    levelDate.row.hidden = !(awd || cont);
-    levelPrevDate.row.hidden = !(awd || cont);
-    tmax.row.hidden = !(awd || cont); tmin.row.hidden = !(awd || cont);
-    etc.row.hidden = !(awd || cont);
-    level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : cont ? LEVEL_LABEL.cont : LEVEL_LABEL.int), level.row.firstChild);
+    levelDate.row.hidden = !hasTube;
+    levelPrevDate.row.hidden = !hasTube;
+    tmax.row.hidden = !hasTube; tmin.row.hidden = !hasTube;
+    etc.row.hidden = !hasTube;
+    level.row.hidden = !hasTube;
+    levelPrev.row.hidden = !hasTube;
+    level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : LEVEL_LABEL.cont), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
   };
   const loadPlot = () => {
@@ -674,10 +702,12 @@ CARDS.rice = function (root) {
     syncMethod(); syncForget();
   };
   plot.addEventListener('change', loadPlot);
-  method.input.addEventListener('change', syncMethod); syncMethod();
+  method.input.addEventListener('change', syncMethod);
+  instrument.input.addEventListener('change', syncMethod);
+  syncMethod();
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
-    const inp = { plot: plot.value, method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
+    const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value, tens: num(tens.input), surface: surface.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
                   soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
@@ -700,7 +730,9 @@ CARDS.rice = function (root) {
     const levelCm = inp.level == null ? null : (inp.level || 0), levelPrevCm = inp.levelPrev == null ? null : (inp.levelPrev || 0);
     const F = riceFieldStats(inp.plot);
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
-      season: inp.season, levelCm: levelCm, levelPrevCm: span != null ? levelPrevCm : null, daysBetween: span,
+      season: inp.season, instrument: inp.instrument, tensiometerCb: inp.tens,
+      surfaceDry: inp.surface === 'yes' ? true : (inp.surface === 'no' ? false : null),
+      levelCm: levelCm, levelPrevCm: span != null ? levelPrevCm : null, daysBetween: span,
       fieldDropCmPerDay: F ? F.mean : null, fieldDropSigma: F ? F.sd : null, weedsManaged: inp.weeds, soil: inp.soil });
     /* The field only learns from a drawdown it actually measured. A rate carried over from its own
        history is not a new observation and must not be fed back in. */
@@ -729,6 +761,12 @@ CARDS.rice = function (root) {
         dmy(dayFrom(r.startsInDays)) + ', ' + r.startDays[0] + ' to ' + r.startDays[1] + ' days after transplanting (PhilRice). Until then keep ' + r.depthCm[0] + ' to ' + r.depthCm[1] + ' cm of water, whatever the tube shows.']);
       if (r.levelCm != null) lines.push([bi({ en: 'Your reading', fil: 'Ang pagbása ninyo' }),
         (r.levelCm === 0 ? 'level with the soil surface' : fmt(Math.abs(r.levelCm), 1) + ' cm ' + (r.levelCm < 0 ? 'below the soil surface' : 'above the soil')) + ', recorded but not acted on yet']);
+    }
+    if (r.cb != null) {
+      lines.push([bi({ en: 'Tensiometer', fil: 'Tensiometer' }), fmt(r.cb, 0) + ' centibars'
+        + (r.triggerCb != null ? ', and the trigger is ' + r.triggerCb + ' cb' + (r.remainingCb != null ? ', so ' + fmt(r.remainingCb, 0) + ' cb still to go' : ', which you have reached') : '')
+        + (r.saturatedCb != null ? ', and saturated soil reads 0 to ' + r.saturatedCb + ' cb' : '')]);
+      lines.push([bi({ en: 'Decided by', fil: 'Batay sa' }), 'the tensiometer, not the tube. Carrijo et al. (2017) draw the same line at -20 kPa that DA Administrative Order 25-09 draws at 15 cm, and the tensiometer reads what the roots feel.']);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
@@ -839,14 +877,25 @@ CARDS.rice = function (root) {
       'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).',
       'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).',
       'Stop irrigating one week before harvest on light soils and two weeks on clay (PhilRice PalayCheck).'];
+    /* What this way of managing water costs and buys, both sides, from meta-analyses rather than
+       from advocacy. Keyed to what the farmer is actually doing, including having no instrument. */
+    const ev = A.METHOD_EVIDENCE[inp.instrument === 'none' ? 'none' : (inp.method === 'continuous' ? 'continuous' : 'awd')];
+    if (ev) {
+      why.push(inp.instrument === 'none' ? 'Going by the look of the field, what that buys you:'
+        : (inp.method === 'continuous' ? 'What continuous flooding buys you:' : 'What safe AWD buys you:'));
+      ev.pros.forEach(p => why.push(p));
+      why.push('And what it costs:');
+      ev.cons.forEach(c => why.push(c));
+    }
     const flags = (r.flags || []).concat(sp ? sp.flags : []).concat(dateFlags).concat(etoFlags).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);
-    const limits = ['Safe AWD assumes heavy soils with a shallow water table; on loamy and sandy soils with deep water tables, IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).',
+    const limits = ['Done as this card instructs, safe AWD does not significantly cost yield. Carrijo, Lundy and Linquist (2017), pooling 56 studies and 528 comparisons, found no significant yield reduction under mild AWD, which they define as a field water level no lower than 15 cm or a soil water potential at or above -20 kPa, and a 23.4% cut in water use. The 22.6% yield loss they report belongs to severe AWD, past that line. The threshold is the whole method.',
+      'The risk is worse on some soils. Yield losses under AWD are larger on alkaline soils, pH 7 and above, and on soils under 1% carbon (Carrijo et al. 2017), and on loamy and sandy soils with deep water tables IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).',
       'No percolation or seepage rate is assumed. Every loss figure here was measured in your field, not modelled, and none appears until you have given two readings or the field has a history. The published rates of Bouman et al. (1994) are used only to say which band your own measurement falls in.',
       'Those published rates were measured on ponded fields at IRRI. Once the water is below the soil surface, where it sits through most of an AWD cycle, their relation between percolation and ponded depth no longer applies directly, and this app does not carry it there.',
       'Splitting the loss needs the crop water use figure from the watering card, which is FAO-56 with the paddy rice crop coefficient. Those coefficients are derived for flooded paddy, so under AWD with no standing water the split is less certain than the total loss, which is measured.',
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
-    show(out, result({ level: level2, verdict: t(T.verdicts[r.code], { trig: r.triggerCm, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
+    show(out, result({ level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
       assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot, and both readings are taken at the same place.',
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',

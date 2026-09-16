@@ -371,6 +371,88 @@ const AWD = {
   tube: { lengthCm: 30, diameterCm: [10, 15], aboveSoilCm: 15 },
   weedPostponeWeeks: [2, 3]
 };
+/* TENSIOMETER  [CARRIJO2017, IRROMETER]. A tensiometer reads how hard the soil holds its water, in
+   centibars, which is the same quantity as soil water potential with the sign dropped: 20 cb is
+   -20 kPa. Carrijo, Lundy and Linquist (2017) put that figure and the AWD tube depth side by side as
+   two ways of drawing the same line. Their meta-analysis of 56 studies separates mild AWD, at soil
+   water potential at or above -20 kPa OR a field water level no lower than 15 cm, from severe AWD
+   below it. Mild AWD did not significantly reduce yield and cut water use by 23.4 per cent; severe
+   AWD cost 22.6 per cent of yield. So 20 cb is the same boundary the card already enforces at 15 cm,
+   expressed in the units of a different instrument.
+
+   What a tensiometer cannot do is give a date. Turning a tension into a future water level needs the
+   soil's water retention curve, which this app does not have and will not assume, so the tensiometer
+   answers now or not now and the tube, if the farmer also has one, still supplies the date.
+
+   Two limits are carried as flags rather than silently handled. A tensiometer stops reading truthfully
+   somewhere around 80 to 85 cb, where the water column breaks; above that the instrument is out of
+   range, not the field dry. And the depth at which the instrument sits changes what the reading means,
+   which is declared in UNVERIFIED rather than assumed away. */
+/* WHAT EACH METHOD COSTS AND BUYS  [CARRIJO2017, LI2024, BOUMAN2007, IRRI_AWD]. Both sides, from
+   meta-analyses rather than from advocacy. The two headline numbers disagree in sign and that is not
+   a conflict: Carrijo's -5.4 per cent pools mild and severe AWD together, Li's +1.52 per cent covers a
+   different set, and both find the yield penalty appears only once the drying passes the threshold. */
+const METHOD_EVIDENCE = {
+  awd: {
+    pros: [
+      'Water use falls about 23 per cent against continuous flooding, with no significant yield loss, provided the drying stays mild, which is what the 15 cm rule enforces (Carrijo et al. 2017, 56 studies).',
+      'Methane emissions fall about 43 per cent and the net global warming potential about 37 per cent (Li et al. 2024, 72 studies).',
+      'Fewer irrigations means less pumping, and the field tells you when it needs water instead of the calendar.'
+    ],
+    cons: [
+      'Let the field dry past the threshold and it costs about 23 per cent of yield (Carrijo et al. 2017). The whole method depends on not overshooting, which is why it needs an instrument.',
+      'Nitrous oxide emissions rise about 43 per cent. Methane still dominates, so the net warming effect falls, but the trade is real (Li et al. 2024).',
+      'The yield penalty is worse on alkaline soils, pH 7 and above, and on soils under 1 per cent carbon (Carrijo et al. 2017).',
+      'On loamy and sandy soils with a deep water table, IRRI reports water savings above 50 per cent but yield losses above 20 per cent (Bouman et al. 2007).'
+    ],
+    sources: ['CARRIJO2017', 'LI2024', 'BOUMAN2007', 'IRRI_AWD', 'DA_AO25']
+  },
+  continuous: {
+    pros: [
+      'Simplest to manage: keep the water between the target depths and there is no threshold to overshoot.',
+      'No yield risk from drying, because the field never dries.',
+      'Standing water suppresses weeds, which is why AWD is postponed while weeds are uncontrolled (IRRI).'
+    ],
+    cons: [
+      'Uses about 23 per cent more water than mild AWD for no yield gain (Carrijo et al. 2017).',
+      'Methane emissions are roughly 43 per cent higher than under AWD, and rice paddies are a major source (Li et al. 2024).',
+      'On a leaky field the losses are large and continuous: Bouman et al. (1994) measured seepage and percolation up to 5 cm a day and more at IRRI where the plow sole had broken up.'
+    ],
+    sources: ['IRRI_AWD', 'CARRIJO2017', 'LI2024', 'BOUMAN1994']
+  },
+  none: {
+    pros: [
+      'Costs nothing and needs no equipment.'
+    ],
+    cons: [
+      'Drying an unmonitored field is not safe AWD. Without a reading you cannot tell a field 5 cm below the surface, which is fine, from one 30 cm below, which is past the point where yield starts to go (Carrijo et al. 2017).',
+      'Irrigating when the surface looks dry is the safe error, but it is early, and it gives up the water saving that makes AWD worth doing.',
+      'A tube is 30 cm of plastic pipe or bamboo and an hour of work (IRRI).'
+    ],
+    sources: ['IRRI_AWD', 'CARRIJO2017']
+  }
+};
+const TENSIOMETER = {
+  awdTriggerCb: 20,            // Carrijo et al. 2017: the mild/severe AWD boundary, -20 kPa, equal to their 15 cm water level
+  saturatedCb: 10,            // IRROMETER standard bands: 0 to 10 cb is saturated soil
+  outOfRangeCb: 80,           // the water column breaks around 80 to 85 cb; above this the instrument, not the field, is the limit
+  severeBelowKPa: -20         // the same number as a potential, for the text
+};
+/* Under safe AWD the tensiometer replaces the tube as the trigger. Under continuous flooding it
+   answers a different question, which is whether the field is still saturated at all. */
+function tensiometerDecision(cb, method) {
+  if (!isNum(cb)) return null;
+  const flags = [], T = TENSIOMETER;
+  if (cb < 0) flags.push('tensiometer_negative');
+  if (cb >= T.outOfRangeCb) flags.push('tensiometer_out_of_range');
+  if (method === 'continuous') {
+    return { code: cb > T.saturatedCb ? 'cf_top_up' : 'cf_ok', cb: cb, saturatedCb: T.saturatedCb,
+             flags: flags, from: 'tensiometer', sources: ['IRROMETER'] };
+  }
+  return { code: cb >= T.awdTriggerCb ? 'reflood_now' : 'not_yet', cb: cb, triggerCb: T.awdTriggerCb,
+           remainingCb: cb < T.awdTriggerCb ? T.awdTriggerCb - cb : null,
+           flags: flags, from: 'tensiometer', sources: ['CARRIJO2017'] };
+}
 /* THE MEASUREMENT. One number describes the water in a rice field, on one datum: the soil surface.
    Negative is centimetres below it (what the AWD tube shows), 0 is level with it, positive is water
    standing above it. Every rule in this section is a comparison against that one number, so the sign
@@ -495,7 +577,14 @@ function continuousFloodDecision(inp) {
   const L = lossRate(inp);
   const base = { targetCm: target, dropCmPerDay: L.drop, dropFrom: L.dropFrom, dropSigma: L.sigma,
                  daysBetween: L.days, fallCm: L.fallCm, gainCm: L.gainCm, flags: L.flags.slice(), sources: src };
-  if (!isNum(inp.levelCm)) return Object.assign({ code: 'cf_need_depth' }, base);
+  /* Under continuous flooding a tensiometer answers a different question. The field is meant to be
+     saturated, so any reading out of the 0 to 10 cb saturated band means the ponded water is gone. */
+  const tensC = tensiometerDecision(inp.tensiometerCb, 'continuous');
+  if (tensC) return Object.assign({}, base, { code: tensC.code, decidedBy: 'tensiometer', cb: tensC.cb,
+    saturatedCb: tensC.saturatedCb, levelCm: inp.levelCm,
+    shortCm: isNum(inp.levelCm) && inp.levelCm < target[0] ? target[0] - inp.levelCm : null,
+    flags: base.flags.concat(tensC.flags), sources: src.concat(['IRROMETER']) });
+  if (!isNum(inp.levelCm)) return Object.assign({ code: 'cf_need_depth', decidedBy: 'stick' }, base);
   if (inp.levelCm < target[0]) return Object.assign({ code: 'cf_top_up', shortCm: target[0] - inp.levelCm }, base);
   if (inp.levelCm > target[1] + 5) return Object.assign({ code: 'cf_too_deep' }, base);
   const p = project(inp.levelCm, target[0], L.drop, L.sigma);
@@ -519,10 +608,38 @@ function intermittentDecision(inp) {
   if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, flags: flags, tube: AWD.tube, sources: src };
   return { code: 'intermittent_no_threshold', flags: flags, tube: AWD.tube, sources: src };   // no triggerCm: there is none to give
 }
+/* NO INSTRUMENT  [IRRI_AWD, CARRIJO2017]. The card cannot read the field, so the farmer does. Whether
+   the water has gone from the surface is an observation, not an estimate, and putting water on a field
+   that has dried out needs no published depth. This is the conservative answer: a dry surface says
+   nothing about how far the water table has fallen underneath, so it irrigates earlier than a tube
+   would and gives up the water saving that makes AWD worth doing. The card says that rather than
+   pretending the answer is as good as a measured one. */
+function noInstrumentDecision(inp) {
+  const src = ['IRRI_AWD', 'CARRIJO2017'], flags = ['no_instrument'];
+  const cont = inp.method === 'continuous';
+  const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
+  if (inp.weedsManaged === false && !cont) flags.push('postpone_awd_weeds');
+  if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= (cont ? AWD.continuous.drainBeforeHarvestDays[1] : drainDays))
+    return { code: 'drain_stop_irrigating', drainDays: cont ? AWD.continuous.drainBeforeHarvestDays : drainDays, flags: flags, tube: AWD.tube, sources: src };
+  if (isNum(inp.daysToFlowering) && Math.abs(inp.daysToFlowering) <= AWD.floweringWindowDays)
+    return { code: 'flowering_top_up_to_5cm', targetCm: AWD.floweringFloodCm, flags: flags, tube: AWD.tube, sources: src };
+  if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0] && !cont)
+    return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, startDays: AWD.startDays,
+             startsInDays: AWD.startDays[0] - inp.daysAfterEstablish, flags: flags, tube: AWD.tube, sources: src };
+  const target = cont ? (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]
+    ? [AWD.continuous.afterTransplantCm, AWD.continuous.afterTransplantCm] : AWD.continuous.laterCm) : null;
+  if (inp.surfaceDry === true) return { code: 'surface_dry_irrigate', refloodCm: AWD.refloodCm, targetCm: target, flags: flags, tube: AWD.tube, sources: src };
+  if (inp.surfaceDry === false) return { code: 'surface_wet_wait', refloodCm: AWD.refloodCm, targetCm: target, flags: flags, tube: AWD.tube, sources: src };
+  return { code: 'need_surface_check', flags: flags, tube: AWD.tube, sources: src };
+}
 /* Dispatch on the farmer's chosen method. */
 function riceWaterDecision(inp) {
+  /* The instrument decides which rule can be applied at all, so it is checked before the method.
+     Without one there is no reading, and the card asks the farmer for the one observation they can
+     make themselves rather than offering a method whose answer is a refusal. */
+  if (inp.instrument === 'none') return noInstrumentDecision(inp);
   if (inp.method === 'continuous') return continuousFloodDecision(inp);
-  if (inp.method === 'intermittent') return intermittentDecision(inp);
+  if (inp.method === 'intermittent') return intermittentDecision(inp);   // kept for older saved inputs
   return awdDecision(inp);
 }
 /* inp: {daysAfterEstablish, daysToFlowering (negative after), daysToHarvest, season:'wet'|'dry'|'nodry',
@@ -537,10 +654,9 @@ function awdDecision(inp) {
     const ok = isNum(inp.levelCm) && inp.levelCm >= AWD.floweringFloodCm;
     return { code: ok ? 'flowering_keep_flooded' : 'flowering_top_up_to_5cm', targetCm: AWD.floweringFloodCm, sources: src };
   }
-  /* AWD does not begin until 21 to 30 days after establishment, and that rule outranks the tube. It
-     used to return here with nothing else, so one tap on the date field made the card answer "keep 2
-     to 3 cm" forever and appear broken. The rule stands; what it returns now also carries the reading,
-     the loss rate and the day AWD may start, so the farmer can see why. */
+  /* AWD does not begin until 21 to 30 days after establishment, and that rule outranks every
+     instrument. It used to return here with nothing else, so one tap on the date field made the card
+     answer "keep 2 to 3 cm" forever and appear broken. */
   if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) {
     const L0 = lossRate(inp);
     return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, startDays: AWD.startDays,
@@ -549,29 +665,43 @@ function awdDecision(inp) {
              daysBetween: L0.days, fallCm: L0.fallCm, gainCm: L0.gainCm, flags: L0.flags.slice(), sources: src };
   }
   const L = lossRate(inp), flags = L.flags.slice();
-  /* Without the date the start window cannot be checked, so the tube drives the answer and the rule is
-     stated as a flag instead. The app must not act on a date it filled in itself. */
   if (!isNum(inp.daysAfterEstablish)) flags.push('awd_start_window_unknown');
   if (inp.weedsManaged === false) flags.push('postpone_awd_weeds');
   const base = { triggerCm: trig, irriTriggerCm: AWD.irriTriggerCm, dropCmPerDay: L.drop, dropFrom: L.dropFrom,
                  dropSigma: L.sigma, daysBetween: L.days, fallCm: L.fallCm, gainCm: L.gainCm, flags: flags, sources: src };
-  if (!isNum(inp.levelCm)) return Object.assign({ code: 'need_tube_reading' }, base);
-  /* Re-flood when the level REACHES the trigger, not after it passes it. The farmer needs the rise,
-     not just the target: from where the water stands up to the soil surface, then the re-flood depth
-     on top of that. At -16 cm with a 5 cm re-flood, that is 16 + 5 = 21 cm of water to put in. */
-  if (inp.levelCm <= -trig) return Object.assign({ code: 'reflood_now', refloodCm: AWD.refloodCm,
-    riseCm: AWD.refloodCm - inp.levelCm, fromCm: -inp.levelCm }, base);
-  /* The DA depth is the policy and leads. IRRI safe AWD re-floods at 15 cm in every season, so in the
-     wet season there is a second, earlier date. It is carried alongside the DA one, never instead. */
-  const projections = [];
-  const da = project(inp.levelCm, -trig, L.drop, L.sigma);
-  if (da) projections.push(Object.assign({ which: 'da', triggerCm: trig }, da));
-  if (trig !== AWD.irriTriggerCm) {
-    const ir = project(inp.levelCm, -AWD.irriTriggerCm, L.drop, L.sigma);
-    if (ir) projections.push(Object.assign({ which: 'irri', triggerCm: AWD.irriTriggerCm }, ir));
+  /* Everything the tube can say, worked out whenever there is a reading, whoever takes the decision.
+     A tensiometer answers now or not now; only the tube gives a date, so the two are complementary
+     rather than alternatives and the card keeps both. */
+  const lvl = {};
+  if (isNum(inp.levelCm)) {
+    lvl.levelCm = inp.levelCm;
+    lvl.remainingCm = inp.levelCm + trig;
+    lvl.riseCm = AWD.refloodCm - inp.levelCm;
+    lvl.fromCm = -inp.levelCm;
+    lvl.refloodCm = AWD.refloodCm;
+    const ps = [], da = project(inp.levelCm, -trig, L.drop, L.sigma);
+    if (da) ps.push(Object.assign({ which: 'da', triggerCm: trig }, da));
+    if (trig !== AWD.irriTriggerCm) {
+      const ir = project(inp.levelCm, -AWD.irriTriggerCm, L.drop, L.sigma);
+      if (ir) ps.push(Object.assign({ which: 'irri', triggerCm: AWD.irriTriggerCm }, ir));
+    }
+    lvl.projections = ps;
   }
-  return Object.assign({ code: 'not_yet', remainingCm: inp.levelCm + trig,
-    daysLeft: projections.length ? projections[0].days : null, projections: projections }, base);
+  /* The tensiometer takes the decision where there is one: it reads what the roots feel, and Carrijo
+     et al. (2017) draw the same line at -20 kPa that DA AO 25-09 draws at 15 cm. The card says so
+     rather than switching rule silently. */
+  const tens = tensiometerDecision(inp.tensiometerCb, 'awd');
+  if (tens) {
+    const out = Object.assign({}, base, lvl, { code: tens.code, decidedBy: 'tensiometer', cb: tens.cb,
+      triggerCb: tens.triggerCb, remainingCb: tens.remainingCb, refloodCm: AWD.refloodCm,
+      flags: flags.concat(tens.flags), sources: src.concat(['CARRIJO2017']) });
+    if (tens.code === 'reflood_now') delete out.projections;
+    return out;
+  }
+  if (!isNum(inp.levelCm)) return Object.assign({ code: 'need_tube_reading', decidedBy: 'tube' }, base);
+  if (inp.levelCm <= -trig) { const out = Object.assign({}, base, lvl, { code: 'reflood_now', decidedBy: 'tube' }); delete out.projections; return out; }
+  return Object.assign({}, base, lvl, { code: 'not_yet', decidedBy: 'tube',
+    daysLeft: lvl.projections && lvl.projections.length ? lvl.projections[0].days : null });
 }
 
 /* =====================================================================
@@ -898,6 +1028,9 @@ const REFS = {
   FAO_TM4: { cls: 'primary', cite: 'Brouwer, C., Prins, K., Heibloem, M. (1989). Irrigation Scheduling. FAO Irrigation Water Management Training Manual 4, Annex I.', url: 'https://www.fao.org/4/t7202e/t7202e08.htm' },
   FAO_FROST: { cls: 'primary', cite: 'Snyder, R.L., de Melo-Abreu, J.P. (2005). Frost Protection: fundamentals, practice and economics, Vol. 1. FAO Environment and Natural Resources Series 10.', url: 'https://www.fao.org/4/y7223e/y7223e00.htm' },
   YOSHIDA1981: { cls: 'primary', cite: 'Yoshida, S. (1981). Fundamentals of Rice Crop Science. International Rice Research Institute, Los Baños. Table 2.4, critical temperatures by growth stage (adapted from Yoshida 1977a), and section 2.3.6, spikelet sterility when temperature exceeds 35 °C at anthesis for more than 1 hour.', url: 'http://books.irri.org/9711040522_content.pdf' },
+  CARRIJO2017: { cls: 'primary', cite: 'Carrijo, D.R., Lundy, M.E., Linquist, B.A. (2017). Rice yields and water use under alternate wetting and drying irrigation: A meta-analysis. Field Crops Research 203: 173-180. 56 studies, 528 comparisons.', url: 'https://doi.org/10.1016/j.fcr.2016.12.002' },
+  LI2024: { cls: 'primary', cite: 'Li, L., Huang, Z., Mu, Y. et al. (2024). Alternate wetting and drying maintains rice yield and reduces global warming potential: A global meta-analysis. Field Crops Research 318. 72 studies.', url: 'https://doi.org/10.1016/j.fcr.2024.109603' },
+  IRROMETER: { cls: 'extension', cite: 'IRROMETER Company. Soil Water Basics: tensiometer reading ranges, 0-10 cb saturated, 10-30 adequately wet, 30-60 usual range for initiating irrigation in most soils.', url: 'https://www.irrometer.com/basics.html' },
   BOUMAN1994: { cls: 'primary', cite: 'Bouman, B.A.M., Wopereis, M.C.S., Kropff, M.J., ten Berge, H.F.M., Tuong, T.P. (1994). Water use efficiency of flooded rice fields II. Percolation and seepage losses. Agricultural Water Management 26(4): 291-304. Field experiment at IRRI, Los Banos, Philippines.', url: 'https://doi.org/10.1016/0378-3774(94)90007-8' },
   BOUMAN2007: { cls: 'primary', cite: 'Bouman, B.A.M., Lampayan, R.M., Tuong, T.P. (2007). Water Management in Irrigated Rice: Coping with Water Scarcity. IRRI.', url: 'http://books.irri.org/9789712202193_content.pdf' },
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
@@ -950,6 +1083,7 @@ const UNVERIFIED = [
   { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' },
   { id: 'AWD_NO_DRY_SEASON', text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
   { id: 'VEGETABLE_TEMPERATURES', text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
+  { id: 'TENSIOMETER_DEPTH', text: 'The tensiometer trigger of 20 centibars is the mild-versus-severe AWD boundary of Carrijo, Lundy and Linquist (2017), who give it as -20 kPa alongside a field water level of 15 cm. What their figure does not fix, and this app therefore does not assume, is the depth at which the instrument sits. A tensiometer reads the soil around its cup, so the same field gives different numbers at different installation depths, and no Philippine guidance on where to place one in a paddy under AWD was found. The card states the trigger and tells the farmer to install the instrument in the root zone at about the depth the AWD tube monitors, which is an assumption of this app.' },
   { id: 'READING_PRECISION', text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
   { id: 'STRESS_NO_ACTION', text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
 ];
@@ -968,6 +1102,8 @@ const API = {
   // rice
   AWD, awdDecision, continuousFloodDecision, intermittentDecision, riceWaterDecision, lossRate, project,
   SP, spClassify,
+  TENSIOMETER, tensiometerDecision, METHOD_EVIDENCE,
+  noInstrumentDecision,
   READ_SIGMA_CM, MIN_FALL_CM, PROJECT_HORIZON_DAYS,
   // rain
   effectiveRainMonthly,

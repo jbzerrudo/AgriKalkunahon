@@ -254,6 +254,32 @@ eq('a negative remainder is impossible and is flagged', A.spClassify(-0.2).flags
 eq('no figure, no classification', A.spClassify(null), null);
 eq('the rice card cites the 1994 paper', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5 }).sources.indexOf('BOUMAN1994') >= 0, true);
 eq('and the reference is on file', A.REFS.BOUMAN1994.cite.indexOf('Agricultural Water Management 26') >= 0, true);
+
+console.log('\n-- tensiometer, on Carrijo et al. (2017) --');
+eq('the AWD trigger is 20 centibars', A.TENSIOMETER.awdTriggerCb, 20);
+eq('which is the same -20 kPa boundary Carrijo draws at 15 cm', A.TENSIOMETER.severeBelowKPa, -20);
+eq('19 cb is not yet', A.tensiometerDecision(19, 'awd').code, 'not_yet');
+eq('20 cb reaches the trigger', A.tensiometerDecision(20, 'awd').code, 'reflood_now');
+ok('and it reports how far short a reading falls', A.tensiometerDecision(15, 'awd').remainingCb, 5, 1e-9, 'cb');
+eq('past the point the water column breaks, the instrument is flagged', A.tensiometerDecision(85, 'awd').flags.indexOf('tensiometer_out_of_range') >= 0, true);
+eq('and that limit is about 80 cb', A.TENSIOMETER.outOfRangeCb, 80);
+eq('a negative reading is flagged', A.tensiometerDecision(-3, 'awd').flags.indexOf('tensiometer_negative') >= 0, true);
+eq('under continuous flooding it answers whether the soil is still saturated', A.tensiometerDecision(5, 'continuous').code, 'cf_ok');
+eq('and says top up once it is not', A.tensiometerDecision(15, 'continuous').code, 'cf_top_up');
+eq('saturated is 0 to 10 cb (IRROMETER)', A.TENSIOMETER.saturatedCb, 10);
+eq('no reading, no answer', A.tensiometerDecision(null, 'awd'), null);
+eq('the AWD answer cites Carrijo', A.tensiometerDecision(25, 'awd').sources.join(','), 'CARRIJO2017');
+eq('the installation depth is declared unverified', A.UNVERIFIED.map(u => u.id).indexOf('TENSIOMETER_DEPTH') >= 0, true);
+
+console.log('\n-- what each method costs and buys --');
+['awd', 'continuous', 'none'].forEach(m => {
+  eq(m + ' has pros', A.METHOD_EVIDENCE[m].pros.length > 0, true);
+  eq(m + ' has cons, which is the point', A.METHOD_EVIDENCE[m].cons.length > 0, true);
+  eq(m + ' names its sources', A.METHOD_EVIDENCE[m].sources.length > 0, true);
+});
+eq('the AWD case lists as many cons as pros, at least', A.METHOD_EVIDENCE.awd.cons.length >= A.METHOD_EVIDENCE.awd.pros.length, true);
+eq('Carrijo is cited for the yield evidence', A.REFS.CARRIJO2017.cite.indexOf('Field Crops Research 203') >= 0, true);
+eq('Li 2024 is cited for the greenhouse gas evidence', A.REFS.LI2024.cite.indexOf('global meta-analysis') >= 0, true);
 eq('the PhilRice news item is cited to its author, not to the expert it quotes', A.REFS.PHILRICE_NEWS.cite.indexOf('Mendoza, C.A. (2022)') === 0, true);
 eq('and it names Saludez as the one quoted', A.REFS.PHILRICE_NEWS.cite.indexOf('quoting F. Saludez') >= 0, true);
 eq('the rice card cites it, since its depths come from there', A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5 }).sources.indexOf('PHILRICE_NEWS') >= 0, true);
@@ -354,7 +380,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the ten items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,READING_PRECISION,STRESS_NO_ACTION'); }
+  eq('UNVERIFIED list names the eleven items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,READING_PRECISION,STRESS_NO_ACTION'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
