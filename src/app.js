@@ -722,8 +722,18 @@ CARDS.rice = function (root) {
   syncMethod();
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
-    const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value, tens: num(tens.input), surface: surface.input.value, bothMode: bothMode.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
-                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
+    /* A hidden box is not an input. Its value survives in the DOM, so reading the form blindly let
+       yesterday's tube readings drive the answer on a paddy the farmer had just told the card is read
+       with a tensiometer. Every reading is now taken through the row that carries it, so whatever
+       syncMethod decided to show is exactly what the engine is given. */
+    const numOf = x => x.row.hidden ? null : num(x.input);
+    const valOf = (x, blank) => x.row.hidden ? blank : x.input.value;
+    const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value,
+                  tens: numOf(tens), surface: valOf(surface, 'unknown'), bothMode: valOf(bothMode, 'tensiometer'),
+                  season: valOf(season, 'dry'), est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
+                  soil: soil.input.value, level: numOf(level), levelPrev: numOf(levelPrev),
+                  levelDate: valOf(levelDate, ''), levelPrevDate: valOf(levelPrevDate, ''),
+                  tmax: numOf(tmax), tmin: numOf(tmin), etc: numOf(etc), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
     /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
