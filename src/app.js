@@ -601,8 +601,7 @@ CARDS.rice = function (root) {
   ], prev.instrument || 'tube');
   const bothMode = selectInput('rboth', { en: 'You have both. Which should the card follow?', fil: 'Mayroon kayong pareho. Alin ang susundin ng card?' }, [
     ['tensiometer', { en: 'The tensiometer, which reads what the roots feel', fil: 'Ang tensiometer, na nagbabása ng nararamdaman ng ugat' }],
-    ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }],
-    ['validate', { en: 'Both: the tensiometer decides, the tube still gives the date, and tell me if they disagree', fil: 'Pareho: ang tensiometer ang magpapasya, ang tube ang magbibigay ng petsa, at sabihin kung hindi sila magkatugma' }]
+    ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }]
   ], prev.bothMode || 'tensiometer');
   const tens = numInput('rtens', { en: 'Tensiometer reading now, centibars. Install it in the root zone, at about the depth the AWD tube watches.', fil: 'Pagbasa ng tensiometer ngayon, centibars. Ilagay ito sa lalim ng ugat, mga kasinglalim ng binabantayan ng AWD tube.' }, prev.tens, 1);
   tens.input.min = 0;
@@ -685,8 +684,8 @@ CARDS.rice = function (root) {
        the farmer to walk out and take a measurement that will not be used. */
     const ins = instrument.input.value, bothSel = ins === 'both', bare = ins === 'none';
     const mode = bothMode.input.value;
-    const hasTens = ins === 'tensiometer' || (bothSel && (mode === 'tensiometer' || mode === 'validate'));
-    const hasTube = ins === 'tube' || (bothSel && (mode === 'tube' || mode === 'validate'));
+    const hasTens = ins === 'tensiometer' || (bothSel && mode === 'tensiometer');
+    const hasTube = ins === 'tube' || (bothSel && mode === 'tube');
     instrument.row.hidden = false;
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
@@ -792,17 +791,10 @@ CARDS.rice = function (root) {
         + (r.triggerCb != null ? ', and the trigger is ' + r.triggerCb + ' cb' + (r.remainingCb != null ? ', so ' + fmt(r.remainingCb, 0) + ' cb still to go' : ', which you have reached') : '')
         + (r.saturatedCb != null ? ', and saturated soil reads 0 to ' + r.saturatedCb + ' cb' : '')]);
       const byTxt = r.decidedBy === 'tube' ? 'the tube, which is the DA Administrative Order 25-09 rule at ' + r.triggerCm + ' cm'
-        : r.decidedBy === 'both' ? 'both instruments together, taking whichever calls for water first, because re-flooding earlier than the trigger is always allowed'
-        : 'the tensiometer, which reads what the roots feel';
+                : 'the tensiometer, which reads what the roots feel';
       lines.push([bi({ en: 'Decided by', fil: 'Batay sa' }), byTxt
         + (r.tubeSaysNow != null ? '. The tube ' + (r.tubeSaysNow ? 'calls for water' : 'does not yet') + ' and the tensiometer ' + (r.tensSaysNow ? 'calls for water' : 'does not yet') + ', so they ' + (r.instrumentsDisagree ? 'disagree' : 'agree') : '')
         + '. Carrijo et al. (2017) draw the same line at -20 kPa that the Order draws at ' + (r.triggerCm || 15) + ' cm.']);
-      if (r.calibration) {
-        const c = r.calibration;
-        lines.push([bi({ en: 'Checking the tensiometer', fil: 'Pagsusuri sa tensiometer' }),
-          'Your tube has reached ' + fmt(Math.abs(c.atLevelCm), 0) + ' cm below the surface, which is where Carrijo et al. put the tensiometer at about ' + c.expectedCb + ' cb. Yours reads ' + fmt(c.actualCb, 0) + ', so it is ' + (c.offsetCb === 0 ? 'exactly there' : fmt(Math.abs(c.offsetCb), 0) + ' cb ' + (c.offsetCb > 0 ? 'drier' : 'wetter') + ' than expected')
-          + '. That comparison holds only at this depth: away from the trigger there is no published way to turn a water table depth into a tension, and this app does not invent one.']);
-      }
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision

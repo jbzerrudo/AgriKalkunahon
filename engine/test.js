@@ -283,13 +283,9 @@ console.log('\n-- both instruments: whose rule governs --');
   eq('and named by which way it falls', both(25, -8, 'tensiometer').flags.indexOf('instruments_disagree_tensiometer_drier') >= 0, true);
   eq('the other way round is named too', both(6, -16, 'tensiometer').flags.indexOf('instruments_disagree_tube_drier') >= 0, true);
   eq('a tube past the DA depth is never overridden into waiting', both(6, -16, 'tensiometer').code, 'reflood_now');
-  eq('validate follows whichever calls for water first', both(25, -8, 'validate').code, 'reflood_now');
-  eq('and attributes the answer to both', both(25, -8, 'validate').decidedBy, 'both');
-  eq('validate still waits when neither calls for water', both(12, -8, 'validate').code, 'not_yet');
-  eq('the tensiometer is checked only where Carrijo anchors the equivalence', both(12, -8, 'validate').calibration, null);
-  ok('at the trigger it is compared against 20 cb', both(21, -15, 'validate').calibration.offsetCb, 1, 1e-9, 'cb');
-  eq('and a wetter-than-expected instrument shows a negative offset', both(6, -16, 'validate').calibration.offsetCb < 0, true);
   eq('no negative still-to-go is ever returned', both(25, -8, 'tensiometer').remainingCm, undefined); }
+
+
 
 console.log('\n-- what each method costs and buys --');
 ['awd', 'continuous', 'none'].forEach(m => {

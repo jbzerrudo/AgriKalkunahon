@@ -580,10 +580,26 @@ function continuousFloodDecision(inp) {
   /* Under continuous flooding a tensiometer answers a different question. The field is meant to be
      saturated, so any reading out of the 0 to 10 cb saturated band means the ponded water is gone. */
   const tensC = tensiometerDecision(inp.tensiometerCb, 'continuous');
-  if (tensC) return Object.assign({}, base, { code: tensC.code, decidedBy: 'tensiometer', cb: tensC.cb,
-    saturatedCb: tensC.saturatedCb, levelCm: inp.levelCm,
-    shortCm: isNum(inp.levelCm) && inp.levelCm < target[0] ? target[0] - inp.levelCm : null,
-    flags: base.flags.concat(tensC.flags), sources: src.concat(['IRROMETER']) });
+  if (tensC) {
+    /* The stick answers the same question from the other side, so where both are given they can
+       agree or disagree, exactly as under AWD, and the disagreement is never suppressed. */
+    const stickSaysTopUp = isNum(inp.levelCm) ? inp.levelCm < target[0] : null;
+    const tensSaysTopUp = tensC.code === 'cf_top_up';
+    const disagree = stickSaysTopUp != null && stickSaysTopUp !== tensSaysTopUp;
+    const mode = inp.bothMode === 'tube' ? 'tube' : 'tensiometer';
+    let by = 'tensiometer', topUp = tensSaysTopUp;
+    if (stickSaysTopUp != null) {
+      if (mode === 'tube') { by = 'stick'; topUp = stickSaysTopUp; }
+      else if (disagree) { topUp = stickSaysTopUp || tensSaysTopUp; by = tensSaysTopUp ? 'tensiometer' : 'stick'; }
+    }
+    const fl = base.flags.concat(tensC.flags);
+    if (disagree) fl.push(stickSaysTopUp ? 'instruments_disagree_tube_drier' : 'instruments_disagree_tensiometer_drier');
+    return Object.assign({}, base, { code: topUp ? 'cf_top_up' : 'cf_ok', decidedBy: by, bothMode: stickSaysTopUp != null ? mode : null,
+      instrumentsDisagree: disagree, tubeSaysNow: stickSaysTopUp, tensSaysNow: tensSaysTopUp,
+      cb: tensC.cb, saturatedCb: tensC.saturatedCb, levelCm: inp.levelCm,
+      shortCm: isNum(inp.levelCm) && inp.levelCm < target[0] ? target[0] - inp.levelCm : null,
+      flags: fl, sources: src.concat(['IRROMETER']) });
+  }
   if (!isNum(inp.levelCm)) return Object.assign({ code: 'cf_need_depth', decidedBy: 'stick' }, base);
   if (inp.levelCm < target[0]) return Object.assign({ code: 'cf_top_up', shortCm: target[0] - inp.levelCm }, base);
   if (inp.levelCm > target[1] + 5) return Object.assign({ code: 'cf_too_deep' }, base);
@@ -701,24 +717,23 @@ function awdDecision(inp) {
     const tubeSaysNow = isNum(inp.levelCm) ? inp.levelCm <= -trig : null;
     const tensSaysNow = tens.code === 'reflood_now';
     const disagree = tubeSaysNow != null && tubeSaysNow !== tensSaysNow;
-    const mode = inp.bothMode === 'tube' || inp.bothMode === 'validate' ? inp.bothMode : 'tensiometer';
+    const mode = inp.bothMode === 'tube' ? 'tube' : 'tensiometer';
     let by = 'tensiometer', now = tensSaysNow;
     if (tubeSaysNow != null) {
       if (mode === 'tube') { by = 'tube'; now = tubeSaysNow; }
       /* Validate, and any disagreement at all, follow whichever calls for water first. Re-flooding
          earlier than the trigger is always allowed, so the early call is never the harmful error. */
-      else if (mode === 'validate' || disagree) { now = tubeSaysNow || tensSaysNow; by = mode === 'validate' ? 'both' : (tensSaysNow ? 'tensiometer' : 'tube'); }
+      /* On a disagreement, follow whichever calls for water first: re-flooding early is always
+         allowed, so it is never the harmful error. */
+      else if (disagree) { now = tubeSaysNow || tensSaysNow; by = tensSaysNow ? 'tensiometer' : 'tube'; }
     }
     if (disagree) flags.push(tubeSaysNow ? 'instruments_disagree_tube_drier' : 'instruments_disagree_tensiometer_drier');
     /* Carrijo anchors the equivalence at the boundary and nowhere else, so the tensiometer is only
        compared against 20 cb at the moment the tube reaches its own trigger. Away from that line no
        published mapping exists between a water table depth and a tension, and none is invented. */
-    let calibration = null;
-    if (tubeSaysNow === true) calibration = { atLevelCm: inp.levelCm, triggerCm: trig, expectedCb: TENSIOMETER.awdTriggerCb,
-      actualCb: tens.cb, offsetCb: tens.cb - TENSIOMETER.awdTriggerCb };
     const out = Object.assign({}, base, lvl, { code: now ? 'reflood_now' : 'not_yet', decidedBy: by,
       bothMode: tubeSaysNow != null ? mode : null, instrumentsDisagree: disagree,
-      tubeSaysNow: tubeSaysNow, tensSaysNow: tensSaysNow, calibration: calibration,
+      tubeSaysNow: tubeSaysNow, tensSaysNow: tensSaysNow,
       cb: tens.cb, triggerCb: tens.triggerCb, remainingCb: tens.remainingCb, refloodCm: AWD.refloodCm,
       flags: flags.concat(tens.flags), sources: src.concat(['CARRIJO2017']) });
     if (out.code === 'reflood_now') delete out.projections;

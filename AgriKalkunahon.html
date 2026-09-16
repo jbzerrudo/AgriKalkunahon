@@ -730,10 +730,26 @@ function continuousFloodDecision(inp) {
   /* Under continuous flooding a tensiometer answers a different question. The field is meant to be
      saturated, so any reading out of the 0 to 10 cb saturated band means the ponded water is gone. */
   const tensC = tensiometerDecision(inp.tensiometerCb, 'continuous');
-  if (tensC) return Object.assign({}, base, { code: tensC.code, decidedBy: 'tensiometer', cb: tensC.cb,
-    saturatedCb: tensC.saturatedCb, levelCm: inp.levelCm,
-    shortCm: isNum(inp.levelCm) && inp.levelCm < target[0] ? target[0] - inp.levelCm : null,
-    flags: base.flags.concat(tensC.flags), sources: src.concat(['IRROMETER']) });
+  if (tensC) {
+    /* The stick answers the same question from the other side, so where both are given they can
+       agree or disagree, exactly as under AWD, and the disagreement is never suppressed. */
+    const stickSaysTopUp = isNum(inp.levelCm) ? inp.levelCm < target[0] : null;
+    const tensSaysTopUp = tensC.code === 'cf_top_up';
+    const disagree = stickSaysTopUp != null && stickSaysTopUp !== tensSaysTopUp;
+    const mode = inp.bothMode === 'tube' ? 'tube' : 'tensiometer';
+    let by = 'tensiometer', topUp = tensSaysTopUp;
+    if (stickSaysTopUp != null) {
+      if (mode === 'tube') { by = 'stick'; topUp = stickSaysTopUp; }
+      else if (disagree) { topUp = stickSaysTopUp || tensSaysTopUp; by = tensSaysTopUp ? 'tensiometer' : 'stick'; }
+    }
+    const fl = base.flags.concat(tensC.flags);
+    if (disagree) fl.push(stickSaysTopUp ? 'instruments_disagree_tube_drier' : 'instruments_disagree_tensiometer_drier');
+    return Object.assign({}, base, { code: topUp ? 'cf_top_up' : 'cf_ok', decidedBy: by, bothMode: stickSaysTopUp != null ? mode : null,
+      instrumentsDisagree: disagree, tubeSaysNow: stickSaysTopUp, tensSaysNow: tensSaysTopUp,
+      cb: tensC.cb, saturatedCb: tensC.saturatedCb, levelCm: inp.levelCm,
+      shortCm: isNum(inp.levelCm) && inp.levelCm < target[0] ? target[0] - inp.levelCm : null,
+      flags: fl, sources: src.concat(['IRROMETER']) });
+  }
   if (!isNum(inp.levelCm)) return Object.assign({ code: 'cf_need_depth', decidedBy: 'stick' }, base);
   if (inp.levelCm < target[0]) return Object.assign({ code: 'cf_top_up', shortCm: target[0] - inp.levelCm }, base);
   if (inp.levelCm > target[1] + 5) return Object.assign({ code: 'cf_too_deep' }, base);
@@ -851,24 +867,23 @@ function awdDecision(inp) {
     const tubeSaysNow = isNum(inp.levelCm) ? inp.levelCm <= -trig : null;
     const tensSaysNow = tens.code === 'reflood_now';
     const disagree = tubeSaysNow != null && tubeSaysNow !== tensSaysNow;
-    const mode = inp.bothMode === 'tube' || inp.bothMode === 'validate' ? inp.bothMode : 'tensiometer';
+    const mode = inp.bothMode === 'tube' ? 'tube' : 'tensiometer';
     let by = 'tensiometer', now = tensSaysNow;
     if (tubeSaysNow != null) {
       if (mode === 'tube') { by = 'tube'; now = tubeSaysNow; }
       /* Validate, and any disagreement at all, follow whichever calls for water first. Re-flooding
          earlier than the trigger is always allowed, so the early call is never the harmful error. */
-      else if (mode === 'validate' || disagree) { now = tubeSaysNow || tensSaysNow; by = mode === 'validate' ? 'both' : (tensSaysNow ? 'tensiometer' : 'tube'); }
+      /* On a disagreement, follow whichever calls for water first: re-flooding early is always
+         allowed, so it is never the harmful error. */
+      else if (disagree) { now = tubeSaysNow || tensSaysNow; by = tensSaysNow ? 'tensiometer' : 'tube'; }
     }
     if (disagree) flags.push(tubeSaysNow ? 'instruments_disagree_tube_drier' : 'instruments_disagree_tensiometer_drier');
     /* Carrijo anchors the equivalence at the boundary and nowhere else, so the tensiometer is only
        compared against 20 cb at the moment the tube reaches its own trigger. Away from that line no
        published mapping exists between a water table depth and a tension, and none is invented. */
-    let calibration = null;
-    if (tubeSaysNow === true) calibration = { atLevelCm: inp.levelCm, triggerCm: trig, expectedCb: TENSIOMETER.awdTriggerCb,
-      actualCb: tens.cb, offsetCb: tens.cb - TENSIOMETER.awdTriggerCb };
     const out = Object.assign({}, base, lvl, { code: now ? 'reflood_now' : 'not_yet', decidedBy: by,
       bothMode: tubeSaysNow != null ? mode : null, instrumentsDisagree: disagree,
-      tubeSaysNow: tubeSaysNow, tensSaysNow: tensSaysNow, calibration: calibration,
+      tubeSaysNow: tubeSaysNow, tensSaysNow: tensSaysNow,
       cb: tens.cb, triggerCb: tens.triggerCb, remainingCb: tens.remainingCb, refloodCm: AWD.refloodCm,
       flags: flags.concat(tens.flags), sources: src.concat(['CARRIJO2017']) });
     if (out.code === 'reflood_now') delete out.projections;
@@ -1752,7 +1767,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'b0c16e58' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'f9ba6714' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1904,8 +1919,7 @@ CARDS.rice = function (root) {
   ], prev.instrument || 'tube');
   const bothMode = selectInput('rboth', { en: 'You have both. Which should the card follow?', fil: 'Mayroon kayong pareho. Alin ang susundin ng card?' }, [
     ['tensiometer', { en: 'The tensiometer, which reads what the roots feel', fil: 'Ang tensiometer, na nagbabása ng nararamdaman ng ugat' }],
-    ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }],
-    ['validate', { en: 'Both: the tensiometer decides, the tube still gives the date, and tell me if they disagree', fil: 'Pareho: ang tensiometer ang magpapasya, ang tube ang magbibigay ng petsa, at sabihin kung hindi sila magkatugma' }]
+    ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }]
   ], prev.bothMode || 'tensiometer');
   const tens = numInput('rtens', { en: 'Tensiometer reading now, centibars. Install it in the root zone, at about the depth the AWD tube watches.', fil: 'Pagbasa ng tensiometer ngayon, centibars. Ilagay ito sa lalim ng ugat, mga kasinglalim ng binabantayan ng AWD tube.' }, prev.tens, 1);
   tens.input.min = 0;
@@ -1988,8 +2002,8 @@ CARDS.rice = function (root) {
        the farmer to walk out and take a measurement that will not be used. */
     const ins = instrument.input.value, bothSel = ins === 'both', bare = ins === 'none';
     const mode = bothMode.input.value;
-    const hasTens = ins === 'tensiometer' || (bothSel && (mode === 'tensiometer' || mode === 'validate'));
-    const hasTube = ins === 'tube' || (bothSel && (mode === 'tube' || mode === 'validate'));
+    const hasTens = ins === 'tensiometer' || (bothSel && mode === 'tensiometer');
+    const hasTube = ins === 'tube' || (bothSel && mode === 'tube');
     instrument.row.hidden = false;
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
@@ -2095,17 +2109,10 @@ CARDS.rice = function (root) {
         + (r.triggerCb != null ? ', and the trigger is ' + r.triggerCb + ' cb' + (r.remainingCb != null ? ', so ' + fmt(r.remainingCb, 0) + ' cb still to go' : ', which you have reached') : '')
         + (r.saturatedCb != null ? ', and saturated soil reads 0 to ' + r.saturatedCb + ' cb' : '')]);
       const byTxt = r.decidedBy === 'tube' ? 'the tube, which is the DA Administrative Order 25-09 rule at ' + r.triggerCm + ' cm'
-        : r.decidedBy === 'both' ? 'both instruments together, taking whichever calls for water first, because re-flooding earlier than the trigger is always allowed'
-        : 'the tensiometer, which reads what the roots feel';
+                : 'the tensiometer, which reads what the roots feel';
       lines.push([bi({ en: 'Decided by', fil: 'Batay sa' }), byTxt
         + (r.tubeSaysNow != null ? '. The tube ' + (r.tubeSaysNow ? 'calls for water' : 'does not yet') + ' and the tensiometer ' + (r.tensSaysNow ? 'calls for water' : 'does not yet') + ', so they ' + (r.instrumentsDisagree ? 'disagree' : 'agree') : '')
         + '. Carrijo et al. (2017) draw the same line at -20 kPa that the Order draws at ' + (r.triggerCm || 15) + ' cm.']);
-      if (r.calibration) {
-        const c = r.calibration;
-        lines.push([bi({ en: 'Checking the tensiometer', fil: 'Pagsusuri sa tensiometer' }),
-          'Your tube has reached ' + fmt(Math.abs(c.atLevelCm), 0) + ' cm below the surface, which is where Carrijo et al. put the tensiometer at about ' + c.expectedCb + ' cb. Yours reads ' + fmt(c.actualCb, 0) + ', so it is ' + (c.offsetCb === 0 ? 'exactly there' : fmt(Math.abs(c.offsetCb), 0) + ' cb ' + (c.offsetCb > 0 ? 'drier' : 'wetter') + ' than expected')
-          + '. That comparison holds only at this depth: away from the trigger there is no published way to turn a water table depth into a tension, and this app does not invent one.']);
-      }
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
@@ -2648,8 +2655,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 448 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build b0c16e58. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 442 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build f9ba6714. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2738,7 +2745,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build b0c16e58)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build f9ba6714)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2750,7 +2757,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build b0c16e58).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build b0c16e58 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build f9ba6714).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build f9ba6714 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2797,7 +2804,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build b0c16e58.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build f9ba6714.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
