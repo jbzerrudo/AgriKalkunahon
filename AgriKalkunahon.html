@@ -288,6 +288,9 @@ function eto(inp) {
   const Tmax = inp.Tmax, Tmin = inp.Tmin;
   if (!isNum(Tmax) || !isNum(Tmin)) return { error: 'need_tmax_tmin' };
   if (Tmax < Tmin) return { error: 'tmax_below_tmin' };
+  /* Ra needs both, and rad(undefined) is NaN, which used to travel all the way out inside a fully
+     populated result object: a caller testing for the absence of an error would proceed with it. */
+  if (!isNum(inp.lat) || !isNum(inp.J)) return { error: 'need_lat_and_day_of_year' };
   const z = isNum(inp.elev) ? inp.elev : 0, P = pressure(z);
   // humidity
   let ea, eaMethod;
@@ -416,7 +419,15 @@ function cropKc(cropId, opts) {
   const flags = [];
   if (!isNum(o.RHmin) && !(isNum(o.Tmin) && isNum(o.Tmax))) flags.push('rhmin_default_45');
   let kIni = c.kcIni;
-  if (cropId === 'rice') { kIni = RICE_KC_INI[o.riceHumidity || 'subhumid'][o.riceWind || 'moderate']; }
+  if (cropId === 'rice') {
+    /* FAO-56 Table 14 labels this row "Sub-humid - Humid", and 'humid' is a valid key of RHMIN_CLASS,
+       so a caller passing it was reading the same table. It used to throw. An unrecognised class is
+       reported rather than silently defaulted. */
+    const hum = o.riceHumidity === 'humid' ? 'subhumid' : (o.riceHumidity || 'subhumid');
+    const wnd = o.riceWind || 'moderate';
+    if (!RICE_KC_INI[hum] || RICE_KC_INI[hum][wnd] == null) return { error: 'unknown_rice_kc_class' };
+    kIni = RICE_KC_INI[hum][wnd];
+  }
   else if (c.kcIniGroup) flags.push('kc_ini_is_group_value');
   const mid = kcAdjust(c.kcMid, u2, RHmin, c.h, false);
   const endTab = c.kcEnd[o.kcEndChoice || 0];
@@ -634,6 +645,13 @@ const PROJECT_HORIZON_DAYS = 7;                        // past a week the canopy
    Order of preference: this drawdown, then the field's own past average, then a rate typed in. */
 function lossRate(inp) {
   const out = { drop: null, dropFrom: null, gainCm: null, days: null, sigma: null, fallCm: null, flags: [] };
+  /* A span of zero or less is not a span. It used to be silently replaced by one day, so two readings
+     with the same timestamp, or entered in the wrong order, produced a rate reported as measured and
+     written into the paddy's history. Two readings with no time between them measure nothing. */
+  if (isNum(inp.levelCm) && isNum(inp.levelPrevCm) && isNum(inp.daysBetween) && inp.daysBetween <= 0) {
+    out.flags.push(inp.daysBetween === 0 ? 'readings_same_day' : 'readings_out_of_order');
+    return out;
+  }
   const days = isNum(inp.daysBetween) && inp.daysBetween > 0 ? inp.daysBetween : 1;
   if (isNum(inp.levelCm) && isNum(inp.levelPrevCm)) {
     const fall = inp.levelPrevCm - inp.levelCm;         // positive when the level fell
@@ -672,8 +690,23 @@ function project(levelCm, targetLevelCm, drop, sigma) {
   if (!(gap > 0)) return null;
   const days = gap / drop;
   let lo = null, hi = null;
+  /* The rate and the distance to the trigger are not independent. Both are built from the same current
+     reading: the level enters the gap directly and enters the fall with the opposite sign, so one
+     centimetre of reading error shrinks the gap and lengthens the fall together, and both push the date
+     the same way. Writing g for the gap and f for the fall between the two readings, propagating the
+     error of g/f gives a relative error of sigma_read * sqrt((f+g)^2 + g^2) / (f g). The term this app
+     used before was sqrt(2g^2 + f^2) over the same denominator, which is the same expression with the
+     2fg cross term dropped, and it was too narrow: against this app's own one-centimetre reading noise
+     it covered 57 to 65 per cent of outcomes where one standard deviation implies about 68. With the
+     cross term carried it covers 69 to 72. The fall is recovered from the rate, since sigma is
+     sigma_read * sqrt(2) / n by construction and f is the rate times n. What is still not modelled is
+     the right skew of a ratio: the late end of a date window runs further out than the early end, so
+     the window is a planning aid and the tube reading remains the decision rule. */
   if (isNum(sigma) && sigma > 0) {
-    const rel = Math.sqrt((sigma / drop) * (sigma / drop) + (READ_SIGMA_CM / gap) * (READ_SIGMA_CM / gap));
+    const n = READ_SIGMA_CM * Math.SQRT2 / sigma, fall = drop * n;
+    const rel = fall > 0
+      ? READ_SIGMA_CM * Math.sqrt((fall + gap) * (fall + gap) + gap * gap) / (fall * gap)
+      : Math.sqrt((sigma / drop) * (sigma / drop) + (READ_SIGMA_CM / gap) * (READ_SIGMA_CM / gap));
     lo = Math.max(0, days * (1 - rel)); hi = days * (1 + rel);
   }
   return { days: days, lo: lo, hi: hi, beyondHorizon: days > PROJECT_HORIZON_DAYS };
@@ -1000,6 +1033,9 @@ function dryingDecision(inp) {
   if (inp.T < 10 || inp.T > 50) flags.push('temp_outside_corroborated_range');
   const emc = emcWetBasis(inp.T, inp.RH);
   const target = STORAGE_MC[inp.storage || 'weeks_to_months'];
+  /* An unknown key used to leave the target undefined, whereupon the bisection for the humidity needed
+     compared everything against undefined, every test failed, and the card reported one per cent. */
+  if (!isNum(target)) return { code: 'unknown_storage_target', flags: flags.concat(['unknown_storage_target']), sources: src };
   const rhNeeded = rhForMoisture(inp.T, target);
   /* Palay off the field runs roughly 20-26% moisture; anything above 40 or at or below the target is
      either a typo or a crop that needs no drying, and the card says so rather than computing from it. */
@@ -1042,6 +1078,7 @@ const STRESS = {
 function stressCheck(cropId, phase, days) {
   const c = STRESS[cropId]; if (!c) return { error: 'no_thresholds_for_crop' };
   const ph = c.phases[phase]; if (!ph) return { error: 'unknown_phase' };
+  if (!Array.isArray(days)) return { error: 'need_days' };
   const per = days.map(d => {
     const codes = [];
     if (ph.hi != null && d.Tmax >= ph.hi) codes.push('heat_above_threshold');
@@ -1223,7 +1260,11 @@ function harvestWindow(variety, method, sowDateUTC) {
   const v = RICE_VARIETIES[variety]; if (!v) return { error: 'unknown_variety' };
   let days = v[method] != null ? v[method] : (v.any != null ? v.any : (v.ds != null ? v.ds : v.tp));
   const basisFlag = v[method] != null ? null : 'maturity_basis_not_stated_for_method';
-  const d = new Date(sowDateUTC.getTime() + days * 86400000);
+  /* Accept a Date or anything Date can parse, and decline rather than throw on neither. Clearing the
+     sowing-date field used to take the whole timing card down with an invalid time value. */
+  const sown = sowDateUTC instanceof Date ? sowDateUTC : (sowDateUTC != null ? new Date(sowDateUTC) : null);
+  if (!sown || !isFinite(sown.getTime())) return { error: 'need_sowing_date' };
+  const d = new Date(sown.getTime() + days * 86400000);
   return { days: days, date: d, plusMinusDays: 7 /* design assumption */, flag: basisFlag, sources: ['PHILRICE_VARIETIES'] };
 }
 
@@ -1295,18 +1336,24 @@ const REFS = {
   PHILRICE_VARIETIES: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank, rice variety pages (maturity in days).', url: 'https://www.pinoyrice.com/rice-varieties/' }
 };
 /* Items the app could not verify against a primary source (shown in the Sources module) */
+/* Each entry names the cards whose answers rest on it. The interface renders the entry's own text into
+   the assumptions block of every card listed, so the declaration required by R3(a) comes from the same
+   object as the registry rather than from prose retyped on the card, and a card cannot use one of these
+   quantities while quietly omitting the declaration. A card suppresses an entry only where the quantity
+   is not in play in that particular answer, such as the tensiometer depth on a paddy read with a well.
+   A test asserts that every entry names at least one card. */
 const UNVERIFIED = [
-  { id: 'D245_STANDARD', text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
-  { id: 'SMITH1992', text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
-  { id: 'FROST_DEWPOINT', text: 'The 2 C dew-point line in the frost indicator is a design assumption. The FAO frost manual prints no threshold: its recommended method is a regression, Tmin = a T + b Td + c, from the temperature and dew point two hours after sunset on radiative frost nights, whose coefficients must be fitted locally from historical records. No such fit exists for Benguet, and neither Marasigan (2017) nor Launio et al. (2020) gives a dew-point value.' },
-  { id: 'DEW_NEAR_SATURATION', text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
-  { id: 'LEAF_WETNESS_DURATION', text: 'Hours of leaf wetness are not calculated, because every published method needs an input this card does not have. The RH >= 90% estimator needs hourly humidity through the night (Sentelhas et al. 2008). The sigmoid on daily mean relative humidity used by Alsafadi et al. (2024), after Alvares et al. (2015) in Brazil, needs its three coefficients fitted locally, and no Philippine fit is published. Luo and Goudriaan (2000), the only Philippine study of dew duration on rice, drove its model with nocturnal net radiation measured by a net radiometer. What this card reports instead is their measured drying time.' },
-  { id: 'HARVEST_PM7', text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' },
-  { id: 'AWD_NO_DRY_SEASON', text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
-  { id: 'VEGETABLE_TEMPERATURES', text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
-  { id: 'TENSIOMETER_DEPTH', text: 'The tensiometer trigger of 20 centibars is the mild-versus-severe AWD boundary of Carrijo, Lundy and Linquist (2017), who give it as -20 kPa alongside a field water level of 15 cm. What their figure does not fix, and this app therefore does not assume, is the depth at which the instrument sits. A tensiometer reads the soil around its cup, so the same field gives different numbers at different installation depths, and no Philippine guidance on where to place one in a paddy under AWD was found. The card states the trigger and tells the farmer to install the instrument in the root zone at about the depth the AWD tube monitors, which is an assumption of this app.' },
-  { id: 'READING_PRECISION', text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The centimetre gradation itself is an addition of this app: the PhilRice observation well and the IRRI field water tube are both look-and-see devices, marked only at the depth that calls for water, and the published rule is whether water can still be seen in the well rather than how far down it is. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
-  { id: 'STRESS_NO_ACTION', text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
+  { id: 'D245_STANDARD', cards: ['dry'], text: 'ASABE D245.6/D245.7 could not be verified (the standard is paywalled); the rough-rice constants are taken from a thesis reproduction and corroborated against the University of Arkansas EMC table. IRRI\'s own EMC statements run about one percentage point lower.' },
+  { id: 'SMITH1992', cards: ['rain'], text: 'CROPWAT effective rainfall methods are not implemented. The USDA-SCS table is verified in FAO Irrigation and Drainage Paper 25, Chapter II (Tables 7 and 8); the FAO/AGLW formula could not be verified against FAO Paper 46. This app uses the FAO Training Manual 3 formula instead.' },
+  { id: 'FROST_DEWPOINT', cards: ['frost'], text: 'The 2 C dew-point line in the frost indicator is a design assumption. The FAO frost manual prints no threshold: its recommended method is a regression, Tmin = a T + b Td + c, from the temperature and dew point two hours after sunset on radiative frost nights, whose coefficients must be fitted locally from historical records. No such fit exists for Benguet, and neither Marasigan (2017) nor Launio et al. (2020) gives a dew-point value.' },
+  { id: 'DEW_NEAR_SATURATION', cards: ['disease'], text: 'The 2 C dew-point depression below which the leaf-wetness card calls dew likely whatever the sky is a design assumption of this app. FAO defines dew by a surface reaching the dew point and prints no such number.' },
+  { id: 'LEAF_WETNESS_DURATION', cards: ['disease'], text: 'Hours of leaf wetness are not calculated, because every published method needs an input this card does not have. The RH >= 90% estimator needs hourly humidity through the night (Sentelhas et al. 2008). The sigmoid on daily mean relative humidity used by Alsafadi et al. (2024), after Alvares et al. (2015) in Brazil, needs its three coefficients fitted locally, and no Philippine fit is published. Luo and Goudriaan (2000), the only Philippine study of dew duration on rice, drove its model with nocturnal net radiation measured by a net radiometer. What this card reports instead is their measured drying time.' },
+  { id: 'HARVEST_PM7', cards: ['timing'], text: 'The plus or minus one week on the harvest window is a design assumption; PhilRice gives none, and it is probably optimistic. Cauba et al. (2025), estimating harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates, report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure of how tightly a Philippine harvest date can be pinned, and it is wider than a week. The card therefore gives PhilRice PalayCheck Key Check 8 as the thing to judge by.' },
+  { id: 'AWD_NO_DRY_SEASON', cards: ['rice'], text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
+  { id: 'VEGETABLE_TEMPERATURES', cards: ['stress'], text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
+  { id: 'TENSIOMETER_DEPTH', cards: ['rice'], text: 'The tensiometer trigger of 20 centibars is the mild-versus-severe AWD boundary of Carrijo, Lundy and Linquist (2017), who give it as -20 kPa alongside a field water level of 15 cm. What their figure does not fix, and this app therefore does not assume, is the depth at which the instrument sits. A tensiometer reads the soil around its cup, so the same field gives different numbers at different installation depths, and no Philippine guidance on where to place one in a paddy under AWD was found. The card states the trigger and tells the farmer to install the instrument in the root zone at about the depth the AWD tube monitors, which is an assumption of this app.' },
+  { id: 'READING_PRECISION', cards: ['rice'], text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The centimetre gradation itself is an addition of this app: the PhilRice observation well and the IRRI field water tube are both look-and-see devices, marked only at the depth that calls for water, and the published rule is whether water can still be seen in the well rather than how far down it is. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
+  { id: 'STRESS_NO_ACTION', cards: ['stress'], text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
 ];
 
 const API = {
@@ -1796,7 +1843,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '3550310d' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '37db5300' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1832,7 +1879,16 @@ function result(spec) {
   const det = (title, items, cls) => { if (!items || !items.length) return; const d = el('details', { class: cls || '' }, el('summary', null, bi(title))); const ul = el('ul'); items.forEach(x => ul.appendChild(el('li', { html: x }))); d.appendChild(ul); box.appendChild(d); };
   det(T.ui.why, spec.why);
   det(T.ui.fallback, spec.flags, 'flags');
-  det(T.ui.assumptions, spec.assumptions);
+  /* R3(a) says the declaration travels with the number, in the same view. Retyping each declaration by
+     hand on its card let three of them fall out: the dew-point depression the leaf-wetness card acts on,
+     the tensiometer depth the rice card instructs on, and the effective-rainfall substitution the rain
+     card makes, all of which existed only on the global sources page, which is a route change away.
+     Every entry in the registry now names the cards it belongs to, and the card gets its text from the
+     registry. A card suppresses one only where that quantity is not in play in this particular answer. */
+  const declared = (A.UNVERIFIED || []).filter(function (u) {
+    return spec.card && u.cards && u.cards.indexOf(spec.card) >= 0 && (spec.suppress || []).indexOf(u.id) < 0;
+  }).map(function (u) { return u.text; });
+  det(T.ui.assumptions, declared.concat(spec.assumptions || []));
   det(T.ui.limits, spec.limits);
   if (spec.sources && spec.sources.length) {
     const d = el('details', null, el('summary', null, bi(T.ui.sources)));
@@ -2308,7 +2364,7 @@ CARDS.rice = function (root) {
       'Splitting the loss needs the crop water use figure from the watering card, which is FAO-56 with the paddy rice crop coefficient. Those coefficients are derived for flooded paddy, so under AWD with no standing water the split is less certain than the total loss, which is measured.',
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
-    show(out, result({ level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
+    show(out, result({ card: 'rice', suppress: riceSuppress(inp), level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
       assumptions: riceAssumptions(inp).concat([
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
@@ -2321,13 +2377,20 @@ CARDS.rice = function (root) {
    declared choice rather than a published rule: DA AO 25-09 names a depth for the dry season and one
    for the wet, and two of the four Philippine climate types have neither, so the card says which one
    it took and why rather than letting the substitution pass unseen. */
+/* Two of the rice card's declared assumptions apply only to some answers. The tensiometer depth is not
+   in play on a paddy read with a well, and the no-dry-season choice is not in play unless the farmer
+   said the area has no dry season. Everything else in the registry for this card always applies. */
+function riceSuppress(inp) {
+  const out = [];
+  const usesTens = inp.instrument === 'tensiometer' || (inp.instrument === 'both' && inp.bothMode !== 'tube');
+  if (!usesTens) out.push('TENSIOMETER_DEPTH');
+  if (inp.season !== 'nodry') out.push('AWD_NO_DRY_SEASON');
+  return out;
+}
 function riceAssumptions(inp) {
   const a = [];
   const out = inp.season === 'wet' ? 5 : 10, down = inp.season === 'wet' ? 20 : 15;
   a.push('The observation well is 25 cm of perforated pipe or bamboo, 10 to 15 cm across, set so the ring for your season is level with the ground: ' + out + ' cm stands above the soil and its base sits ' + down + ' cm below it, which is the depth that calls for water (PhilRice). It is in a representative spot and both readings are taken in the same well.');
-  if (inp.season === 'nodry') {
-    a.push('Your area has no dry season, and this card has used the dry-season trigger of 15 cm. DA Administrative Order 25-09 sets 15 cm for the dry season and 20 cm for the wet and does not say which applies where there is no dry season, which is the case in two of the four Philippine climate types (DOST-PAGASA Climate Map of the Philippines 1951-2010). Re-flooding at the shallower depth is the smaller mistake. That choice is an assumption of this app, not a published rule.');
-  }
   return a;
 }
 
@@ -2351,7 +2414,7 @@ CARDS.rain = function (root) {
     /* Litres read badly past a million as "5000 thousand"; switch unit rather than pile on zeroes. */
     const lit = (v, word) => { const L = A.mmToM3PerHa(v) * ha * 1000; return L >= 1e6 ? fmt(L / 1e6, 2) + (word === 'en' ? ' million litres' : ' milyong litro') : fmt(L / 1e3, 0) + (word === 'en' ? ' thousand litres' : ' libong litro'); };
     const onArea = { en: inp.area != null ? 'on your ' + fmt(ha, 2) + ' ha' : 'on one hectare', fil: inp.area != null ? 'sa ' + fmt(ha, 2) + ' ektarya ninyo' : 'sa isang ektarya' };
-    show(out, result({ level: 'info', verdict: { en: 'Of ' + fmt(inp.P, 0) + ' mm, about ' + fmt(pe, 0) + ' mm counts for the crop this month.', fil: 'Sa ' + fmt(inp.P, 0) + ' mm, mga ' + fmt(pe, 0) + ' mm ang napakinabangan ng pananim ngayong buwan.' },
+    show(out, result({ card: 'rain', level: 'info', verdict: { en: 'Of ' + fmt(inp.P, 0) + ' mm, about ' + fmt(pe, 0) + ' mm counts for the crop this month.', fil: 'Sa ' + fmt(inp.P, 0) + ' mm, mga ' + fmt(pe, 0) + ' mm ang napakinabangan ng pananim ngayong buwan.' },
       lines: [[bi({ en: 'The ' + fmt(pe, 0) + ' mm that counts, as water', fil: 'Ang ' + fmt(pe, 0) + ' mm na napakinabangan, bilang tubig' }), bi({ en: cm(pe) + ' cm deep, the same depth on a field of any size: ' + m3(pe) + ' m\u00b3 (' + lit(pe, 'en') + ') ' + onArea.en + '.', fil: cm(pe) + ' cm ang lalim, pareho sa bukid na anumang laki: ' + m3(pe) + ' m\u00b3 (' + lit(pe, 'fil') + ') ' + onArea.fil + '.' }), 'key'],
               [bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm'],
               [bi({ en: 'All ' + fmt(inp.P, 0) + ' mm, as water', fil: 'Lahat ng ' + fmt(inp.P, 0) + ' mm, bilang tubig' }), bi({ en: cm(inp.P) + ' cm deep standing on the field, if none ran off or soaked away: ' + m3(inp.P) + ' m\u00b3 (' + lit(inp.P, 'en') + ') ' + onArea.en + '.', fil: cm(inp.P) + ' cm ang lalim ng tubig sa bukid, kung walang umagos o sumipsip pailalim: ' + m3(inp.P) + ' m\u00b3 (' + lit(inp.P, 'fil') + ') ' + onArea.fil + '.' }), 'minor'],
@@ -2393,7 +2456,7 @@ CARDS.spray = function (root) {
     const why = r.reasons.map(c => CODES[c]).filter(Boolean);
     if (!why.length) why.push('Delta T 2 to 8, wind 3 to 15 km/h, outside the inversion window, no inversion signs, air at or below 30 °C (GRDC, BOM, Agriculture Victoria, APVMA label).');
     why.push('Rainfastness is product-specific: check the label. BASF Philippine labels say do not spray within 24 h of heavy rain and do not apply when windy.');
-    show(out, result({ level, verdict: t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone.', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
+    show(out, result({ card: 'spray', level, verdict: t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone.', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
       limits: ['Thresholds come from Australian grain-industry guidance for boom spraying; they describe the weather, not knapsack equipment.', 'Wind is at 2 m over the field; a 10 m station wind can be twice the field wind (GRDC).'], sources: r.sources }));
   }
 };
@@ -2428,7 +2491,7 @@ CARDS.dry = function (root) {
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
     const limits = ['The reachable moisture is computed from the air, so the reading must be shaded air temperature and humidity, not a thermometer sitting in the sun. Grain lying in the sun is warmer than that air and can dry lower, which is why "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
-    show(out, result({ level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
+    show(out, result({ card: 'dry', level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
   }
 };
 
@@ -2468,7 +2531,7 @@ CARDS.stress = function (root) {
     if (days.length >= 3) lines.push([bi({ en: 'Three consecutive days above threshold', fil: 'Tatlong sunod na araw na lampas sa hangganan' }), r.threeConsecutiveHeat ? 'yes' : 'no']);
     const why = { rice: ['Rice thresholds: Yoshida (1981), Fundamentals of Rice Crop Science, Table 2.4, critical low and high temperatures by growth stage; where Yoshida gives a range, the lower value is the cold line. An FAO reproduction of this table differs at two stages (germination low, panicle differentiation high) and is not used. Sterility above 35 °C at anthesis for more than an hour (Yoshida 1981, section 2.3.6; Satake and Yoshida 1978); one hour at 33.7 °C spikelet temperature already causes sterility (Jagadish et al. 2007), hence the watch line at 33 °C.'], maize: ['Maize: pollen viability falls above 35 °C and kernel growth is reduced from 30 to 35 °C (Hatfield et al. 2011; Hatfield and Prueger 2015); Queensland DAF sweet corn thresholds 33 °C at flowering.'], sweetcorn: ['Queensland DAF sweet corn thresholds; Hatfield et al. 2011 for pollen viability.'] }[inp.crop] || ['Queensland Department of Agriculture and Fisheries critical temperature thresholds (literature review, 2023-2024); the series calls its values "a good guide, but by no means definitive due to slight varietal variation".'];
     const limits = ['Yoshida\'s rice thresholds are daily mean temperatures (germination excepted); this card compares them with the afternoon high and the morning low, so it flags stress earlier than a daily-mean test would. The anthesis heat line is the exception: it rests on afternoon temperatures at flowering (Satake and Yoshida 1978; Jagadish et al. 2007).', 'Thresholds are air temperatures; plant tissue can be warmer under water stress or cooler when well watered (Hatfield et al. 2011).', 'Duration matters: many studies used exposure of one hour to several days; a single afternoon reading is an indicator, not a damage estimate.', 'No yield loss is predicted.', 'This card does not say what to do when a threshold is crossed, because no published work ties a management response to a threshold under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist.'];
-    show(out, result({ level, verdict: t(T.verdicts[code]), lines, why, limits, sources: r.sources }));
+    show(out, result({ card: 'stress', level, verdict: t(T.verdicts[code]), lines, why, limits, sources: r.sources }));
   }
 };
 
@@ -2561,7 +2624,7 @@ CARDS.frost = function (root) {
       ? 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) records it in December, January and February, with January the most frequent and November the least; Launio et al. (2020) report December to February, now sometimes into March. Today falls outside those months, so check the readings before acting on this answer.'
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
     if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
-    show(out, result({ level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
+    show(out, result({ card: 'frost', level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
   }
 };
 
@@ -2645,7 +2708,7 @@ CARDS.disease = function (root) {
     }
     if (inp.T != null && inp.RH != null) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
-      show(out, result({ level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: (function () {
+      show(out, result({ card: 'disease', level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: (function () {
           const ls = [
             [bi({ en: 'Read any time between', fil: 'Puwedeng magbása mula' }), hhmm0(stT.sunset - A.FROST.readingBeforeSunsetH) + ' and ' + hhmm0(stN.sunrise) + ' at your field, and the later in that window the better', 'minor'],
             [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(inp.T, 1) + ' °C, what you measured'],
@@ -2715,7 +2778,7 @@ CARDS.timing = function (root) {
       const g = A.gdd(inp.tx, inp.tn, 10, 30, 2) * days;
       lines.push([bi({ en: 'Corn heat units since planting', fil: 'Init na naipon ng mais mula nang itanim' }), fmt(g, 0) + ' °C·day over ' + days + ' days (base 10 °C, cap 30 °C, McMaster and Wilhelm method 2); no stage target is published for Philippine hybrids, so this is a tracker only']);
     }
-    show(out, result({ level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['The harvest date is an orientation, not a promise: it says when to start looking at the crop. Judge the cut by PalayCheck Key Check 8 above.', 'Any window of about a week around this date would be a design assumption; PhilRice publishes none, and a week is probably too narrow. Cauba et al. (2025) estimated harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates and report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure and it is wider than a week.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['PALAYCHECK', 'CAUBA2025', 'MCMASTER1997', 'FAO56']) }));
+    show(out, result({ card: 'timing', level: 'info', verdict: t(T.verdicts.harvest, { date: h.date.toISOString().slice(0, 10) }), lines, why: ['Maturity days from the PhilRice Pinoy Rice Knowledge Bank variety pages, counted from sowing as the pages state.', 'Heat units: GDD = (Tmax + Tmin)/2 − 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], flags, assumptions: ['The harvest date is an orientation, not a promise: it says when to start looking at the crop. Judge the cut by PalayCheck Key Check 8 above.', 'Any window of about a week around this date would be a design assumption; PhilRice publishes none, and a week is probably too narrow. Cauba et al. (2025) estimated harvest dates for 99 Philippine rice fields from Sentinel-1 against farmer-reported dates and report root mean squared differences of 16 to 17.5 days in the dry season and 8 to 22 days in the wet. That is detection rather than prediction, but it is the closest published measure and it is wider than a week.', 'Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: h.sources.concat(['PALAYCHECK', 'CAUBA2025', 'MCMASTER1997', 'FAO56']) }));
   }
 };
 
@@ -2740,8 +2803,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 530 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build 3550310d. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 566 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build 37db5300. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2830,7 +2893,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 3550310d)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 37db5300)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2842,7 +2905,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 3550310d).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 3550310d ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 37db5300).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 37db5300 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2889,7 +2952,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 3550310d.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 37db5300.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

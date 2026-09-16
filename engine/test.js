@@ -197,14 +197,56 @@ console.log('\n-- water loss from two readings, and the date it gives --');
   ok('still to go, on the same datum', r.remainingCm, 10, 1e-9, 'cm');
   ok('days to the trigger', r.daysLeft, 5, 1e-9, 'd');
   ok('the rate carries sqrt(2) cm over the span', r.dropSigma, Math.SQRT2 / 2, 1e-12, 'cm/d');
-  ok('the date window is widened by both reading errors', r.projections[0].lo, 5 * (1 - Math.sqrt(0.135)), 1e-9, 'd');
-  ok('and on the far side too', r.projections[0].hi, 5 * (1 + Math.sqrt(0.135)), 1e-9, 'd');
+  /* The window must come from the propagated error of g/f, where g is the gap still to go and f the
+     fall between the readings, carrying the cross term that makes them dependent: they share the
+     current reading. Computed here from the derivation rather than from the engine's own expression,
+     so the test constrains the arithmetic instead of recording it. The previous form of these two
+     assertions recorded sqrt(2g^2 + f^2), which is this with the 2fg term dropped, and a Monte Carlo
+     over the app's own reading noise put its coverage at 57 to 65 per cent against a nominal 68. */
+  { const g = 10, f = 4, expect = Math.sqrt((f + g) * (f + g) + g * g) / (f * g);
+    ok('the date window carries the cross term between gap and fall', r.projections[0].lo, 5 * (1 - expect), 1e-9, 'd');
+    ok('and on the far side too', r.projections[0].hi, 5 * (1 + expect), 1e-9, 'd');
+    ok('which is wider than treating the two as independent', expect > Math.sqrt(2 * g * g + f * f) / (f * g), true, 0, ''); }
   eq('a fall of 4 cm is enough to project from', r.flags.indexOf('readings_too_close'), -1); }
 { const r = A.awdDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -5, levelPrevCm: -3, daysBetween: 1 });
   ok('the same rate from a 1-day pair', r.dropCmPerDay, 2, 1e-9, 'cm/d');
   eq('but a fall under 2 sqrt(2) cm is flagged as too close to read', r.flags.indexOf('readings_too_close') >= 0, true);
-  ok('and its window is nearly as wide as the answer', r.projections[0].hi - r.projections[0].lo, 2 * 5 * Math.sqrt(0.5 + 0.01), 1e-9, 'd'); }
+  { const g = 10, f = 2, expect = Math.sqrt((f + g) * (f + g) + g * g) / (f * g);
+    ok('and its window is wider than the answer itself', r.projections[0].hi - r.projections[0].lo, 2 * 5 * expect, 1e-9, 'd'); } }
 eq('the minimum useful fall is two sigma of the difference', A.MIN_FALL_CM, 2 * Math.SQRT2, 1e-12);
+/* R3(a) requires the declaration to travel with the number, so every declared assumption must name at
+   least one card, and the interface renders the registry's own text into that card's assumptions block.
+   Three of them once existed only on the global sources page, a route change away from the answer they
+   qualified. This is the structural guard against that happening again. */
+{ const known = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing'];
+  A.UNVERIFIED.forEach(function (u) {
+    eq('declared assumption ' + u.id + ' names the cards it belongs to',
+       Array.isArray(u.cards) && u.cards.length > 0, true);
+    (u.cards || []).forEach(function (c) {
+      eq('and ' + c + ' is a real card', known.indexOf(c) >= 0, true);
+    });
+  }); }
+/* Two readings with no time between them, or entered in the wrong order, measure nothing. Both used to
+   be replaced by a one-day span and reported as measured. */
+{ const same = A.lossRate({ levelCm: -11, levelPrevCm: -1, daysBetween: 0 });
+  eq('two readings on the same day give no rate', same.drop, null);
+  eq('and say why', same.flags.indexOf('readings_same_day') >= 0, true);
+  const back = A.lossRate({ levelCm: -11, levelPrevCm: -1, daysBetween: -3 });
+  eq('readings out of order give no rate', back.drop, null);
+  eq('and say why', back.flags.indexOf('readings_out_of_order') >= 0, true); }
+/* Every public entry point declines rather than throwing. Each of these used to raise. */
+{ const noThrow = function (name, f) { let r; try { r = f(); } catch (e) { r = { threw: e.message }; }
+    eq(name + ' declines rather than throwing', r.threw === undefined, true); return r; };
+  eq('FAO-56 Table 14 labels the row sub-humid to humid, so humid is accepted',
+     A.cropKc('rice', { riceHumidity: 'humid' }).error, undefined);
+  eq('an unrecognised humidity class is reported', A.cropKc('rice', { riceHumidity: 'zzz' }).error, 'unknown_rice_kc_class');
+  noThrow('stressCheck with no days array', function () { return A.stressCheck('rice', 'flowering'); });
+  noThrow('harvestWindow with a date string', function () { return A.harvestWindow('NSIC Rc222 (Tubigan 18)', 'tp', '2026-06-01'); });
+  eq('harvestWindow accepts a parseable date string', A.harvestWindow('NSIC Rc222 (Tubigan 18)', 'tp', '2026-06-01').error, undefined);
+  eq('and declines a missing one', A.harvestWindow('NSIC Rc222 (Tubigan 18)', 'tp', null).error, 'need_sowing_date');
+  eq('an unknown storage target is reported, not computed from', A.dryingDecision({ T: 32, RH: 70, storage: 'zzz' }).code, 'unknown_storage_target');
+  noThrow('eto with no latitude', function () { return A.eto({ Tmax: 32, Tmin: 24, RHmean: 80, elev: 20, J: 100 }); });
+  eq('eto declines without latitude and day of year', A.eto({ Tmax: 32, Tmin: 24, RHmean: 80, elev: 20, J: 100 }).error, 'need_lat_and_day_of_year'); }
 { /* averaging the daily falls inside one drawdown is the same number as first minus last: they telescope */
   const daily = [1, 4, 1], mean = daily.reduce((a, b) => a + b, 0) / daily.length;
   ok('daily falls telescope to the endpoints', A.lossRate({ levelCm: -7, levelPrevCm: -1, daysBetween: 3 }).drop, mean, 1e-12, 'cm/d'); }
