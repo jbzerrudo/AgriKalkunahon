@@ -6,3 +6,5 @@ paper/
 cards_icons/
 *.zip
 GIS/
+PAGASA_AgriWeather/
+env.cmd
