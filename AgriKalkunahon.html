@@ -936,7 +936,11 @@ function sprayWindow(inp) {
   else if (dT <= 12) { dtBand = 'very_coarse_only'; level = Math.max(level, 1); reasons.push('deltaT_10_12'); }
   else { dtBand = 'above_12'; level = 2; reasons.push('deltaT_above_12'); }
   // wind
-  const w = inp.windKmh, maxW = isNum(inp.labelMaxWindKmh) ? clamp(inp.labelMaxWindKmh, 15, 20) : 15;
+  /* The label governs. A product label may raise the GRDC figure as far as the 20 km/h the bands allow,
+     but a label stricter than 15 km/h is the legal limit and this card may not relax it: the old clamp
+     raised a 10 km/h label to 15 and returned a green light at 14. */
+  const w = inp.windKmh;
+  const maxW = isNum(inp.labelMaxWindKmh) ? Math.min(clamp(inp.labelMaxWindKmh, 0, SPRAY.windKmh.labelMax), Math.max(inp.labelMaxWindKmh, SPRAY.windKmh.good[1])) : SPRAY.windKmh.good[1];
   if (isNum(w)) {
     if (w < 3) { level = 2; reasons.push('wind_below_3'); }
     else if (w < SPRAY.windKmh.variableBelow) { level = Math.max(level, 1); reasons.push('wind_3_5_variable'); }
@@ -999,8 +1003,8 @@ function dryingDecision(inp) {
   const rhNeeded = rhForMoisture(inp.T, target);
   /* Palay off the field runs roughly 20-26% moisture; anything above 40 or at or below the target is
      either a typo or a crop that needs no drying, and the card says so rather than computing from it. */
-  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
-  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, weightAtTarget: null, cavansAtTarget: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, cavansAtTarget: null, practice: SUN_DRYING, flags: flags, sources: src };
   if (isNum(inp.mc) && inp.mc > 40) flags.push('moisture_above_normal_harvest');
   const code = emc <= target ? 'can_reach_target' : 'not_assured_target';
   let w2 = null, cavans = null;
@@ -1008,7 +1012,7 @@ function dryingDecision(inp) {
     w2 = weightAfterDrying(inp.weightKg, inp.mc, target);
     cavans = w2 == null ? null : w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
   }
-  return { code: code, emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: w2, weightAt14: w2, cavansAtTarget: cavans, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
+  return { code: code, emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, weightAtTarget: w2, cavansAtTarget: cavans, practice: SUN_DRYING, flags: flags, sources: src };
 }
 
 /* =====================================================================
@@ -1098,19 +1102,27 @@ function frostSeason(month) {
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
 function frostIndicator(inp) {
   const td = tdewFromEa(es0(inp.T) * inp.RH / 100);
-  const conds = { clear: inp.sky === 'clear', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T <= FROST.singleDigitC, hollow: !!inp.hollow };
+  const conds = { clear: inp.sky === 'clear', partlyClear: inp.sky === 'partly', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T <= FROST.singleDigitC, hollow: !!inp.hollow };
   let code, ruledOutBy = null;
   // Cloud and wind suppress radiative cooling, so they rule frost out, but only while they last: both
   // can lift at any hour, and then cooling starts. The card reports which one is holding frost off so
   // the farmer knows what would undo the answer. Air temperature is different again: it falls all
   // night, so an evening reading can never rule frost out, and a clear calm night returns at least
   // 'watch' however mild the thermometer reads.
-  if (inp.sky === 'overcast' || inp.wind === 'breezy') {
+  /* Only two things rule frost out, and both are things that can lift within the hour: thick cloud and
+     a real wind. Partial cloud is neither. It slows radiative cooling without stopping it, and no source
+     puts a number on how much, so a partly cloudy sky cannot be treated as an overcast one. It used to
+     fall through to 'unlikely' here, which returned a green verdict at -2 C on a calm night with no
+     reason attached. A sky that is not overcast, over a wind that is not breezy, now answers on the same
+     ladder as a clear one, one rung lower: 'watch' where a clear sky would read 'possible'. */
+  const ruledOut = inp.sky === 'overcast' || inp.wind === 'breezy';
+  const openSky = !ruledOut && (inp.sky === 'clear' || inp.sky === 'partly');
+  if (ruledOut) {
     code = 'unlikely';
     ruledOutBy = inp.sky === 'overcast' ? (inp.wind === 'breezy' ? 'sky_and_wind' : 'sky') : 'wind';
   }
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
-  else if (conds.clear && conds.calm) code = 'watch';
+  else if (openSky && conds.calm) code = 'watch';
   else code = 'unlikely';
   return { code: code, ruledOutBy: ruledOutBy, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }
@@ -1784,7 +1796,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '5fcb0210' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '58c9a7fa' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2175,7 +2187,18 @@ CARDS.rice = function (root) {
       lines.push([bi(lab), val]);
     });
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm before the trigger']);
-    if (r.riseCm != null) lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.riseCm, 0) + ' cm: ' + fmt(r.fromCm, 0) + ' cm up to the soil surface, then ' + r.refloodCm + ' cm above it']);
+    /* Only shown when the card is actually calling for water. It used to print under "not yet" as well,
+       so the answer read "do not water yet" and "water to add: 19 cm" together. The breakdown into
+       "so many cm up to the surface" only makes sense while the water is below the surface; with water
+       standing on the field it printed a negative distance, so above the surface the card gives the
+       total rise alone. */
+    const calling = r.code === 'reflood_now' || r.code === 'surface_dry_irrigate' || r.code === 'cf_top_up' || r.code === 'flowering_top_up_to_5cm';
+    if (r.riseCm != null && calling) {
+      const below = typeof r.fromCm === 'number' && isFinite(r.fromCm) && r.fromCm > 0;
+      lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.riseCm, 0) + ' cm'
+        + (below ? ': ' + fmt(r.fromCm, 0) + ' cm up to the soil surface, then ' + r.refloodCm + ' cm above it'
+                 : ', to ' + r.refloodCm + ' cm above the soil surface')]);
+    }
     if (r.shortCm != null) lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.shortCm, 0) + ' cm']);
     if (r.drainDays) lines.push([bi({ en: 'Drain', fil: 'Patuyuin' }), Array.isArray(r.drainDays) ? r.drainDays[0] + ' to ' + r.drainDays[1] + ' days before harvest' : r.drainDays + ' days before harvest on ' + (inp.soil === 'clay' ? 'clay' : 'light soil')]);
     if (r.targetCm && Array.isArray(r.targetCm)) lines.push([bi({ en: 'Target depth now', fil: 'Dapat na lalim ngayon' }), depthText + ' cm above the soil']);
@@ -2286,13 +2309,27 @@ CARDS.rice = function (root) {
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
     show(out, result({ level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
-      assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot, and both readings are taken at the same place.',
+      assumptions: riceAssumptions(inp).concat([
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
-        'A reading is taken as good to about one centimetre. That figure sets the width of the date window and is an assumption of this app, not a published value.'],
+        'A reading is taken as good to about one centimetre. Neither PhilRice nor IRRI publishes a graduated well: both are marked only at the depth that calls for water, and the published rule is whether water can still be seen. The centimetre marking, the precision and the width of the date window that follows from it are additions of this app, not published values.']),
       limits, sources: r.sources }));
   }
 };
+
+/* The observation well is set to the season, so its description is too. The no-dry-season case is a
+   declared choice rather than a published rule: DA AO 25-09 names a depth for the dry season and one
+   for the wet, and two of the four Philippine climate types have neither, so the card says which one
+   it took and why rather than letting the substitution pass unseen. */
+function riceAssumptions(inp) {
+  const a = [];
+  const out = inp.season === 'wet' ? 5 : 10, down = inp.season === 'wet' ? 20 : 15;
+  a.push('The observation well is 25 cm of perforated pipe or bamboo, 10 to 15 cm across, set so the ring for your season is level with the ground: ' + out + ' cm stands above the soil and its base sits ' + down + ' cm below it, which is the depth that calls for water (PhilRice). It is in a representative spot and both readings are taken in the same well.');
+  if (inp.season === 'nodry') {
+    a.push('Your area has no dry season, and this card has used the dry-season trigger of 15 cm. DA Administrative Order 25-09 sets 15 cm for the dry season and 20 cm for the wet and does not say which applies where there is no dry season, which is the case in two of the four Philippine climate types (DOST-PAGASA Climate Map of the Philippines 1951-2010). Re-flooding at the shallower depth is the smaller mistake. That choice is an assumption of this app, not a published rule.');
+  }
+  return a;
+}
 
 /* RAIN */
 CARDS.rain = function (root) {
@@ -2381,8 +2418,12 @@ CARDS.dry = function (root) {
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const weight = inp.w != null ? inp.w : (inp.cav != null ? inp.cav * inp.cavkg : null);
     const r = A.dryingDecision({ T: inp.T, RH: inp.RH, weightKg: weight, mc: inp.mc, cavanKg: inp.cavkg, storage: inp.storage });
-    const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach 14% at this temperature', fil: 'Halumigmig na kailangan para umabot sa 14%' }), 'below ' + fmt(r.rhFor14, 0) + '%']];
-    if (r.weightAt14 != null) lines.push([bi({ en: 'Weight after drying to 14%', fil: 'Bigat pagkatapos matuyo sa 14%' }), fmt(r.weightAt14, 0) + ' kg = ' + fmt(r.cavansAt14, 1) + ' cavans of ' + inp.cavkg + ' kg (from ' + fmt(weight, 0) + ' kg at ' + inp.mc + '%)']);
+    /* Both figures are for the storage moisture the farmer chose, not a fixed 14 per cent. The labels
+       used to say 14% whatever was chosen, so "keep as seed" printed the humidity needed for 12% under
+       a label that read 14%. The target now travels with the number. */
+    const tgt = fmt(r.storageTarget, 0) + '%';
+    const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach ' + tgt + ' at this temperature', fil: 'Halumigmig na kailangan para umabot sa ' + tgt }), 'below ' + fmt(r.rhForTarget, 0) + '%']];
+    if (r.weightAtTarget != null) lines.push([bi({ en: 'Weight after drying to ' + tgt, fil: 'Bigat pagkatapos matuyo sa ' + tgt }), fmt(r.weightAtTarget, 0) + ' kg = ' + fmt(r.cavansAtTarget, 1) + ' cavans of ' + inp.cavkg + ' kg (from ' + fmt(weight, 0) + ' kg at ' + inp.mc + '%)']);
     lines.push([bi({ en: 'Sun-drying practice (IRRI)', fil: 'Tamang pagbibilad (IRRI)' }), 'Layer 2 to 4 cm; stir every 30 minutes; cover when the grain is hotter than 50 °C (42 °C for seed); cover at rain and at night.']);
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
@@ -2699,8 +2740,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 448 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 5fcb0210. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 530 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.5.1, build 58c9a7fa. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2789,7 +2830,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 5fcb0210)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 58c9a7fa)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2801,7 +2842,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 5fcb0210).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 5fcb0210 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 58c9a7fa).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 58c9a7fa ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -2848,7 +2889,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 5fcb0210.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 58c9a7fa.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

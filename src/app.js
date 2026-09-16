@@ -840,7 +840,18 @@ CARDS.rice = function (root) {
       lines.push([bi(lab), val]);
     });
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm before the trigger']);
-    if (r.riseCm != null) lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.riseCm, 0) + ' cm: ' + fmt(r.fromCm, 0) + ' cm up to the soil surface, then ' + r.refloodCm + ' cm above it']);
+    /* Only shown when the card is actually calling for water. It used to print under "not yet" as well,
+       so the answer read "do not water yet" and "water to add: 19 cm" together. The breakdown into
+       "so many cm up to the surface" only makes sense while the water is below the surface; with water
+       standing on the field it printed a negative distance, so above the surface the card gives the
+       total rise alone. */
+    const calling = r.code === 'reflood_now' || r.code === 'surface_dry_irrigate' || r.code === 'cf_top_up' || r.code === 'flowering_top_up_to_5cm';
+    if (r.riseCm != null && calling) {
+      const below = typeof r.fromCm === 'number' && isFinite(r.fromCm) && r.fromCm > 0;
+      lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.riseCm, 0) + ' cm'
+        + (below ? ': ' + fmt(r.fromCm, 0) + ' cm up to the soil surface, then ' + r.refloodCm + ' cm above it'
+                 : ', to ' + r.refloodCm + ' cm above the soil surface')]);
+    }
     if (r.shortCm != null) lines.push([bi({ en: 'Water to add', fil: 'Tubig na idadagdag' }), 'raise it by about ' + fmt(r.shortCm, 0) + ' cm']);
     if (r.drainDays) lines.push([bi({ en: 'Drain', fil: 'Patuyuin' }), Array.isArray(r.drainDays) ? r.drainDays[0] + ' to ' + r.drainDays[1] + ' days before harvest' : r.drainDays + ' days before harvest on ' + (inp.soil === 'clay' ? 'clay' : 'light soil')]);
     if (r.targetCm && Array.isArray(r.targetCm)) lines.push([bi({ en: 'Target depth now', fil: 'Dapat na lalim ngayon' }), depthText + ' cm above the soil']);
@@ -951,13 +962,27 @@ CARDS.rice = function (root) {
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
     show(out, result({ level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
-      assumptions: ['The field tube is 25 to 30 cm long, perforated, buried with 15 cm below the soil (IRRI), at a representative spot, and both readings are taken at the same place.',
+      assumptions: riceAssumptions(inp).concat([
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
-        'A reading is taken as good to about one centimetre. That figure sets the width of the date window and is an assumption of this app, not a published value.'],
+        'A reading is taken as good to about one centimetre. Neither PhilRice nor IRRI publishes a graduated well: both are marked only at the depth that calls for water, and the published rule is whether water can still be seen. The centimetre marking, the precision and the width of the date window that follows from it are additions of this app, not published values.']),
       limits, sources: r.sources }));
   }
 };
+
+/* The observation well is set to the season, so its description is too. The no-dry-season case is a
+   declared choice rather than a published rule: DA AO 25-09 names a depth for the dry season and one
+   for the wet, and two of the four Philippine climate types have neither, so the card says which one
+   it took and why rather than letting the substitution pass unseen. */
+function riceAssumptions(inp) {
+  const a = [];
+  const out = inp.season === 'wet' ? 5 : 10, down = inp.season === 'wet' ? 20 : 15;
+  a.push('The observation well is 25 cm of perforated pipe or bamboo, 10 to 15 cm across, set so the ring for your season is level with the ground: ' + out + ' cm stands above the soil and its base sits ' + down + ' cm below it, which is the depth that calls for water (PhilRice). It is in a representative spot and both readings are taken in the same well.');
+  if (inp.season === 'nodry') {
+    a.push('Your area has no dry season, and this card has used the dry-season trigger of 15 cm. DA Administrative Order 25-09 sets 15 cm for the dry season and 20 cm for the wet and does not say which applies where there is no dry season, which is the case in two of the four Philippine climate types (DOST-PAGASA Climate Map of the Philippines 1951-2010). Re-flooding at the shallower depth is the smaller mistake. That choice is an assumption of this app, not a published rule.');
+  }
+  return a;
+}
 
 /* RAIN */
 CARDS.rain = function (root) {
@@ -1046,8 +1071,12 @@ CARDS.dry = function (root) {
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const weight = inp.w != null ? inp.w : (inp.cav != null ? inp.cav * inp.cavkg : null);
     const r = A.dryingDecision({ T: inp.T, RH: inp.RH, weightKg: weight, mc: inp.mc, cavanKg: inp.cavkg, storage: inp.storage });
-    const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach 14% at this temperature', fil: 'Halumigmig na kailangan para umabot sa 14%' }), 'below ' + fmt(r.rhFor14, 0) + '%']];
-    if (r.weightAt14 != null) lines.push([bi({ en: 'Weight after drying to 14%', fil: 'Bigat pagkatapos matuyo sa 14%' }), fmt(r.weightAt14, 0) + ' kg = ' + fmt(r.cavansAt14, 1) + ' cavans of ' + inp.cavkg + ' kg (from ' + fmt(weight, 0) + ' kg at ' + inp.mc + '%)']);
+    /* Both figures are for the storage moisture the farmer chose, not a fixed 14 per cent. The labels
+       used to say 14% whatever was chosen, so "keep as seed" printed the humidity needed for 12% under
+       a label that read 14%. The target now travels with the number. */
+    const tgt = fmt(r.storageTarget, 0) + '%';
+    const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach ' + tgt + ' at this temperature', fil: 'Halumigmig na kailangan para umabot sa ' + tgt }), 'below ' + fmt(r.rhForTarget, 0) + '%']];
+    if (r.weightAtTarget != null) lines.push([bi({ en: 'Weight after drying to ' + tgt, fil: 'Bigat pagkatapos matuyo sa ' + tgt }), fmt(r.weightAtTarget, 0) + ' kg = ' + fmt(r.cavansAtTarget, 1) + ' cavans of ' + inp.cavkg + ' kg (from ' + fmt(weight, 0) + ' kg at ' + inp.mc + '%)']);
     lines.push([bi({ en: 'Sun-drying practice (IRRI)', fil: 'Tamang pagbibilad (IRRI)' }), 'Layer 2 to 4 cm; stir every 30 minutes; cover when the grain is hotter than 50 °C (42 °C for seed); cover at rain and at night.']);
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);

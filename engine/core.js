@@ -786,7 +786,11 @@ function sprayWindow(inp) {
   else if (dT <= 12) { dtBand = 'very_coarse_only'; level = Math.max(level, 1); reasons.push('deltaT_10_12'); }
   else { dtBand = 'above_12'; level = 2; reasons.push('deltaT_above_12'); }
   // wind
-  const w = inp.windKmh, maxW = isNum(inp.labelMaxWindKmh) ? clamp(inp.labelMaxWindKmh, 15, 20) : 15;
+  /* The label governs. A product label may raise the GRDC figure as far as the 20 km/h the bands allow,
+     but a label stricter than 15 km/h is the legal limit and this card may not relax it: the old clamp
+     raised a 10 km/h label to 15 and returned a green light at 14. */
+  const w = inp.windKmh;
+  const maxW = isNum(inp.labelMaxWindKmh) ? Math.min(clamp(inp.labelMaxWindKmh, 0, SPRAY.windKmh.labelMax), Math.max(inp.labelMaxWindKmh, SPRAY.windKmh.good[1])) : SPRAY.windKmh.good[1];
   if (isNum(w)) {
     if (w < 3) { level = 2; reasons.push('wind_below_3'); }
     else if (w < SPRAY.windKmh.variableBelow) { level = Math.max(level, 1); reasons.push('wind_3_5_variable'); }
@@ -849,8 +853,8 @@ function dryingDecision(inp) {
   const rhNeeded = rhForMoisture(inp.T, target);
   /* Palay off the field runs roughly 20-26% moisture; anything above 40 or at or below the target is
      either a typo or a crop that needs no drying, and the card says so rather than computing from it. */
-  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
-  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, weightAt14: null, cavansAtTarget: null, cavansAt14: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && (inp.mc <= 0 || inp.mc >= 100)) return { code: 'moisture_out_of_range', emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, weightAtTarget: null, cavansAtTarget: null, practice: SUN_DRYING, flags: flags, sources: src };
+  if (isNum(inp.mc) && inp.mc <= target) return { code: 'already_dry_enough', emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, mc: inp.mc, weightAtTarget: null, cavansAtTarget: null, practice: SUN_DRYING, flags: flags, sources: src };
   if (isNum(inp.mc) && inp.mc > 40) flags.push('moisture_above_normal_harvest');
   const code = emc <= target ? 'can_reach_target' : 'not_assured_target';
   let w2 = null, cavans = null;
@@ -858,7 +862,7 @@ function dryingDecision(inp) {
     w2 = weightAfterDrying(inp.weightKg, inp.mc, target);
     cavans = w2 == null ? null : w2 / (isNum(inp.cavanKg) ? inp.cavanKg : CAVAN_KG);
   }
-  return { code: code, emcWb: emc, rhForTarget: rhNeeded, rhFor14: rhNeeded, storageTarget: target, weightAtTarget: w2, weightAt14: w2, cavansAtTarget: cavans, cavansAt14: cavans, practice: SUN_DRYING, flags: flags, sources: src };
+  return { code: code, emcWb: emc, rhForTarget: rhNeeded, storageTarget: target, weightAtTarget: w2, cavansAtTarget: cavans, practice: SUN_DRYING, flags: flags, sources: src };
 }
 
 /* =====================================================================
@@ -948,19 +952,27 @@ function frostSeason(month) {
 /* inp: {T, RH, sky:'clear'|'partly'|'overcast', wind:'calm'|'light'|'breezy', hollow:bool, elev} */
 function frostIndicator(inp) {
   const td = tdewFromEa(es0(inp.T) * inp.RH / 100);
-  const conds = { clear: inp.sky === 'clear', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T <= FROST.singleDigitC, hollow: !!inp.hollow };
+  const conds = { clear: inp.sky === 'clear', partlyClear: inp.sky === 'partly', calm: inp.wind === 'calm' || inp.wind === 'light', lowDewPoint: td <= FROST.dewPointLineC, cold: inp.T <= FROST.singleDigitC, hollow: !!inp.hollow };
   let code, ruledOutBy = null;
   // Cloud and wind suppress radiative cooling, so they rule frost out, but only while they last: both
   // can lift at any hour, and then cooling starts. The card reports which one is holding frost off so
   // the farmer knows what would undo the answer. Air temperature is different again: it falls all
   // night, so an evening reading can never rule frost out, and a clear calm night returns at least
   // 'watch' however mild the thermometer reads.
-  if (inp.sky === 'overcast' || inp.wind === 'breezy') {
+  /* Only two things rule frost out, and both are things that can lift within the hour: thick cloud and
+     a real wind. Partial cloud is neither. It slows radiative cooling without stopping it, and no source
+     puts a number on how much, so a partly cloudy sky cannot be treated as an overcast one. It used to
+     fall through to 'unlikely' here, which returned a green verdict at -2 C on a calm night with no
+     reason attached. A sky that is not overcast, over a wind that is not breezy, now answers on the same
+     ladder as a clear one, one rung lower: 'watch' where a clear sky would read 'possible'. */
+  const ruledOut = inp.sky === 'overcast' || inp.wind === 'breezy';
+  const openSky = !ruledOut && (inp.sky === 'clear' || inp.sky === 'partly');
+  if (ruledOut) {
     code = 'unlikely';
     ruledOutBy = inp.sky === 'overcast' ? (inp.wind === 'breezy' ? 'sky_and_wind' : 'sky') : 'wind';
   }
   else if (conds.clear && conds.calm && conds.lowDewPoint && conds.cold) code = 'possible';
-  else if (conds.clear && conds.calm) code = 'watch';
+  else if (openSky && conds.calm) code = 'watch';
   else code = 'unlikely';
   return { code: code, ruledOutBy: ruledOutBy, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }

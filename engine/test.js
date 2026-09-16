@@ -318,6 +318,28 @@ console.log('\n== SPRAY WINDOW (GRDC 2025 bands) ==');
 eq('wind 2 km/h: do not spray', A.sprayWindow({ T: 28, RH: 60, windKmh: 2, hoursToSunset: 6, hoursAfterSunrise: 4 }).code, 'do_not_spray');
 eq('wind 18 km/h: do not spray without label', A.sprayWindow({ T: 28, RH: 60, windKmh: 18, hoursToSunset: 6, hoursAfterSunrise: 4 }).code, 'do_not_spray');
 eq('wind 18 km/h with label 20: not blocked by wind', A.sprayWindow({ T: 28, RH: 60, windKmh: 18, labelMaxWindKmh: 20, hoursToSunset: 6, hoursAfterSunrise: 4 }).reasons.includes('wind_above_max'), false);
+/* A label may raise the GRDC 15 km/h figure as far as 20. It may never relax a stricter one: the old
+   clamp raised a 10 km/h label to 15 and returned a green light at 14 km/h, which is an off-label
+   application the card was endorsing. */
+const spray = function (label, wind) { return A.sprayWindow({ T: 28, RH: 60, windKmh: wind, labelMaxWindKmh: label, hoursToSunset: 6, hoursAfterSunrise: 6 }); };
+eq('a 10 km/h label stops a spray at 14 km/h', spray(10, 14).code, 'do_not_spray');
+eq('and says why', spray(10, 14).reasons.includes('wind_above_max'), true);
+eq('the same label allows 9 km/h', spray(10, 9).code, 'good');
+eq('a 5 km/h label stops a spray at 6 km/h', spray(5, 6).reasons.includes('wind_above_max'), true);
+eq('a 20 km/h label still allows 18', spray(20, 18).reasons.includes('wind_above_max'), false);
+eq('and still stops 21', spray(20, 21).reasons.includes('wind_above_max'), true);
+eq('with no label the GRDC figure governs at 16', spray(null, 16).reasons.includes('wind_above_max'), true);
+eq('and allows 14', spray(null, 14).reasons.includes('wind_above_max'), false);
+/* The rule stated as an invariant over the whole range. A label at or below the GRDC figure governs
+   exactly, so it is never relaxed; a label above it may raise the limit, but no further than the 20 km/h
+   the bands allow. */
+[3, 5, 8, 10, 12, 15, 18, 20, 25].forEach(function (lab) {
+  const want = lab <= 15 ? lab : Math.min(lab, 20);
+  [4, 9, 14, 16, 19, 22].forEach(function (wd) {
+    eq('label ' + lab + ' at ' + wd + ' km/h obeys a limit of ' + want,
+       spray(lab, wd).reasons.includes('wind_above_max'), wd > want);
+  });
+});
 eq('1 h before sunset, 5 km/h: inversion window', A.sprayWindow({ T: 26, RH: 70, windKmh: 5, hoursToSunset: 1, hoursAfterSunrise: 10 }).code, 'do_not_spray');
 eq('dew present: do not spray', A.sprayWindow({ T: 24, RH: 90, windKmh: 6, hoursToSunset: 8, hoursAfterSunrise: 3, mistFogDew: true }).code, 'do_not_spray');
 { const r = A.sprayWindow({ T: 36, RH: 25, P: 101.3, windKmh: 8, hoursToSunset: 6, hoursAfterSunrise: 4 });
@@ -338,8 +360,18 @@ ok('PalayCheck yield example 4867 kg/ha', 673.4 / 1250 * 10000 * (100 - 22.3) / 
 ok('PalayCheck /86 equals (100-14)', A.weightAfterDrying(673.4 / 1250 * 10000, 22.3, 14), 4867.34, 0.5, 'kg/ha');
 eq('cavan default 50 kg', A.CAVAN_KG, 50);
 { const d = A.dryingDecision({ T: 33, RH: 60, weightKg: 2500, mc: 24 });
-  eq('33 C 60%: can reach the target', d.code, 'can_reach_target'); ok('cavans at 14%', d.cavansAt14, 2500 * 76 / 86 / 50, 1e-9);
+  eq('33 C 60%: can reach the target', d.code, 'can_reach_target'); ok('cavans at the target', d.cavansAtTarget, 2500 * 76 / 86 / 50, 1e-9);
   eq('storage target weeks to months 14%', d.storageTarget, 14); }
+/* The card prints the target beside every figure, so the figures must belong to the chosen target and
+   nothing may still be named for a fixed 14 per cent. Seed storage is 12 per cent, and both numbers
+   must move with it. */
+{ const seed = A.dryingDecision({ T: 32, RH: 70, mc: 24, weightKg: 1000, storage: 'seed' });
+  const keep = A.dryingDecision({ T: 32, RH: 70, mc: 24, weightKg: 1000, storage: 'weeks_to_months' });
+  eq('seed storage targets 12%', seed.storageTarget, 12);
+  ok('humidity needed for seed is lower than for 14%', seed.rhForTarget, 58, 1);
+  ok('and for 14% it is higher', keep.rhForTarget, 71, 1);
+  eq('drying further leaves less weight', seed.weightAtTarget < keep.weightAtTarget, true);
+  eq('no figure is still named for a fixed 14 per cent', seed.rhFor14 === undefined && seed.weightAt14 === undefined && seed.cavansAt14 === undefined, true); }
 eq('30 C 85%: not assured', A.dryingDecision({ T: 30, RH: 85 }).code, 'not_assured_target');
 eq('palay already at or below target: stop drying', A.dryingDecision({ T: 33, RH: 60, mc: 12, weightKg: 100 }).code, 'already_dry_enough');
 eq('impossible moisture is refused', A.dryingDecision({ T: 33, RH: 60, mc: 120 }).code, 'moisture_out_of_range');
@@ -363,6 +395,24 @@ console.log('\n== FROST INDICATOR ==');
 eq('clear calm 6 C RH 60: possible', A.frostIndicator({ T: 6, RH: 60, sky: 'clear', wind: 'calm' }).code, 'possible');
 eq('overcast: unlikely', A.frostIndicator({ T: 6, RH: 60, sky: 'overcast', wind: 'calm' }).code, 'unlikely');
 eq('clear calm 12 C RH 40 (Td low, not cold): watch', A.frostIndicator({ T: 12, RH: 40, sky: 'clear', wind: 'calm' }).code, 'watch');
+/* Partial cloud is the middle option in the card's own menu and it used to fall through to 'unlikely',
+   which the interface paints green. On a calm Benguet night below freezing that is the worst answer the
+   card can give, and it arrived with no reason attached. Only thick cloud or a real wind rules frost
+   out; partial cloud slows the cooling and no source says by how much. */
+eq('partly cloudy, calm, below freezing: not a green light', A.frostIndicator({ T: -2, RH: 45, sky: 'partly', wind: 'calm' }).code, 'watch');
+eq('and it is never ruled out without naming what ruled it out', A.frostIndicator({ T: -2, RH: 45, sky: 'partly', wind: 'calm' }).ruledOutBy, null);
+eq('partly cloudy and calm at 8 C: watch', A.frostIndicator({ T: 8, RH: 50, sky: 'partly', wind: 'calm' }).code, 'watch');
+eq('partly cloudy but breezy: the wind rules it out', A.frostIndicator({ T: -2, RH: 45, sky: 'partly', wind: 'breezy' }).ruledOutBy, 'wind');
+eq('overcast still rules it out at any temperature', A.frostIndicator({ T: -5, RH: 45, sky: 'overcast', wind: 'calm' }).ruledOutBy, 'sky');
+eq('a clear sky still reads one rung higher than a partly cloudy one', A.frostIndicator({ T: -2, RH: 45, sky: 'clear', wind: 'calm' }).code, 'possible');
+/* Anything the card returns as unlikely must be able to say what is holding frost off, or the farmer
+   gets a green verdict with no reason. */
+['clear', 'partly', 'overcast'].forEach(function (sk) {
+  ['calm', 'light', 'breezy'].forEach(function (wd) {
+    const r = A.frostIndicator({ T: -2, RH: 45, sky: sk, wind: wd });
+    eq('unlikely always names its reason: ' + sk + '/' + wd, r.code !== 'unlikely' || r.ruledOutBy != null, true);
+  });
+});
 eq('dew: near-saturated air dews even under cloud', A.dewTonight(18, 94, 'overcast', 'calm').code, 'dew_very_likely_near_saturation');
 eq('dew: dry air under cloud does not', A.dewTonight(18, 40, 'overcast', 'calm').code, 'dew_less_likely');
 eq('dew: dry air on a clear calm night may', A.dewTonight(18, 40, 'clear', 'calm').code, 'dew_likely_if_cools_to_dewpoint');
