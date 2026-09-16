@@ -356,7 +356,7 @@ function gpsUncertainty() {
 function locationWarnings() {
   const L = store.loc, out = [];
   if (!L.set) out.push({ en: 'This is the app\'s starting location (Metro Manila), not your field. Nothing you see that depends on location, including sunrise, sunset, the frost reading window and the time the leaves should dry, is about your place until you set it.', fil: 'Ito ang panimulang lokasyon ng app (Metro Manila), hindi ang bukid ninyo. Lahat ng nakadepende sa lokasyon, kasama ang pagsikat at paglubog ng araw, ang oras ng pagbása para sa andap, at ang oras ng pagkatuyo ng dahon, ay hindi tungkol sa lugar ninyo hangga\'t hindi ninyo ito itinatakda.' });
-  if (isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127)) out.push({ en: 'This location is outside the Philippines. The physics still holds anywhere: evapotranspiration, dew point, drying and day length are FAO-56 and general, and the clock times are computed for your own time zone. The thresholds are another matter. The rice water depths and harvest checks are Philippine, the spray bands Australian, the vegetable thresholds Queensland, the late blight model Scottish and untested outside the UK, and the frost card is built on Benguet records. Every result names its source, so check whether that source suits your country.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Nananatiling tama ang pisika kahit saan: ang evapotranspiration, dew point, pagpapatuyo at haba ng araw ay FAO-56 at pangkalahatan, at ang mga oras ay batay sa sariling time zone ninyo. Iba naman ang mga hangganan. Ang lalim ng tubig sa palayan at ang pagsusuri sa pag-ani ay Pilipino, ang spray bands ay Australyano, ang hangganan sa gulay ay Queensland, ang modelo sa late blight ay Scottish at hindi pa nasusubok sa labas ng UK, at ang card ng andap ay nakabatay sa talaan ng Benguet. Bawat sagot ay may nakasaad na sanggunian, kaya suriin kung angkop ito sa bansa ninyo.' });
+  if (isFinite(L.lat) && isFinite(L.lon) && !A.insidePH(L.lat, L.lon)) out.push({ en: 'This location is outside the Philippines. The physics still holds anywhere: evapotranspiration, dew point, drying and day length are FAO-56 and general, and the clock times are computed for your own time zone. The thresholds are another matter. The rice water depths and harvest checks are Philippine, the spray bands Australian, the vegetable thresholds Queensland, the late blight model Scottish and untested outside the UK, and the frost card is built on Benguet records. Every result names its source, so check whether that source suits your country.', fil: 'Nasa labas ng Pilipinas ang lokasyong ito. Nananatiling tama ang pisika kahit saan: ang evapotranspiration, dew point, pagpapatuyo at haba ng araw ay FAO-56 at pangkalahatan, at ang mga oras ay batay sa sariling time zone ninyo. Iba naman ang mga hangganan. Ang lalim ng tubig sa palayan at ang pagsusuri sa pag-ani ay Pilipino, ang spray bands ay Australyano, ang hangganan sa gulay ay Queensland, ang modelo sa late blight ay Scottish at hindi pa nasusubok sa labas ng UK, at ang card ng andap ay nakabatay sa talaan ng Benguet. Bawat sagot ay may nakasaad na sanggunian, kaya suriin kung angkop ito sa bansa ninyo.' });
   const dev = tzHours(), fld = fieldTz();
   const z = n => 'UTC' + (n >= 0 ? '+' : '') + n;
   if (dev !== fld) out.push({ en: 'This device\'s clock is set to ' + z(dev) + ', too far from your field to be its clock, so every hour shown here, sunrise, sunset, the reading window and the drying window, is worked out for ' + z(fld) + ' instead, from the field\'s longitude. Those are the times on the clocks around the field, not the time on this screen.', fil: 'Nakatakda sa ' + z(dev) + ' ang orasan ng device na ito, masyadong malayo sa bukid ninyo, kaya lahat ng oras dito, ang pagsikat at paglubog ng araw, ang oras ng pagbása at ang oras ng pagkatuyo, ay ayon sa ' + z(fld) + ' batay sa longitude ng bukid. Ito ang mga oras sa mga orasan sa paligid ng bukid, hindi ang oras sa screen na ito.' });
@@ -1179,7 +1179,7 @@ CARDS.frost = function (root) {
     const nowH = fieldHourNow();   // compared against field-time sun times, so it must be field time too
     /* Refuse a daytime reading rather than judging tonight from air that is still warming. */
     if (!A.frostReadingUsable(nowH, stToday.sunset, st.sunrise)) {
-      const opens = ((stToday.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+      const opens = ((stToday.sunset + A.FROST.faoReadingAfterSunsetH) % 24 + 24) % 24;   // the FAO reading time
       show(out, result({ level: 'info',
         verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa upang hatulan kung magkaka-andap.' },
         lines: [[bi({ en: 'Read again after', fil: 'Magbása uli pagkatapos ng' }), hhmm(opens) + ' (sunset ' + hhmm(stToday.sunset) + ')'],
@@ -1190,16 +1190,24 @@ CARDS.frost = function (root) {
       return;
     }
     const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
-    const weight = toMin > 10 ? 'early' : (toMin > 4.5 ? 'middle' : 'close');   // a Philippine night runs about 12 hours
+    /* Which of the three texts to show used to be decided by splitting the night at 10 and 4.5 hours
+       before sunrise, two numbers with no source. It is now decided on the cited method's own clock:
+       the FAO frost manual takes its reading two hours after sunset and puts the minimum just before
+       sunrise, so a reading before that time is early, one after it is the reading the method is built
+       around, and one inside the last hour is taken at the minimum itself. */
+    const weight = A.frostReadingWeight(nowH, st.sunset, st.sunrise);
     const weightText = {
       early: { en: 'This is an early reading, taken near dusk. Almost the whole night of cooling is still ahead, so treat this answer as provisional and read again before you sleep.', fil: 'Maagang pagbása ito, malapit sa dapithapon. Halos buong gabi pa ang lalamig, kaya pansamantala muna ang sagot na ito; magbása uli bago matulog.' },
-      middle: { en: 'An evening reading. The air will keep cooling for several more hours, so a later reading will tell you more.', fil: 'Pagbása sa gabi. Lalamig pa ang hangin nang ilang oras, kaya mas marami ang masasabi ng pagbása mamaya.' },
-      close: { en: 'Read close to the coldest hour, so this reading carries the most weight.', fil: 'Malapit na sa pinakamalamig na oras ang pagbása, kaya ito ang pinakamabigat na batayan.' }
+      method: { en: 'An evening reading. The air will keep cooling for several more hours, so a later reading will tell you more.', fil: 'Pagbása sa gabi. Lalamig pa ang hangin nang ilang oras, kaya mas marami ang masasabi ng pagbása mamaya.' },
+      at_minimum: { en: 'Read close to the coldest hour, so this reading carries the most weight.', fil: 'Malapit na sa pinakamalamig na oras ang pagbása, kaya ito ang pinakamabigat na batayan.' }
     }[weight];
     /* Cloud and wind hold frost off only while they last. Name whichever is doing it, so the farmer
        knows what would undo this answer, and only while the night still has hours to run. */
     const revoke = { sky: { en: 'the cloud cover', fil: 'ang takip ng ulap' }, wind: { en: 'the wind', fil: 'ang hangin' }, sky_and_wind: { en: 'the cloud cover and the wind', fil: 'ang takip ng ulap at ang hangin' } }[r.ruledOutBy];
-    const revocable = revoke && toMin > 1.5;
+    /* This used to be hidden once fewer than 1.5 hours of night remained, on an uncited cut-off. If
+       cloud is the only thing holding frost off, the last hour is when the farmer most needs to know
+       it, so the line is shown whenever there is a reason to show. */
+    const revocable = !!revoke;
     /* Name the month the verdict is based on, so the farmer can see which month the card thinks it is
        rather than trusting a bare classification. The classification is monthly, so no day is shown. */
     const mi = new Date().getMonth();
@@ -1217,7 +1225,7 @@ CARDS.frost = function (root) {
        describe their place. No elevation threshold for frost is claimed: 900 m is simply the bottom of
        the range the records themselves come from (Marasigan 2017, citing Estoque 2012 for Baguio). */
     const benguetKm = A.haversineKm(L.lat, L.lon, A.BENGUET.lat, A.BENGUET.lon);
-    const offPH = isFinite(L.lat) && isFinite(L.lon) && (L.lat < 4 || L.lat > 22 || L.lon < 116 || L.lon > 127);
+    const offPH = isFinite(L.lat) && isFinite(L.lon) && !A.insidePH(L.lat, L.lon);
     const lowland = isFinite(L.elev) && L.elev < A.BENGUET.recordLowM;
     const lines = [];
     if (offPH || lowland) lines.push([bi({ en: 'This place is not in the frost record', fil: 'Wala sa talaan ng andap ang lugar na ito' }),
@@ -1314,7 +1322,7 @@ CARDS.disease = function (root) {
     if (inp.T != null && inp.RH != null && !A.frostReadingUsable(nowH0, stT.sunset, stN.sunrise)) {
       show(out, result({ level: 'info',
         verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa sa araw upang hatulan ang gabi.' },
-        lines: [[bi({ en: 'Read again after', fil: 'Magbása uli pagkatapos ng' }), hhmm0(((stT.sunset - A.FROST.readingBeforeSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
+        lines: [[bi({ en: 'Read again after', fil: 'Magbása uli pagkatapos ng' }), hhmm0(((stT.sunset + A.FROST.faoReadingAfterSunsetH) % 24 + 24) % 24) + ' (sunset ' + hhmm0(stT.sunset) + ')']],
         why: ['Dew forms as the surface cools through the night. Until the air has begun cooling, a reading carries no information about tonight: the air will warm further, peak, and only then start falling.'],
         sources: ['FAO56', 'FAO_FROST'] }));
       if (lwPanel) show(out, lwPanel);
@@ -1324,7 +1332,7 @@ CARDS.disease = function (root) {
       const d = A.dewTonight(inp.T, inp.RH, inp.sky, inp.wind);
       show(out, result({ card: 'disease', level: (d.code === 'dew_less_likely') ? 'go' : 'caution', verdict: t(T.verdicts[d.code], { td: fmt(d.dewPoint, 1), dep: fmt(d.depression, 1) }), lines: (function () {
           const ls = [
-            [bi({ en: 'Read any time between', fil: 'Puwedeng magbása mula' }), hhmm0(stT.sunset - A.FROST.readingBeforeSunsetH) + ' and ' + hhmm0(stN.sunrise) + ' at your field, and the later in that window the better', 'minor'],
+            [bi({ en: 'Read any time between', fil: 'Puwedeng magbása mula' }), hhmm0(((stT.sunset + A.FROST.faoReadingAfterSunsetH) % 24 + 24) % 24) + ' and ' + hhmm0(stN.sunrise) + ' at your field, and the later in that window the better', 'minor'],
             [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(inp.T, 1) + ' °C, what you measured'],
             [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(d.dewPoint, 1) + ' °C, the temperature the air must fall to before dew forms'],
             [bi({ en: 'Still to cool', fil: 'Lamig na kailangan pa' }), fmt(d.depression, 1) + ' °C, the difference between the two figures above']

@@ -214,6 +214,67 @@ console.log('\n-- water loss from two readings, and the date it gives --');
   { const g = 10, f = 2, expect = Math.sqrt((f + g) * (f + g) + g * g) / (f * g);
     ok('and its window is wider than the answer itself', r.projections[0].hi - r.projections[0].lo, 2 * 5 * expect, 1e-9, 'd'); } }
 eq('the minimum useful fall is two sigma of the difference', A.MIN_FALL_CM, 2 * Math.SQRT2, 1e-12);
+/* The run-of-days rule is QDAF's, quoted in stressCheck: the critical temperature plus two, for three
+   days, applied to each crop's threshold. It used to run alongside a stricter rule invented here, three
+   days at the critical temperature itself. */
+{ const mk = function (t) { return t.map(function (x) { return { Tmax: x, Tmin: 20 }; }); };
+  eq('the window is three days', A.STRESS_RUN.days, 3);
+  eq('and the bar is the critical temperature plus two', A.STRESS_RUN.overThresholdC, 2);
+  const tf = A.STRESS.tomato.phases.flowering;
+  eq('the one explicit QDAF value is that rule already worked out', tf.days3, tf.hi + A.STRESS_RUN.overThresholdC);
+  eq('tomato at flowering trips at 29 for three days', A.stressCheck('tomato', 'flowering', mk([29, 29, 29])).threeConsecutiveHeat, true);
+  eq('and not at 28', A.stressCheck('tomato', 'flowering', mk([28, 28, 28])).threeConsecutiveHeat, false);
+  eq('and not on two days at 29', A.stressCheck('tomato', 'flowering', mk([29, 29])).threeConsecutiveHeat, false);
+  eq('cabbage, critical 32, trips at 34', A.stressCheck('cabbage', 'vegetative', mk([34, 34, 34])).threeConsecutiveHeat, true);
+  eq('and not at 33', A.stressCheck('cabbage', 'vegetative', mk([33, 33, 33])).threeConsecutiveHeat, false);
+  eq('the bar is reported so the card can show it', A.stressCheck('cabbage', 'vegetative', mk([34, 34, 34])).runBarC, 34);
+  /* Rice thresholds come from Yoshida and others, not QDAF, so QDAF's rule is not carried onto them. */
+  eq('a crop whose thresholds are not QDAF gets no run-of-days verdict', A.stressCheck('rice', 'tillering', mk([40, 40, 40])).threeConsecutiveHeat, false);
+  eq('and no bar', A.stressCheck('rice', 'tillering', mk([40, 40, 40])).runBarC, null); }
+/* The reading window is the FAO frost manual's own: two hours after sunset until sunrise. It used to
+   open two hours before sunset, a number chosen here so a dusk reading would be answered. Sunset 18:00,
+   sunrise 05:48. */
+{ const u = function (h) { return A.frostReadingUsable(h, 18.0, 5.8); };
+  eq('a reading before sunset is refused', u(17.5), false);
+  eq('and just after sunset is still refused', u(18.5), false);
+  eq('one minute short of the FAO time is refused', u(19.98), false);
+  eq('at the FAO time it is accepted', u(20.0), true);
+  eq('through the night', u(23.0), true);
+  eq('past midnight', u(3.0), true);
+  eq('up to sunrise', u(5.7), true);
+  eq('after sunrise it is refused', u(7.0), false);
+  eq('and at midday', u(12.0), false);
+  eq('the window opens at the FAO reading time', A.FROST.faoReadingAfterSunsetH, 2);
+  eq('and no before-sunset constant survives', A.FROST.readingBeforeSunsetH, undefined); }
+/* How much a frost reading is worth is now read off the cited method's own clock rather than off two
+   round numbers: the FAO manual takes its reading two hours after sunset and puts the minimum just
+   before sunrise. Sunset 18:00, sunrise 05:48. */
+{ const w = function (h) { return A.frostReadingWeight(h, 18.0, 5.8); };
+  eq('before sunset is early', w(17.9), 'early');
+  eq('just after sunset is still early', w(18.5), 'early');
+  eq('one minute short of the FAO reading time is early', w(19.98), 'early');
+  eq('at the FAO reading time the method applies', w(20.0), 'method');
+  eq('and through the night', w(23.0), 'method');
+  eq('and past midnight', w(3.0), 'method');
+  eq('outside the last hour it is still the method', w(4.7), 'method');
+  eq('inside the last hour it is taken at the minimum', w(4.9), 'at_minimum');
+  eq('and right before sunrise', w(5.7), 'at_minimum');
+  eq('the FAO reading time is two hours after sunset', A.FROST.faoReadingAfterSunsetH, 2);
+  eq('and the minimum sits in the last hour', A.FROST.coldestWindowBeforeSunriseH, 1); }
+/* The envelope that decides whether a card tells the user they are outside the Philippines is the
+   published 12 nautical mile territorial sea, not a rounded guess. */
+eq('the envelope is the published territorial sea, south', A.PH_ENVELOPE.minLat, 4.2138);
+eq('north', A.PH_ENVELOPE.maxLat, 21.4009);
+eq('west', A.PH_ENVELOPE.minLon, 116.6863);
+eq('east', A.PH_ENVELOPE.maxLon, 126.8063);
+eq('Manila is inside', A.insidePH(14.60, 121.00), true);
+eq('La Trinidad is inside', A.insidePH(16.46, 120.59), true);
+eq('Batanes is inside', A.insidePH(20.45, 121.97), true);
+eq('Tawi-Tawi is inside', A.insidePH(5.05, 119.75), true);
+eq('Singapore is outside', A.insidePH(1.35, 103.82), false);
+eq('Taipei is outside', A.insidePH(25.03, 121.57), false);
+eq('and the envelope names its source', A.PH_ENVELOPE.source, 'PH_BOUNDS');
+eq('which is in the reference list', A.REFS.PH_BOUNDS != null, true);
 /* R3(a) requires the declaration to travel with the number, so every declared assumption must name at
    least one card, and the interface renders the registry's own text into that card's assumptions block.
    Three of them once existed only on the global sources page, a route change away from the answer they
@@ -463,7 +524,7 @@ eq('frost 10.0 C counts as cold (source says at or below 10)', A.frostIndicator(
 eq('frost 10.1 C does not', A.frostIndicator({ T: 10.1, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, false);
 eq('frost reading 09:08 is refused', A.frostReadingUsable(9.13, 17.8, 5.8), false);
 eq('frost reading 13:00 is refused', A.frostReadingUsable(13, 17.8, 5.8), false);
-eq('frost reading 16:00 is usable (two hours before sunset)', A.frostReadingUsable(16, 17.8, 5.8), true);
+eq('frost reading 16:00 is refused: the window opens at the FAO reading time', A.frostReadingUsable(16, 18, 5.8), false);
 eq('frost reading 21:00 is usable', A.frostReadingUsable(21, 17.8, 5.8), true);
 eq('frost reading 04:30 is usable', A.frostReadingUsable(4.5, 17.8, 5.8), true);
 eq('frost reading 06:30 is refused, the night is over', A.frostReadingUsable(6.5, 17.8, 5.8), false);
@@ -496,7 +557,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the twelve items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION'); }
+  eq('UNVERIFIED list names the fourteen items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');

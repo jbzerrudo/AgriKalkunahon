@@ -952,14 +952,31 @@ function stressCheck(cropId, phase, days) {
     return codes;
   });
   const heatDays = per.filter(c => c.includes('heat_above_threshold')).length;
-  const consecutive3 = days.length >= 3 && per.slice(-3).every(c => c.includes('heat_above_threshold'));
-  const days3 = ph.days3 != null && days.length >= 3 && days.slice(-3).every(d => d.Tmax >= ph.days3);
-  return { thresholds: ph, perDay: per, heatDays: heatDays, threeConsecutiveHeat: consecutive3 || days3, sources: c.src };
+  /* The run of days is QDAF's own rule, not this app's, and it has two parts that used to be applied
+     separately and wrongly. Carey and Deuter state it: "To simulate the effects of high temperatures on
+     consecutive days, we have used the critical temperature + 2 C for 3 days and applied this to each
+     crops' threshold", their reason being that "plant stress caused by several days in a row above a
+     critical temperature tends to tip the system into decline". So the window is three days and the bar
+     is the critical temperature plus two, for every crop QDAF covers. This card used to run its own
+     stricter rule alongside it, three days at the critical temperature itself, with the window and the
+     bar both chosen here. That rule is gone. The one explicit days3 value carried for tomato at
+     flowering, 29 against a critical temperature of 27, is QDAF's rule already worked out, and a test
+     holds the two together. Crops whose thresholds come from elsewhere get no run-of-days verdict,
+     because QDAF's rule is stated for QDAF's thresholds. */
+  const qdafSourced = c.src.indexOf('QDAF_CTT') >= 0;
+  const bar = ph.days3 != null ? ph.days3 : (qdafSourced && isNum(ph.hi) ? ph.hi + STRESS_RUN.overThresholdC : null);
+  const runOfDays = isNum(bar) && days.length >= STRESS_RUN.days
+    && days.slice(-STRESS_RUN.days).every(d => d.Tmax >= bar);
+  return { thresholds: ph, perDay: per, heatDays: heatDays, threeConsecutiveHeat: runOfDays,
+           runBarC: isNum(bar) ? bar : null, runDays: STRESS_RUN.days, sources: c.src };
 }
 
 /* =====================================================================
    11. FROST INDICATOR (qualitative)  [FAO_FROST, MARASIGAN2017, BASQUIAL2021, LAUNIO2020]
    ===================================================================== */
+/* QDAF's consecutive-day rule, quoted in stressCheck above. [QDAF_CTT] */
+const STRESS_RUN = { days: 3, overThresholdC: 2 };
+
 const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
   /* Marasigan (2017): 70% of MODIS-detected frost occurrences at land surface temperature at or below
      10 C, 57% at or below 9 C. A marker, not a threshold: 30% of her events were above it, her figure is
@@ -974,11 +991,31 @@ const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
   seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1,
   /* A reading only speaks to the coming night once the air has started cooling. Through the morning and
      the middle of the day it is still warming or at its daily peak, so the card refuses those readings
-     instead of dressing them up as a verdict. Window: from this many hours before sunset, to sunrise. */
-  readingBeforeSunsetH: 2 };
+     instead of dressing them up as a verdict. The window used to open two hours BEFORE sunset, a number
+     chosen here so that a farmer looking at dusk would still get an answer. It now opens at the FAO
+     frost manual's own reading time, two hours AFTER sunset, so the card takes its readings when the
+     cited method takes them. The cost is declared in UNVERIFIED as FROST_READING_WINDOW: the conditions
+     this card tests, a clear sky and a still night, are visible before sunset, and the card now declines
+     to judge from them. */
+  /* The FAO frost manual takes its own reading two hours AFTER sunset, for the regression that
+     predicts the night minimum, and it puts the minimum just before sunrise. Those two published times
+     are what the card now uses to say how much a reading is worth, instead of the two round numbers it
+     used to split the night on: a reading before the FAO time is early, one after it is the reading the
+     published method is built around, and one inside the last hour before sunrise is taken at the
+     minimum itself. Nothing here is a new quantity; it is the cited method's own clock. */
+  faoReadingAfterSunsetH: 2, coldestWindowBeforeSunriseH: 1 };
+/* Where a reading sits on the cited method's clock. Returns 'early', 'method' or 'at_minimum'. */
+function frostReadingWeight(nowH, sunsetH, sunriseH) {
+  const wrap = h => ((h % 24) + 24) % 24;
+  if (wrap(sunriseH - nowH) <= FROST.coldestWindowBeforeSunriseH) return 'at_minimum';
+  /* Hours since sunset, signed: the card accepts readings from two hours before sunset, so this runs
+     from about -2 up to the length of the night. Anything above half a day is the evening before. */
+  let since = wrap(nowH - sunsetH); if (since > 12) since -= 24;
+  return since >= FROST.faoReadingAfterSunsetH ? 'method' : 'early';
+}
 /* All hours are local decimal hours, 0 to 24. Handles the window wrapping past midnight. */
 function frostReadingUsable(nowH, sunsetH, sunriseH) {
-  const start = ((sunsetH - FROST.readingBeforeSunsetH) % 24 + 24) % 24;
+  const start = ((sunsetH + FROST.faoReadingAfterSunsetH) % 24 + 24) % 24;
   const end = ((sunriseH % 24) + 24) % 24;
   return start > end ? (nowH >= start || nowH <= end) : (nowH >= start && nowH <= end);
 }
@@ -988,6 +1025,19 @@ function frostReadingUsable(nowH, sunsetH, sunriseH) {
    Frost in the Philippines is reported from the highlands, particularly Benguet (Basconcillo et al.,
    FROST-PH). No elevation threshold for frost is published, so none is applied: the card prints the
    comparison and lets the farmer see it. */
+/* The box that decides whether the card tells a user they are outside the Philippines, and whether the
+   frost card says the place is not in the frost record. It used to be 4 to 22 N and 116 to 127 E, with
+   no source: the right shape, rounded outward from nothing in particular. These are the published
+   bounds of the Philippine 12 nautical mile territorial sea [PH_BOUNDS]. Being the territorial sea
+   rather than the coastline it is generous, which is the safe direction for a warning: it errs toward
+   staying quiet near the coast rather than telling someone standing on Philippine soil that they are
+   somewhere else. */
+const PH_ENVELOPE = { minLat: 4.2138, maxLat: 21.4009, minLon: 116.6863, maxLon: 126.8063, source: 'PH_BOUNDS' };
+function insidePH(lat, lon) {
+  const E = PH_ENVELOPE;
+  return isNum(lat) && isNum(lon) && lat >= E.minLat && lat <= E.maxLat && lon >= E.minLon && lon <= E.maxLon;
+}
+
 const BENGUET = { lat: 16.46, lon: 120.59, place: 'the PAGASA Benguet agrometeorological station at La Trinidad', elevM: 1524, recordLowM: 900, recordHighM: 1600, towns: 'Atok, Buguias, Kabayan, Kibungan and Mankayan' };
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371, p = Math.PI / 180;
@@ -1151,6 +1201,7 @@ const REFS = {
   YOSHIDA1981: { cls: 'primary', cite: 'Yoshida, S. (1981). Fundamentals of Rice Crop Science. International Rice Research Institute, Los Baños. Table 2.4, critical temperatures by growth stage (adapted from Yoshida 1977a), and section 2.3.6, spikelet sterility when temperature exceeds 35 °C at anthesis for more than 1 hour.', url: 'http://books.irri.org/9711040522_content.pdf' },
   CARRIJO2017: { cls: 'primary', cite: 'Carrijo, D.R., Lundy, M.E., Linquist, B.A. (2017). Rice yields and water use under alternate wetting and drying irrigation: A meta-analysis. Field Crops Research 203: 173-180. 56 studies, 528 comparisons.', url: 'https://doi.org/10.1016/j.fcr.2016.12.002' },
   LI2024: { cls: 'primary', cite: 'Li, L., Huang, Z., Mu, Y. et al. (2024). Alternate wetting and drying maintains rice yield and reduces global warming potential: A global meta-analysis. Field Crops Research 318. 72 studies.', url: 'https://doi.org/10.1016/j.fcr.2024.109603' },
+  PH_BOUNDS: { cls: 'primary', cite: 'Flanders Marine Institute (2023). Maritime Boundaries Geodatabase: Territorial Seas (12NM), version 4, record "Philippine 12 NM", MRGID 49051: minimum latitude 4.2138 N, maximum 21.4009 N; minimum longitude 116.6863 E, maximum 126.8063 E. The envelope is the territorial sea, so it takes in coastal waters as well as land.', url: 'https://doi.org/10.14284/633' },
   BEAUFORT: { cls: 'extension', cite: 'World Meteorological Organization Beaufort wind force scale, forces 0 to 4, as tabulated by the NOAA Storm Prediction Center: force 0 calm below 1 km/h, smoke rises vertically; force 1 light air 1.1 to 5.5 km/h, smoke drift indicates wind direction; force 2 light breeze 5.6 to 11 km/h, wind felt on exposed skin, leaves rustle; force 3 gentle breeze 12 to 19 km/h, leaves and twigs constantly moving; force 4 moderate breeze 20 to 28 km/h, dust and loose paper raised, small branches begin to move.', url: 'https://www.spc.noaa.gov/faq/tornado/beaufort.html' },
   IRROMETER: { cls: 'extension', cite: 'IRROMETER Company. Soil Water Basics: tensiometer reading ranges, 0-10 cb saturated, 10-30 adequately wet, 30-60 usual range for initiating irrigation in most soils.', url: 'https://www.irrometer.com/basics.html' },
   BOUMAN1994: { cls: 'primary', cite: 'Bouman, B.A.M., Wopereis, M.C.S., Kropff, M.J., ten Berge, H.F.M., Tuong, T.P. (1994). Water use efficiency of flooded rice fields II. Percolation and seepage losses. Agricultural Water Management 26(4): 291-304. Field experiment at IRRI, Los Banos, Philippines.', url: 'https://doi.org/10.1016/0378-3774(94)90007-8' },
@@ -1218,6 +1269,8 @@ const UNVERIFIED = [
   { id: 'AWD_NO_DRY_SEASON', cards: ['rice'], text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
   { id: 'VEGETABLE_TEMPERATURES', cards: ['stress'], text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
   { id: 'TENSIOMETER_DEPTH', cards: ['rice'], text: 'The tensiometer trigger of 20 centibars is the mild-versus-severe AWD boundary of Carrijo, Lundy and Linquist (2017), who give it as -20 kPa alongside a field water level of 15 cm. What their figure does not fix, and this app therefore does not assume, is the depth at which the instrument sits. A tensiometer reads the soil around its cup, so the same field gives different numbers at different installation depths, and no Philippine guidance on where to place one in a paddy under AWD was found. The card states the trigger and tells the farmer to install the instrument in the root zone at about the depth the AWD tube monitors, which is an assumption of this app.' },
+  { id: 'PH_ENVELOPE_IS_MARITIME', cards: ['frost'], text: 'Whether a place counts as being in the Philippines is decided here by the published bounds of the 12 nautical mile territorial sea. That envelope is a maritime boundary, and using it to answer a question about land is an assumption of this app. It was chosen because it is generous: it takes in coastal waters, so the card stays quiet near the shore rather than telling a farmer standing on Philippine soil that the place is somewhere else. The cost runs the other way, that a boat or a sandbar well off the coast is not questioned either.' },
+  { id: 'FROST_READING_WINDOW', cards: ['frost', 'disease'], text: 'This card accepts a reading only from two hours after sunset until sunrise, which is when the FAO frost manual takes its own readings for the regression that predicts the night minimum. Applying that time here is an assumption of this app: the manual set it for a regression this card cannot run, because no local fit exists for Benguet, while what this card actually tests, a clear sky and a still night with dry air, is already visible before sunset. The card follows the published reading time rather than a wider one chosen here, and the cost is that a reading taken at dusk is refused even though the sky may already have told you the answer. Look again two hours after the sun goes down.' },
   { id: 'BEAUFORT_MIDPOINT', cards: ['spray'], text: 'Where the wind speed is chosen from what the trees are doing rather than measured, the description and the band are the WMO Beaufort scale, forces 0 to 4. The scale gives a band, not a number, and this card uses the midpoint of the band. That choice is an assumption of this app. A reading near the edge of a band can therefore sit on the wrong side of the 15 km/h spray limit, so where the answer is close to that limit the wind is worth measuring rather than judging.' },
   { id: 'READING_PRECISION', cards: ['rice'], text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The centimetre gradation itself is an addition of this app: the PhilRice observation well and the IRRI field water tube are both look-and-see devices, marked only at the depth that calls for water, and the published rule is whether water can still be seen in the well rather than how far down it is. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
   { id: 'STRESS_NO_ACTION', cards: ['stress'], text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
@@ -1247,7 +1300,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, stressCheck, FROST, BENGUET, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
