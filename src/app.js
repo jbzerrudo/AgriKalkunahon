@@ -361,31 +361,37 @@ function numInput(id, label, value, step, opts) {
   const row = el('label', { class: 'row' }, bi(label), optTag(opts), input);
   /* Android's decimal keypad carries digits and a decimal point and nothing else: no minus key at
      all. A field that can hold a negative was therefore impossible to fill on a phone while working
-     perfectly on a desktop, which is where this was found. A tap-to-flip control sets the sign
-     without depending on any keyboard. It also works before a number is typed, because a farmer
-     naturally reaches for the sign first. */
+     perfectly on a desktop, which is where this was found. A plus and a minus side by side say what
+     they do without a caption, sit on the same line as the box so the form gains no extra rows, and
+     work before a number is typed, because a farmer reaches for the sign first. */
   if (opts && opts.signed) {
     let wantNeg = false;
-    const btn = el('button', { type: 'button', class: 'btn signbtn' }, '\u2212');
+    const mk = (txt, lab) => el('button', { type: 'button', class: 'btn signbtn', title: lab, 'aria-label': lab }, txt);
+    const pos = mk('+', 'Above zero'), neg = mk('\u2212', 'Below zero');
     const sync = () => {
       const v = parseFloat(input.value);
-      const on = isFinite(v) ? v < 0 : wantNeg;
-      btn.classList.toggle('on', on);
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const isNeg = isFinite(v) ? v < 0 : wantNeg;
+      const known = isFinite(v) || wantNeg;
+      neg.classList.toggle('on', known && isNeg); pos.classList.toggle('on', known && !isNeg);
+      neg.setAttribute('aria-pressed', known && isNeg ? 'true' : 'false');
+      pos.setAttribute('aria-pressed', known && !isNeg ? 'true' : 'false');
     };
-    btn.addEventListener('click', e => {
+    const apply = wantNegative => e => {
       e.preventDefault(); e.stopPropagation();
       const v = parseFloat(input.value);
-      if (isFinite(v)) { input.value = String(-v); wantNeg = input.value.charAt(0) === '-'; }
-      else wantNeg = !wantNeg;
-      sync(); input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+      if (isFinite(v)) input.value = String(wantNegative ? -Math.abs(v) : Math.abs(v));
+      wantNeg = wantNegative; sync();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    neg.addEventListener('click', apply(true)); pos.addEventListener('click', apply(false));
     input.addEventListener('input', () => {
       const v = parseFloat(input.value);
       if (wantNeg && isFinite(v) && v > 0) input.value = String(-v);
-      wantNeg = false; sync();
+      sync();
     });
-    row.appendChild(btn); sync();
+    row.removeChild(input);
+    row.appendChild(el('div', { class: 'numwrap' }, input, pos, neg));
+    sync();
   }
   return { row, input };
 }
@@ -587,21 +593,17 @@ CARDS.rice = function (root) {
   /* ONE measurement, on one datum. The AWD tube and a stick in the field read the same thing: where
      the water stands relative to the soil surface. Asking for it twice made the farmer discard the
      sign and type it again, so the card asks once and the sign carries the meaning. */
-  const level = numInput('level', { en: 'Water level, cm', fil: 'Lalim ng tubig, cm' }, prev.level, 'any');
+  const level = numInput('level', { en: 'Water level, cm', fil: 'Lalim ng tubig, cm' }, prev.level, 'any', { signed: true });
   const LEVEL_LABEL = {
-    awd: { en: 'How far the water is from the soil surface, in the AWD tube (pani tube), cm. Type the distance only, then say below or above underneath. 0 means level with the soil.',
-           fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, sa AWD tube (pani tube), cm. Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw. Ang 0 ay kapantay ng lupa.' },
-    cont: { en: 'How far the water is from the soil surface, in the field, cm, by ruler. Type the distance only, then say below or above underneath. 0 means level with the soil.',
-            fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, sa inyong bukid, cm, sa ruler o metro. Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw. Ang 0 ay kapantay ng lupa.' },
-    int: { en: 'How far the water is from the soil surface, cm (used only in the week either side of flowering). Type the distance only, then say below or above underneath.',
-           fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw.' }
+    awd: { en: 'Water level in the AWD tube (pani tube), cm. Type the number, then tap the minus for water below the soil surface or the plus for water standing on top. 0 is level with the soil.',
+           fil: 'Lalim ng tubig sa AWD tube (pani tube), cm. I-type ang bilang, pagkatapos pindutin ang minus kung ang tubig ay nasa ilalim ng lupa o ang plus kung nasa ibabaw. Ang 0 ay kapantay ng lupa.' },
+    cont: { en: 'Water level in the field, cm, by ruler. Type the number, then tap the plus for water standing on the soil or the minus if it has dried below the surface. 0 is level with the soil.',
+            fil: 'Lalim ng tubig sa inyong bukid, cm, sa ruler o metro. I-type ang bilang, pagkatapos pindutin ang plus kung may tubig sa ibabaw ng lupa o ang minus kung natuyo na sa ilalim. Ang 0 ay kapantay ng lupa.' },
+    int: { en: 'Water level in the field, cm (used only in the week either side of flowering). Plus for water standing on the soil, minus if it is below the surface.',
+           fil: 'Lalim ng tubig sa bukid, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Plus kung may tubig sa ibabaw ng lupa, minus kung nasa ilalim.' }
   };
-  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm. Type the number only.', fil: 'Ang naunang pagbása sa parehong lugar, cm. Ang bilang lamang ang i-type.' }, prev.levelPrev, 'any', { optional: true });
-  /* Where the water stands is a choice, not a sign to type. One tap, and no keyboard has to carry a
-     minus key. The number box takes the distance and nothing else. */
-  const WHERE = [['below', { en: 'below the soil surface', fil: 'sa ilalim ng ibabaw ng lupa' }], ['above', { en: 'standing above the soil', fil: 'nakatayo sa ibabaw ng lupa' }]];
-  const levelWhere = selectInput('levelwhere', { en: 'Is that water above the soil or below it?', fil: 'Ang tubig ba ay nasa ibabaw ng lupa o sa ilalim?' }, WHERE, prev.levelWhere || 'below');
-  const levelPrevWhere = selectInput('levelprevwhere', { en: 'And the earlier reading?', fil: 'At ang naunang pagbása?' }, WHERE, prev.levelPrevWhere || 'below');
+  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm. Same plus and minus.', fil: 'Ang naunang pagbása sa parehong lugar, cm. Parehong plus at minus.' }, prev.levelPrev, 'any', { optional: true, signed: true });
+
   /* The two reading dates, not "how many days ago". They give the span without the farmer doing
      arithmetic, and they anchor the answer on when the tube was actually read rather than on the
      moment the button was pressed. Read at seven, entered at nine at night, and the old card was
@@ -623,7 +625,7 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelWhere.row, levelDate.row, levelPrev.row, levelPrevWhere.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -655,8 +657,6 @@ CARDS.rice = function (root) {
     levelPrev.row.hidden = !(awd || cont);
     levelDate.row.hidden = !(awd || cont);
     levelPrevDate.row.hidden = !(awd || cont);
-    levelWhere.row.hidden = false;
-    levelPrevWhere.row.hidden = !(awd || cont);
     tmax.row.hidden = !(awd || cont); tmin.row.hidden = !(awd || cont);
     etc.row.hidden = !(awd || cont);
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : cont ? LEVEL_LABEL.cont : LEVEL_LABEL.int), level.row.firstChild);
@@ -678,7 +678,7 @@ CARDS.rice = function (root) {
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
     const inp = { plot: plot.value, method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
-                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelWhere: levelWhere.input.value, levelPrevWhere: levelPrevWhere.input.value, levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
+                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
     /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
@@ -695,8 +695,9 @@ CARDS.rice = function (root) {
     /* Magnitude plus direction, combined here into the single signed level the engine works on. The
        magnitude is taken as an absolute value so a stray minus typed on a desktop cannot cancel the
        direction chosen underneath it. */
-    const signed = (mag, where) => mag == null ? null : (where === 'above' ? Math.abs(mag) : -Math.abs(mag));
-    const levelCm = signed(inp.level, inp.levelWhere), levelPrevCm = signed(inp.levelPrev, inp.levelPrevWhere);
+    /* The sign is the reading. `|| 0` collapses negative zero, which JavaScript keeps distinct from 0
+       and which would otherwise print as -0.0 and test as above the surface. */
+    const levelCm = inp.level == null ? null : (inp.level || 0), levelPrevCm = inp.levelPrev == null ? null : (inp.levelPrev || 0);
     const F = riceFieldStats(inp.plot);
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
       season: inp.season, levelCm: levelCm, levelPrevCm: span != null ? levelPrevCm : null, daysBetween: span,
@@ -727,7 +728,7 @@ CARDS.rice = function (root) {
       lines.push([bi({ en: 'Safe AWD can start on', fil: 'Puwedeng simulan ang Safe AWD sa' }),
         dmy(dayFrom(r.startsInDays)) + ', ' + r.startDays[0] + ' to ' + r.startDays[1] + ' days after transplanting (PhilRice). Until then keep ' + r.depthCm[0] + ' to ' + r.depthCm[1] + ' cm of water, whatever the tube shows.']);
       if (r.levelCm != null) lines.push([bi({ en: 'Your reading', fil: 'Ang pagbása ninyo' }),
-        fmt(Math.abs(r.levelCm), 1) + ' cm ' + (r.levelCm < 0 ? 'below the soil surface' : 'above the soil') + ', recorded but not acted on yet']);
+        (r.levelCm === 0 ? 'level with the soil surface' : fmt(Math.abs(r.levelCm), 1) + ' cm ' + (r.levelCm < 0 ? 'below the soil surface' : 'above the soil')) + ', recorded but not acted on yet']);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
