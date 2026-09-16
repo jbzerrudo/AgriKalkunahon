@@ -695,11 +695,16 @@ CARDS.rice = function (root) {
       ? [{ en: 'A stick or ruler', fil: 'Patpat o ruler' }, { en: 'Both a ruler and a tensiometer', fil: 'Parehong ruler at tensiometer' }]
       : [{ en: 'An AWD tube (pani tube)', fil: 'AWD tube (pani tube)' }, { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }];
     [0, 2].forEach((oi, k) => { const op = instrument.input.options[oi]; const L = t(INSTR[k]); op.textContent = L.en + ' / ' + L.fil; });
-    { const L = t(cont ? { en: 'The ruler, which is the IRRI target depth', fil: 'Ang ruler, na siyang target na lalim ng IRRI' }
+    { const L = t(cont ? { en: 'The ruler, which is the traditional method', fil: 'Ang ruler, na siyang tradisyonal na paraan' }
                        : { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' });
       bothMode.input.options[1].textContent = L.en + ' / ' + L.fil; }
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
+    /* Asked whenever the farmer has both, under either method. Under continuous flooding the two
+       instruments answer the same question from opposite sides: the ruler reads the ponded depth
+       against the target, the tensiometer stays in the saturated band until the water has gone and
+       then speaks up. Either can govern, and continuousFloodDecision arbitrates between them and
+       reports any disagreement, so the choice is the farmer's here too. */
     bothMode.row.hidden = !bothSel;
     season.row.hidden = !awd || bare;   // with no reading there is no trigger depth to choose between
     soil.row.hidden = cont;
