@@ -229,6 +229,8 @@ const CODES = {
   sp_may_not_be_steady: 'At this rate the field behaves like Bouman et al.\'s class IIb, where percolation follows the depth of water standing on the field instead of holding steady. Two things follow. The date above is less dependable: their own fixed-rate book-keeping drifted 2 to 3 cm in this class. And there is something you can do, which they state plainly: in a field like this, losses fall considerably if the ponded water is kept low, close to zero. Check the bunds as well.',
   rice_kc_stage_unknown: 'No transplanting date, so the crop coefficient could not be taken from the growth stage and the mid-season value was used. That is the largest one rice reaches, so crop water use is at its highest here and the seepage-and-percolation remainder is at its lowest. Give the transplanting date and both become stage-specific.',
   no_instrument: 'Without a tube or a tensiometer this card cannot read your field, so the answer above rests on what you saw. A dry surface tells you the water has gone from the top and nothing about how far it has fallen underneath, so irrigating now is the safe call but an early one, and the water saving that makes AWD worth doing is given up. A tube is 30 cm of plastic pipe or bamboo and an hour of work, and it turns this card from a yes-or-no into a date.',
+  instruments_disagree_tube_drier: 'Your two instruments disagree. The tube says the water table has passed the re-flood depth while the tensiometer still reads wet. That usually means the tensiometer sits shallower than the depth the tube watches, so it is reading soil the falling water table has not reached yet. Check where the instrument is installed.',
+  instruments_disagree_tensiometer_drier: 'Your two instruments disagree. The tensiometer says the root zone has reached the irrigation point while the tube still shows water above the re-flood depth. That usually means the tensiometer sits deeper than the tube watches, or the soil around its cup is drying faster than the water table is falling. Check where the instrument is installed.',
   tensiometer_out_of_range: 'The tensiometer reads above 80 centibars. The water column inside breaks somewhere around 80 to 85, so past that the instrument has stopped reporting the soil and is reporting its own limit. Treat the field as needing water, re-set the instrument after you irrigate, and do not read anything into how far above 80 it went.',
   tensiometer_negative: 'A tensiometer reading below zero is not possible. Check the gauge and the reading.',
   reading_dates_out_of_order: 'The earlier reading is dated on or after the one you called today, so no span can be worked out and no loss rate is taken from the pair. Check the two dates.',
@@ -597,6 +599,11 @@ CARDS.rice = function (root) {
     ['both', { en: 'Both a tube and a tensiometer', fil: 'Parehong tube at tensiometer' }],
     ['none', { en: 'Neither, I go by what I see', fil: 'Wala, tinitingnan ko lang' }]
   ], prev.instrument || 'tube');
+  const bothMode = selectInput('rboth', { en: 'You have both. Which should the card follow?', fil: 'Mayroon kayong pareho. Alin ang susundin ng card?' }, [
+    ['tensiometer', { en: 'The tensiometer, which reads what the roots feel', fil: 'Ang tensiometer, na nagbabása ng nararamdaman ng ugat' }],
+    ['tube', { en: 'The tube, which is the DA rule', fil: 'Ang tube, na siyang patakaran ng DA' }],
+    ['validate', { en: 'Both, and tell me whether they agree', fil: 'Pareho, at sabihin kung magkatugma sila' }]
+  ], prev.bothMode || 'tensiometer');
   const tens = numInput('rtens', { en: 'Tensiometer reading now, centibars. Install it in the root zone, at about the depth the AWD tube watches.', fil: 'Pagbasa ng tensiometer ngayon, centibars. Ilagay ito sa lalim ng ugat, mga kasinglalim ng binabantayan ng AWD tube.' }, prev.tens, 1);
   tens.input.min = 0;
   const surface = selectInput('rsurf', { en: 'Has the water gone from the field?', fil: 'Wala na ba ang tubig sa bukid?' }, [
@@ -647,7 +654,7 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, method.row, instrument.row, surface.row, tens.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, instrument.row, surface.row, tens.row, bothMode.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -677,6 +684,7 @@ CARDS.rice = function (root) {
     instrument.row.hidden = false;
     surface.row.hidden = !bare;
     tens.row.hidden = !hasTens;
+    bothMode.row.hidden = ins !== 'both';
     season.row.hidden = !awd || bare;   // with no reading there is no trigger depth to choose between
     soil.row.hidden = cont;
     weeds.row.hidden = cont;
@@ -707,7 +715,7 @@ CARDS.rice = function (root) {
   syncMethod();
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
-    const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value, tens: num(tens.input), surface: surface.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
+    const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value, tens: num(tens.input), surface: surface.input.value, bothMode: bothMode.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
                   soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
@@ -731,7 +739,7 @@ CARDS.rice = function (root) {
     const F = riceFieldStats(inp.plot);
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
       season: inp.season, instrument: inp.instrument, tensiometerCb: inp.tens,
-      surfaceDry: inp.surface === 'yes' ? true : (inp.surface === 'no' ? false : null),
+      surfaceDry: inp.surface === 'yes' ? true : (inp.surface === 'no' ? false : null), bothMode: inp.bothMode,
       levelCm: levelCm, levelPrevCm: span != null ? levelPrevCm : null, daysBetween: span,
       fieldDropCmPerDay: F ? F.mean : null, fieldDropSigma: F ? F.sd : null, weedsManaged: inp.weeds, soil: inp.soil });
     /* The field only learns from a drawdown it actually measured. A rate carried over from its own
@@ -766,7 +774,18 @@ CARDS.rice = function (root) {
       lines.push([bi({ en: 'Tensiometer', fil: 'Tensiometer' }), fmt(r.cb, 0) + ' centibars'
         + (r.triggerCb != null ? ', and the trigger is ' + r.triggerCb + ' cb' + (r.remainingCb != null ? ', so ' + fmt(r.remainingCb, 0) + ' cb still to go' : ', which you have reached') : '')
         + (r.saturatedCb != null ? ', and saturated soil reads 0 to ' + r.saturatedCb + ' cb' : '')]);
-      lines.push([bi({ en: 'Decided by', fil: 'Batay sa' }), 'the tensiometer, not the tube. Carrijo et al. (2017) draw the same line at -20 kPa that DA Administrative Order 25-09 draws at 15 cm, and the tensiometer reads what the roots feel.']);
+      const byTxt = r.decidedBy === 'tube' ? 'the tube, which is the DA Administrative Order 25-09 rule at ' + r.triggerCm + ' cm'
+        : r.decidedBy === 'both' ? 'both instruments together, taking whichever calls for water first, because re-flooding earlier than the trigger is always allowed'
+        : 'the tensiometer, which reads what the roots feel';
+      lines.push([bi({ en: 'Decided by', fil: 'Batay sa' }), byTxt
+        + (r.tubeSaysNow != null ? '. The tube ' + (r.tubeSaysNow ? 'calls for water' : 'does not yet') + ' and the tensiometer ' + (r.tensSaysNow ? 'calls for water' : 'does not yet') + ', so they ' + (r.instrumentsDisagree ? 'disagree' : 'agree') : '')
+        + '. Carrijo et al. (2017) draw the same line at -20 kPa that the Order draws at ' + (r.triggerCm || 15) + ' cm.']);
+      if (r.calibration) {
+        const c = r.calibration;
+        lines.push([bi({ en: 'Checking the tensiometer', fil: 'Pagsusuri sa tensiometer' }),
+          'Your tube has reached ' + fmt(Math.abs(c.atLevelCm), 0) + ' cm below the surface, which is where Carrijo et al. put the tensiometer at about ' + c.expectedCb + ' cb. Yours reads ' + fmt(c.actualCb, 0) + ', so it is ' + (c.offsetCb === 0 ? 'exactly there' : fmt(Math.abs(c.offsetCb), 0) + ' cb ' + (c.offsetCb > 0 ? 'drier' : 'wetter') + ' than expected')
+          + '. That comparison holds only at this depth: away from the trigger there is no published way to turn a water table depth into a tension, and this app does not invent one.']);
+      }
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision

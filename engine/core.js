@@ -687,19 +687,46 @@ function awdDecision(inp) {
     }
     lvl.projections = ps;
   }
-  /* The tensiometer takes the decision where there is one: it reads what the roots feel, and Carrijo
-     et al. (2017) draw the same line at -20 kPa that DA AO 25-09 draws at 15 cm. The card says so
-     rather than switching rule silently. */
+  /* The tensiometer reads what the roots feel, and Carrijo et al. (2017) draw the same line at -20 kPa
+     that DA AO 25-09 draws at 15 cm. Where both instruments are present they can still disagree, and
+     that disagreement is never suppressed: it usually means the tensiometer does not sit at the depth
+     the tube watches, and it can mean the card is being asked to contradict the DA rule.
+
+     Which one governs is the farmer's choice, because the honest answer differs by who is asking.
+     An extension worker following the Order wants the tube. A farmer who trusts the instrument in the
+     root zone wants the tensiometer. Someone checking whether the tensiometer is installed sensibly
+     wants both, compared. What the card never does is pick one silently. */
   const tens = tensiometerDecision(inp.tensiometerCb, 'awd');
   if (tens) {
-    const out = Object.assign({}, base, lvl, { code: tens.code, decidedBy: 'tensiometer', cb: tens.cb,
-      triggerCb: tens.triggerCb, remainingCb: tens.remainingCb, refloodCm: AWD.refloodCm,
+    const tubeSaysNow = isNum(inp.levelCm) ? inp.levelCm <= -trig : null;
+    const tensSaysNow = tens.code === 'reflood_now';
+    const disagree = tubeSaysNow != null && tubeSaysNow !== tensSaysNow;
+    const mode = inp.bothMode === 'tube' || inp.bothMode === 'validate' ? inp.bothMode : 'tensiometer';
+    let by = 'tensiometer', now = tensSaysNow;
+    if (tubeSaysNow != null) {
+      if (mode === 'tube') { by = 'tube'; now = tubeSaysNow; }
+      /* Validate, and any disagreement at all, follow whichever calls for water first. Re-flooding
+         earlier than the trigger is always allowed, so the early call is never the harmful error. */
+      else if (mode === 'validate' || disagree) { now = tubeSaysNow || tensSaysNow; by = mode === 'validate' ? 'both' : (tensSaysNow ? 'tensiometer' : 'tube'); }
+    }
+    if (disagree) flags.push(tubeSaysNow ? 'instruments_disagree_tube_drier' : 'instruments_disagree_tensiometer_drier');
+    /* Carrijo anchors the equivalence at the boundary and nowhere else, so the tensiometer is only
+       compared against 20 cb at the moment the tube reaches its own trigger. Away from that line no
+       published mapping exists between a water table depth and a tension, and none is invented. */
+    let calibration = null;
+    if (tubeSaysNow === true) calibration = { atLevelCm: inp.levelCm, triggerCm: trig, expectedCb: TENSIOMETER.awdTriggerCb,
+      actualCb: tens.cb, offsetCb: tens.cb - TENSIOMETER.awdTriggerCb };
+    const out = Object.assign({}, base, lvl, { code: now ? 'reflood_now' : 'not_yet', decidedBy: by,
+      bothMode: tubeSaysNow != null ? mode : null, instrumentsDisagree: disagree,
+      tubeSaysNow: tubeSaysNow, tensSaysNow: tensSaysNow, calibration: calibration,
+      cb: tens.cb, triggerCb: tens.triggerCb, remainingCb: tens.remainingCb, refloodCm: AWD.refloodCm,
       flags: flags.concat(tens.flags), sources: src.concat(['CARRIJO2017']) });
-    if (tens.code === 'reflood_now') delete out.projections;
+    if (out.code === 'reflood_now') delete out.projections;
+    if (out.code !== 'not_yet') delete out.remainingCm;
     return out;
   }
   if (!isNum(inp.levelCm)) return Object.assign({ code: 'need_tube_reading', decidedBy: 'tube' }, base);
-  if (inp.levelCm <= -trig) { const out = Object.assign({}, base, lvl, { code: 'reflood_now', decidedBy: 'tube' }); delete out.projections; return out; }
+  if (inp.levelCm <= -trig) { const out = Object.assign({}, base, lvl, { code: 'reflood_now', decidedBy: 'tube' }); delete out.projections; delete out.remainingCm; return out; }
   return Object.assign({}, base, lvl, { code: 'not_yet', decidedBy: 'tube',
     daysLeft: lvl.projections && lvl.projections.length ? lvl.projections[0].days : null });
 }

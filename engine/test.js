@@ -271,6 +271,26 @@ eq('no reading, no answer', A.tensiometerDecision(null, 'awd'), null);
 eq('the AWD answer cites Carrijo', A.tensiometerDecision(25, 'awd').sources.join(','), 'CARRIJO2017');
 eq('the installation depth is declared unverified', A.UNVERIFIED.map(u => u.id).indexOf('TENSIOMETER_DEPTH') >= 0, true);
 
+console.log('\n-- both instruments: whose rule governs --');
+{ const both = (cb, lv, mode) => A.awdDecision({ daysAfterEstablish: 40, season: 'dry', instrument: 'both',
+    tensiometerCb: cb, levelCm: lv, levelPrevCm: lv + 4, daysBetween: 4, bothMode: mode });
+  eq('agreeing instruments need no arbitration', both(12, -8, 'tensiometer').instrumentsDisagree, false);
+  eq('and the chosen one is named', both(12, -8, 'tensiometer').decidedBy, 'tensiometer');
+  eq('tube mode follows the DA rule', both(25, -8, 'tube').code, 'not_yet');
+  eq('and says so', both(25, -8, 'tube').decidedBy, 'tube');
+  eq('tensiometer mode follows the instrument', both(25, -8, 'tensiometer').code, 'reflood_now');
+  eq('a disagreement is always flagged, whatever the mode', both(25, -8, 'tensiometer').instrumentsDisagree, true);
+  eq('and named by which way it falls', both(25, -8, 'tensiometer').flags.indexOf('instruments_disagree_tensiometer_drier') >= 0, true);
+  eq('the other way round is named too', both(6, -16, 'tensiometer').flags.indexOf('instruments_disagree_tube_drier') >= 0, true);
+  eq('a tube past the DA depth is never overridden into waiting', both(6, -16, 'tensiometer').code, 'reflood_now');
+  eq('validate follows whichever calls for water first', both(25, -8, 'validate').code, 'reflood_now');
+  eq('and attributes the answer to both', both(25, -8, 'validate').decidedBy, 'both');
+  eq('validate still waits when neither calls for water', both(12, -8, 'validate').code, 'not_yet');
+  eq('the tensiometer is checked only where Carrijo anchors the equivalence', both(12, -8, 'validate').calibration, null);
+  ok('at the trigger it is compared against 20 cb', both(21, -15, 'validate').calibration.offsetCb, 1, 1e-9, 'cb');
+  eq('and a wetter-than-expected instrument shows a negative offset', both(6, -16, 'validate').calibration.offsetCb < 0, true);
+  eq('no negative still-to-go is ever returned', both(25, -8, 'tensiometer').remainingCm, undefined); }
+
 console.log('\n-- what each method costs and buys --');
 ['awd', 'continuous', 'none'].forEach(m => {
   eq(m + ' has pros', A.METHOD_EVIDENCE[m].pros.length > 0, true);
