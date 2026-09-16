@@ -720,7 +720,7 @@ CARDS.rice = function (root) {
       const src = r.dropFrom === 'measured' ? ', from your two readings ' + fmt(r.fallCm, 1) + ' cm apart, ' + dmy(prevDate) + ' to ' + dmy(anchor) + ', ' + (r.daysBetween || 1) + (r.daysBetween === 1 ? ' day' : ' days') + ' apart'
                 : r.dropFrom === 'field_average' ? ', this field\'s usual rate, because these two readings cannot give one'
                 : ', the rate you entered';
-      lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm/day' + src]);
+      lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm/day' + (r.dropSigma != null ? ', give or take ' + fmt(r.dropSigma, 1) : '') + src]);
     }
     /* Say when the rule lifts, so "keep 2 to 3 cm" reads as a stage the crop is in rather than as the
        only answer this card is capable of. */
@@ -802,6 +802,19 @@ CARDS.rice = function (root) {
       lines.push([bi({ en: 'Against Philippine paddies', fil: 'Kumpara sa palayan sa Pilipinas' }),
         'Bouman et al. (1994), measured at IRRI: ' + band + (sp.flags.indexOf('sp_negative') >= 0 ? '' : '. Their own four field readings were ' + A.SP.fieldMeasuredCmPerDay.join(', ') + ' cm/day, the lowest with the plow sole intact and the highest after it was damaged') + '.']);
     }
+    /* What to do when the answer is thin, keyed to whichever thing is actually thin. Two different
+       weaknesses need opposite advice, and the wrong one is the intuitive one: on a slow field,
+       reading more often makes the rate worse, not better. The relative error of the rate is
+       sqrt(2) divided by the total fall, so it does not depend on the number of days at all. A 2 cm
+       fall is equally poor whether it took one day or six; only a bigger fall improves it. */
+    const advice = [];
+    if (r.fallCm != null && r.fallCm > 0 && r.fallCm < A.MIN_FALL_CM) {
+      advice.push('A reading off a hand-marked tube is only good to about plus or minus 1 cm, so the difference between two of them carries about 1.4 cm whatever you do. The water fell only ' + fmt(r.fallCm, 1) + ' cm between your two readings, which is not much more than that. It is the size of the fall, not the number of days it took, that decides how firm the date is, so reading more often does not help and on a slow field makes it worse. Wait until the water has fallen at least ' + fmt(A.MIN_FALL_CM, 0) + ' cm before you read again, however long that takes.');
+    }
+    if (Fall && Fall.n < 3) {
+      advice.push('This paddy has ' + Fall.n + (Fall.n === 1 ? ' measurement' : ' measurements') + ' on record. Its usual rate steadies as they build up: a third well-spaced pair roughly halves the uncertainty in it, and past about five more pairs add little.');
+    }
+    if (advice.length) lines.push([bi({ en: 'To tighten this date', fil: 'Upang mas tumiyak ang petsa' }), advice.join(' ')]);
     const iv = riceInterval(inp.plot);
     if (iv) lines.push([bi({ en: 'Usual gap between irrigations', fil: 'Karaniwang agwat ng pagpapatubig' }), fmt(iv.days, 0) + ' days, from ' + iv.n + ' re-floods since ' + iv.first]);
     else if (ricePlot(inp.plot).refloods.length === 1) lines.push([bi({ en: 'Re-floods recorded', fil: 'Naitalang pagpapatubig' }), '1 so far. After the next one this card can give your usual gap between irrigations.']);
