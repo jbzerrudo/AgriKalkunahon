@@ -1038,7 +1038,15 @@ CARDS.spray = function (root) {
   form.appendChild(locationBlock());
   const Tn = numInput('sT', { en: 'Air temperature now (°C)', fil: 'Temperatura ng hangin ngayon (°C)' }, prev.T, 0.1, { signed: true });
   const RH = numInput('sRH', { en: 'Humidity now (%)', fil: 'Halumigmig ngayon (%)' }, prev.RH, 1);
-  const bft = [['', { en: 'Choose from what you see', fil: 'Piliin mula sa nakikita' }], ['0.5', { en: 'Calm: smoke rises straight (under 1 km/h)', fil: 'Walang hangin: tuwid ang usok' }], ['4', { en: 'Smoke drifts, leaves still (2 to 5 km/h)', fil: 'Gumagalaw ang usok, tahimik ang dahon' }], ['9', { en: 'Leaves rustle, wind felt on face (7 to 11 km/h)', fil: 'Kumakaluskos ang dahon, ramdam sa mukha' }], ['16', { en: 'Leaves and twigs move all the time (13 to 19 km/h)', fil: 'Laging gumagalaw ang dahon at sanga' }], ['25', { en: 'Dust rises, small branches move (20 to 30 km/h)', fil: 'Tumataas ang alikabok, gumagalaw ang sanga' }]];
+  /* Built from the engine's Beaufort table so the descriptions, the bands and the speed all come from
+     one sourced object. The value is the midpoint of the band, declared on the card as this app's
+     choice, because the scale gives a range and the card needs a number. */
+  const bft = [['', { en: 'Choose from what you see', fil: 'Piliin mula sa nakikita' }]].concat(
+    A.SPRAY.beaufort.map(function (b) {
+      const band = b.loKmh === 0 ? 'under ' + b.hiKmh + ' km/h' : b.loKmh + ' to ' + b.hiKmh + ' km/h';
+      return [String((b.loKmh + b.hiKmh) / 2),
+              { en: b.land.en + ' (' + band + ')', fil: b.land.fil + ' (' + band + ')' }];
+    }));
   const wsel = selectInput('sW', { en: 'Wind now', fil: 'Hangin ngayon' }, bft, prev.wsel || '');
   const wkmh = numInput('sWk', { en: 'or wind in km/h at 2 m', fil: 'o hangin sa km/h sa 2 m' }, prev.wkmh, 1, { optional: true });
   const label = numInput('sLbl', { en: 'Wind limit printed on the label, if any (km/h)', fil: 'Limitasyon ng hangin sa label, kung meron (km/h)' }, prev.label, 1, { optional: true });
