@@ -354,7 +354,7 @@ function irrigationDecision(inp) {
 }
 
 /* =====================================================================
-   6. LOWLAND RICE: SAFE AWD AND CONTINUOUS FLOODING  [IRRI_AWD, BOUMAN2007, DA_AO25, PHILRICE_AWD, PALAYCHECK]
+   6. LOWLAND RICE: SAFE AWD AND CONTINUOUS FLOODING  [IRRI_AWD, BOUMAN2007, DA_AO25, PHILRICE_AWD, PINOYRICE_WELL, PALAYCHECK]
    ===================================================================== */
 const AWD = {
   triggerCm: { dry: 15, wet: 20 },           // DA AO 25-09 and the PhilRice observation well: the Philippine policy. IRRI safe AWD uses 15 cm all season.
@@ -366,9 +366,20 @@ const AWD = {
   drainBeforeHarvestDays: { light: 7, clay: 14 },   // PhilRice, PalayCheck
   preAwdDepthCm: [2, 3],                     // DA-PhilRice news, Mendoza 2022 quoting Saludez: "irrigate the field with 2-3cm water depth" before AWD starts
   continuous: { afterTransplantCm: 3, laterCm: [5, 10], drainBeforeHarvestDays: [7, 10], headingCm: 5 },  // IRRI RKB, verbatim
-  /* IRRI fact sheet: the tube is 30 cm of plastic pipe or bamboo, 10-15 cm across, hammered in so 15 cm
-     stands above the soil. Quoted on the card, because a farmer without one can make one in an hour. */
-  tube: { lengthCm: 30, diameterCm: [10, 15], aboveSoilCm: 15 },
+  /* THE OBSERVATION WELL  [PINOYRICE_WELL, IRRI_AWD]. The card quotes the PhilRice design, not the IRRI
+     one, because only the PhilRice well can make the measurement the card asks for. IRRI's tube is 30 cm
+     with 15 cm standing above the soil, so it reaches 15 cm down and its bottom sits at the dry-season
+     trigger; it cannot show the wet-season trigger of 20 cm at all. PhilRice cuts the tube shorter, at
+     25 cm, and moves the soil line instead: two rings are marked 5 and 10 cm from the top, labelled wet
+     season and dry season, and the well is pressed in until the ring for the season is level with the
+     ground. The bottom of the well then lands exactly on that season's trigger, 20 cm down in the wet
+     season and 15 cm in the dry, which is why the published instruction can be as simple as "irrigate
+     the field when there is no more visible water in the observation well". Diameter is "at least 10 cm"
+     in PhilRice and 10-15 cm in IRRI, so the range is carried from IRRI. The 1 cm gradation is NOT
+     published by either: both wells are look-and-see devices, and reading a level in centimetres off one
+     is this app's own addition, declared in UNVERIFIED as READING_PRECISION. */
+  tube: { lengthCm: 25, diameterCm: [10, 15], aboveSoilCm: { dry: 10, wet: 5 }, belowSoilCm: { dry: 15, wet: 20 },
+          holeMm: [3, 5], holeAlongCm: 3, holeAroundCm: 5, gradationCm: 1, gradationPublished: false },
   weedPostponeWeeks: [2, 3]
 };
 /* TENSIOMETER  [CARRIJO2017, IRROMETER]. A tensiometer reads how hard the soil holds its water, in
@@ -613,7 +624,7 @@ function continuousFloodDecision(inp) {
    flooded through flowering, drained before harvest, postponed while weeds are unmanaged. With no
    threshold there is nothing to project a date to, so no loss rate is reported either. */
 function intermittentDecision(inp) {
-  const src = ['IRRI_AWD', 'PALAYCHECK'], flags = ['no_tube_no_published_threshold'];
+  const src = ['IRRI_AWD', 'PINOYRICE_WELL', 'PALAYCHECK'], flags = ['no_tube_no_published_threshold'];
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (inp.weedsManaged === false) flags.push('postpone_awd_weeds');
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, flags: flags, tube: AWD.tube, sources: src };
@@ -631,7 +642,7 @@ function intermittentDecision(inp) {
    would and gives up the water saving that makes AWD worth doing. The card says that rather than
    pretending the answer is as good as a measured one. */
 function noInstrumentDecision(inp) {
-  const src = ['IRRI_AWD', 'CARRIJO2017'], flags = ['no_instrument'];
+  const src = ['IRRI_AWD', 'CARRIJO2017', 'PINOYRICE_WELL'], flags = ['no_instrument'];
   const cont = inp.method === 'continuous';
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (inp.weedsManaged === false && !cont) flags.push('postpone_awd_weeds');
@@ -662,7 +673,7 @@ function riceWaterDecision(inp) {
    levelCm (negative below the soil surface, 0 at it, positive standing above it), levelPrevCm,
    daysBetween, fieldDropCmPerDay, fieldDropSigma, dropCmPerDay, weedsManaged, soil:'light'|'clay'} */
 function awdDecision(inp) {
-  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PHILRICE_NEWS', 'PALAYCHECK'];
+  const src = ['IRRI_AWD', 'BOUMAN2007', 'BOUMAN1994', 'DA_AO25', 'PHILRICE_AWD', 'PINOYRICE_WELL', 'PHILRICE_NEWS', 'PALAYCHECK'];
   const trig = AWD.triggerCm[inp.season === 'wet' ? 'wet' : 'dry'];
   const drainDays = AWD.drainBeforeHarvestDays[inp.soil === 'clay' ? 'clay' : 'light'];
   if (isNum(inp.daysToHarvest) && inp.daysToHarvest <= drainDays) return { code: 'drain_stop_irrigating', drainDays: drainDays, sources: src };
@@ -1078,11 +1089,17 @@ const REFS = {
   IRRI_AWD: { cls: 'extension', cite: 'IRRI Rice Knowledge Bank. Saving water with alternate wetting drying (AWD); Water management.', url: 'http://www.knowledgebank.irri.org/training/fact-sheets/water-management/saving-water-alternate-wetting-drying-awd' },
   DA_AO25: { cls: 'regulatory', cite: 'Department of Agriculture (2009). Administrative Order No. 25 s. 2009, Guidelines for the adoption of water saving technologies in irrigated rice production systems in the Philippines, Section 5.', url: 'https://legaldex.com/laws/guidelines-for-the-adoption-of-water-saving-technologies-wst-in' },
   PHILRICE_AWD: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. Alternate Wetting and Drying (AWD).', url: 'https://www.pinoyrice.com/alternate-wetting-and-dryingawd/' },
+  /* The observation well page is the source of the well itself: 25 cm long, at least 10 cm across, holes
+     3-5 mm every 3 cm lengthwise and 5 cm apart crosswise, rings at 5 and 10 cm from the top for wet and
+     dry season, installed to the ring, re-flooded to the top of the tube in the wet season and to 5 cm
+     above ground in the dry. It publishes no gradation and no numeric reading: the rule it gives is
+     whether water is visible in the well. */
+  PINOYRICE_WELL: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank. How to make Observation Well for Controlled Irrigation (Key Check 6, Water Management). Published 3 April 2018, last modified 7 February 2022.', url: 'https://www.pinoyrice.com/keycheck6-water-management/how-to-make-observation-well-for-controlled-irrigation' },
   /* The news item is a separate source from the Knowledge Bank page and carries different figures, so it is
      cited separately. Fredierick Saludez is the DA-PhilRice agriculturist quoted, not the author. It gives the
      2 to 3 cm pre-AWD depth, the 21 to 30 day start window, 5 cm through flowering and the 7 and 14 day
      pre-harvest drainage. It gives NO re-flood depth and no observation well dimensions, so nothing in this
-     app may lean on it for either: the 15 and 20 cm come from DA AO 25-09, the tube recipe from IRRI. */
+     app may lean on it for either: the 15 and 20 cm come from DA AO 25-09, the well recipe from PINOYRICE_WELL. */
   PHILRICE_NEWS: { cls: 'extension', cite: 'Mendoza, C.A. (2022). Expert recommends technique to conserve water in rice farming. DA-PhilRice, 18 April 2022, quoting F. Saludez, DA-PhilRice agriculturist.', url: 'https://www.philrice.gov.ph/expert-recommends-technique-to-conserve-water-in-rice-farming/' },
   PALAYCHECK: { cls: 'extension', cite: 'PhilRice (2022). PalayCheck System, 2022 Revised Edition (Key Check 6; Key Check 8, harvesting at the right time: 85 to 90 per cent golden-yellow grains for manual harvest and 90 to 95 per cent by combine, 18 to 21 per cent moisture in the dry season and 20 to 25 per cent in the wet, field drained 1 to 2 weeks before harvest; Key Check 9; cavan 50 kg).', url: 'https://www.philrice.gov.ph/wp-content/uploads/2023/02/PalayCheck-System-2022-Revised-Edition.pdf' },
   GRDC2025: { cls: 'extension', cite: 'GRDC (2025). Practical tips for spraying, revised January 2025.', url: 'https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf' },
@@ -1126,7 +1143,7 @@ const UNVERIFIED = [
   { id: 'AWD_NO_DRY_SEASON', text: 'The re-flood depth follows DA Administrative Order 25-09: 15 cm below the surface in the dry season and 20 cm in the wet. Two of the four Philippine climate types have no dry season at all (DOST-PAGASA Climate Map of the Philippines 1951-2010), and the Order does not say which depth applies there. Where there is no dry season this app tells the farmer to use the dry-season setting, 15 cm, because re-flooding earlier is the smaller mistake. That choice is an assumption of this app, not a published rule.' },
   { id: 'VEGETABLE_TEMPERATURES', text: 'The vegetable critical temperatures are Queensland values (Queensland Department of Agriculture and Fisheries), not Philippine ones. The one Philippine document that prints temperatures for highland vegetables, the crop climate calendar for Atok, Benguet (Domingo, Umlas and Zuluaga 2020, PIDS Discussion Paper 2020-09), gives optimum ranges for cabbage, carrot and potato only, compiled from production manuals rather than measured at Atok, with no citation attached to the figures. An optimum range is not a damage threshold, so it is not used here.' },
   { id: 'TENSIOMETER_DEPTH', text: 'The tensiometer trigger of 20 centibars is the mild-versus-severe AWD boundary of Carrijo, Lundy and Linquist (2017), who give it as -20 kPa alongside a field water level of 15 cm. What their figure does not fix, and this app therefore does not assume, is the depth at which the instrument sits. A tensiometer reads the soil around its cup, so the same field gives different numbers at different installation depths, and no Philippine guidance on where to place one in a paddy under AWD was found. The card states the trigger and tells the farmer to install the instrument in the root zone at about the depth the AWD tube monitors, which is an assumption of this app.' },
-  { id: 'READING_PRECISION', text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
+  { id: 'READING_PRECISION', text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The centimetre gradation itself is an addition of this app: the PhilRice observation well and the IRRI field water tube are both look-and-see devices, marked only at the depth that calls for water, and the published rule is whether water can still be seen in the well rather than how far down it is. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
   { id: 'STRESS_NO_ACTION', text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter tested at Benguet State University under DOST-PCAARRD (Malamug 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
 ];
 

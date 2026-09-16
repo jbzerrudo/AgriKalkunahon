@@ -164,7 +164,15 @@ eq('no tube: the answer is flagged as unsourced', A.riceWaterDecision({ method: 
 eq('no tube: flowering rule still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 60, daysToFlowering: 2, levelCm: 2 }).code, 'flowering_top_up_to_5cm');
 eq('no tube: pre-harvest drainage still applies', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 100, daysToHarvest: 5, soil: 'light' }).code, 'drain_stop_irrigating');
 eq('no tube: no threshold, so no loss rate is projected', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50, levelCm: -5, levelPrevCm: -1 }).dropCmPerDay, undefined);
-eq('no tube: the tube recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 30);
+eq('no tube: the well recipe is offered', A.riceWaterDecision({ method: 'intermittent', daysAfterEstablish: 50 }).tube.lengthCm, 25);
+/* The whole point of the PhilRice design: the bottom of the well is the trigger. If these two ever drift
+   apart the card is telling the farmer to build a well that cannot reach the depth the card acts on. */
+eq('the well reaches the dry-season trigger exactly', A.AWD.tube.belowSoilCm.dry, A.AWD.triggerCm.dry);
+eq('the well reaches the wet-season trigger exactly', A.AWD.tube.belowSoilCm.wet, A.AWD.triggerCm.wet);
+eq('what stands above plus what is below is the whole tube, dry season', A.AWD.tube.aboveSoilCm.dry + A.AWD.tube.belowSoilCm.dry, A.AWD.tube.lengthCm);
+eq('what stands above plus what is below is the whole tube, wet season', A.AWD.tube.aboveSoilCm.wet + A.AWD.tube.belowSoilCm.wet, A.AWD.tube.lengthCm);
+eq('the wet-season ring is where the field is re-flooded to', A.AWD.tube.aboveSoilCm.wet, A.AWD.refloodCm);
+eq('the gradation is not claimed as published', A.AWD.tube.gradationPublished, false);
 
 console.log('\n-- the sign carries the meaning: one reading, one datum --');
 eq('method defaults to safe AWD', A.riceWaterDecision({ daysAfterEstablish: 40, season: 'dry', levelCm: -16 }).code, 'reflood_now');

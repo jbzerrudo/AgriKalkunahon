@@ -901,8 +901,19 @@ CARDS.rice = function (root) {
     if (iv) lines.push([bi({ en: 'Usual gap between irrigations', fil: 'Karaniwang agwat ng pagpapatubig' }), fmt(iv.days, 0) + ' days, from ' + iv.n + ' re-floods since ' + iv.first]);
     else if (ricePlot(inp.plot).refloods.length === 1) lines.push([bi({ en: 'Re-floods recorded', fil: 'Naitalang pagpapatubig' }), '1 so far. After the next one this card can give your usual gap between irrigations.']);
     if (r.tube) {
-      lines.push([bi({ en: 'How to make an AWD tube (pani tube)', fil: 'Paano gumawa ng AWD tube (pani tube)' }),
-        r.tube.lengthCm + ' cm of plastic pipe or bamboo, ' + r.tube.diameterCm[0] + ' to ' + r.tube.diameterCm[1] + ' cm across, hammered in so ' + r.tube.aboveSoilCm + ' cm stands above the soil (IRRI)']);
+      /* The PhilRice recipe in full. The two rings are the whole idea: setting the ring for the season at
+         ground level puts the bottom of the well on that season's trigger, so the well runs dry exactly
+         when the field wants water. The gradation is flagged as this app's own, not PhilRice's. */
+      const tb = r.tube;
+      lines.push([bi({ en: 'How to make the observation well (AWD tube, pani tube)', fil: 'Paano gumawa ng observation well (AWD tube, pani tube)' }),
+        tb.lengthCm + ' cm of plastic pipe or bamboo, ' + tb.diameterCm[0] + ' to ' + tb.diameterCm[1] + ' cm across. '
+        + 'Drill ' + tb.holeMm[0] + ' to ' + tb.holeMm[1] + ' mm holes every ' + tb.holeAlongCm + ' cm along it and ' + tb.holeAroundCm + ' cm apart around it. '
+        + 'Mark two rings, ' + tb.aboveSoilCm.wet + ' cm and ' + tb.aboveSoilCm.dry + ' cm from the top: the first is for the wet season, the second for the dry. '
+        + 'Press it in and scoop out the soil inside until the ring for your season sits level with the ground, so '
+        + tb.aboveSoilCm.wet + ' cm stands out in the wet season and ' + tb.aboveSoilCm.dry + ' cm in the dry. '
+        + 'The bottom of the well then sits at ' + tb.belowSoilCm.wet + ' cm down in the wet season and ' + tb.belowSoilCm.dry + ' cm in the dry, which is the depth that calls for water, '
+        + 'so the well running dry is itself the signal to re-flood (PhilRice). '
+        + 'To read a number rather than wait for it to empty, mark the inside in ' + tb.gradationCm + ' cm steps down from the soil line. That marking is this card\u2019s addition, not PhilRice\u2019s.']);
     }
     const whyByMethod = {
       continuous: ['Continuous flooding, as the IRRI Rice Knowledge Bank describes it: "After transplanting, water levels should be around 3 cm initially" and "gradually increase to 5-10 cm (with increasing plant height) and remain there until the field is drained". Keep 5 cm "at all times from heading to the end of flowering", and drain "7-10 days before harvest".',
