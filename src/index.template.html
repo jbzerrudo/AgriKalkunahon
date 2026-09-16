@@ -76,6 +76,10 @@ label.row.check input{width:22px;height:22px;min-height:0}
 @media (max-width:420px){.grid2{grid-template-columns:1fr}}
 .hint{font-size:13px;color:var(--muted);margin:8px 0 0}
 .btn{font:inherit;border:1px solid var(--green-dark);background:var(--green-soft);color:var(--green-ink);border-radius:8px;padding:8px 12px;cursor:pointer}
+/* The minus control. Android's decimal keypad has no minus key, so a negative cannot be typed at
+   all on a phone; this sets the sign with one tap. Wide enough to hit with a thumb in a field. */
+.signbtn{align-self:flex-start;margin-top:4px;min-width:56px;font-size:20px;line-height:1;padding:6px 14px}
+.signbtn.on{background:var(--green-dark);color:#fff;font-weight:700}
 .btn.small{font-size:13px;padding:6px 10px;margin:4px 0 6px}
 .btn.primary{display:block;width:100%;margin-top:14px;background:var(--green);color:#fff;font-weight:700;font-size:17px;padding:12px;border-color:var(--green-dark)}
 .btn.primary .bi .fil{color:#E8F5E5}

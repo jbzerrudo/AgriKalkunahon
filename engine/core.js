@@ -537,7 +537,17 @@ function awdDecision(inp) {
     const ok = isNum(inp.levelCm) && inp.levelCm >= AWD.floweringFloodCm;
     return { code: ok ? 'flowering_keep_flooded' : 'flowering_top_up_to_5cm', targetCm: AWD.floweringFloodCm, sources: src };
   }
-  if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, sources: src };
+  /* AWD does not begin until 21 to 30 days after establishment, and that rule outranks the tube. It
+     used to return here with nothing else, so one tap on the date field made the card answer "keep 2
+     to 3 cm" forever and appear broken. The rule stands; what it returns now also carries the reading,
+     the loss rate and the day AWD may start, so the farmer can see why. */
+  if (isNum(inp.daysAfterEstablish) && inp.daysAfterEstablish < AWD.startDays[0]) {
+    const L0 = lossRate(inp);
+    return { code: 'before_awd_keep_shallow', depthCm: AWD.preAwdDepthCm, startDays: AWD.startDays,
+             startsInDays: AWD.startDays[0] - inp.daysAfterEstablish, daysAfterEstablish: inp.daysAfterEstablish,
+             levelCm: inp.levelCm, dropCmPerDay: L0.drop, dropFrom: L0.dropFrom, dropSigma: L0.sigma,
+             daysBetween: L0.days, fallCm: L0.fallCm, gainCm: L0.gainCm, flags: L0.flags.slice(), sources: src };
+  }
   const L = lossRate(inp), flags = L.flags.slice();
   /* Without the date the start window cannot be checked, so the tube drives the answer and the rule is
      stated as a flag instead. The app must not act on a date it filled in itself. */

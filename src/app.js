@@ -359,6 +359,34 @@ function numInput(id, label, value, step, opts) {
   if (value != null && value !== '') input.value = value;
   if (opts && opts.placeholder) input.placeholder = opts.placeholder;
   const row = el('label', { class: 'row' }, bi(label), optTag(opts), input);
+  /* Android's decimal keypad carries digits and a decimal point and nothing else: no minus key at
+     all. A field that can hold a negative was therefore impossible to fill on a phone while working
+     perfectly on a desktop, which is where this was found. A tap-to-flip control sets the sign
+     without depending on any keyboard. It also works before a number is typed, because a farmer
+     naturally reaches for the sign first. */
+  if (opts && opts.signed) {
+    let wantNeg = false;
+    const btn = el('button', { type: 'button', class: 'btn signbtn' }, '\u2212');
+    const sync = () => {
+      const v = parseFloat(input.value);
+      const on = isFinite(v) ? v < 0 : wantNeg;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    };
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const v = parseFloat(input.value);
+      if (isFinite(v)) { input.value = String(-v); wantNeg = input.value.charAt(0) === '-'; }
+      else wantNeg = !wantNeg;
+      sync(); input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      if (wantNeg && isFinite(v) && v > 0) input.value = String(-v);
+      wantNeg = false; sync();
+    });
+    row.appendChild(btn); sync();
+  }
   return { row, input };
 }
 /* Farmers were filling every box because nothing said which ones they could leave alone. Only the
@@ -473,7 +501,7 @@ CARDS.water = function (root) {
   const soil = selectInput('soil', T.ui.soil, Object.keys(A.SOILS).map(k => [k, T.soils[k]]), prev.soil || 'loam');
   const zr = numInput('zr', T.ui.zr, prev.zr, 0.1, { prefilled: true });
   const date = dateInput('date', T.ui.date, prev.date, { prefilled: true });
-  const tmax = numInput('tmax', T.ui.tmax, prev.tmax, 0.1), tmin = numInput('tmin', T.ui.tmin, prev.tmin, 0.1);
+  const tmax = numInput('tmax', T.ui.tmax, prev.tmax, 0.1, { signed: true }), tmin = numInput('tmin', T.ui.tmin, prev.tmin, 0.1, { signed: true });
   const rhmax = numInput('rhmax', T.ui.rhmax, prev.rhmax, 1, { optional: true }), rhmin = numInput('rhmin', T.ui.rhmin, prev.rhmin, 1, { optional: true });
   const wind = selectInput('wind', T.ui.wind, Object.keys(T.windClass).map(k => [k, T.windClass[k]]), prev.wind || 'unknown');
   const sun = numInput('sun', T.ui.sun, prev.sun, 0.5, { optional: true });
@@ -561,14 +589,19 @@ CARDS.rice = function (root) {
      sign and type it again, so the card asks once and the sign carries the meaning. */
   const level = numInput('level', { en: 'Water level, cm', fil: 'Lalim ng tubig, cm' }, prev.level, 'any');
   const LEVEL_LABEL = {
-    awd: { en: 'Water level in the AWD tube (pani tube), cm. Minus below the soil surface: -16 is 16 cm down. 0 is level with the soil. Plus is water standing on top: +5 is 5 cm.',
-           fil: 'Lalim ng tubig sa AWD tube (pani tube), cm. (Minus [-] kung nasa ilalim ng lupa: -16 ay 16 cm pababa. 0 kung kapantay ng lupa. Plus [+] naman kung may tubig sa ibabaw: +5 ay 5 cm.)' },
-    cont: { en: 'Water level in the field, cm, by stick or ruler. Plus is water standing on the soil: +5 is 5 cm. 0 is level with the soil. Minus if it has dried below the surface.',
-            fil: 'Lalim ng tubig sa inyong bukid, cm, sa ruler o metro. Plus (+) kung may tubig sa ibabaw ng lupa: +5 ay 5 cm. 0 kung kapantay ng lupa. Minus kung natuyo na sa ilalim ng lupa.' },
-    int: { en: 'Water level in the field, cm (used only in the week either side of flowering). Plus is water on top, 0 is level with the soil, minus is below it.',
-           fil: 'Lalim ng tubig sa bukid, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Plus kung may tubig sa ibabaw, 0 kung kapantay ng lupa, minus kung nasa ilalim.' }
+    awd: { en: 'How far the water is from the soil surface, in the AWD tube (pani tube), cm. Type the distance only, then say below or above underneath. 0 means level with the soil.',
+           fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, sa AWD tube (pani tube), cm. Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw. Ang 0 ay kapantay ng lupa.' },
+    cont: { en: 'How far the water is from the soil surface, in the field, cm, by ruler. Type the distance only, then say below or above underneath. 0 means level with the soil.',
+            fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, sa inyong bukid, cm, sa ruler o metro. Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw. Ang 0 ay kapantay ng lupa.' },
+    int: { en: 'How far the water is from the soil surface, cm (used only in the week either side of flowering). Type the distance only, then say below or above underneath.',
+           fil: 'Gaano kalayo ang tubig mula sa ibabaw ng lupa, cm (ginagamit lamang sa linggo bago at pagkatapos ng pamumulaklak). Ang layo lamang ang i-type, at piliin sa ibaba kung nasa ilalim o sa ibabaw.' }
   };
-  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm. Use the same minus and plus as above.', fil: 'Ang naunang pagbása sa parehong lugar, cm. Gamitin ang parehong simbolo ng minus at plus tulad sa itaas.' }, prev.levelPrev, 'any', { optional: true });
+  const levelPrev = numInput('levelprev', { en: 'Your earlier reading at the same place, cm. Type the number only.', fil: 'Ang naunang pagbása sa parehong lugar, cm. Ang bilang lamang ang i-type.' }, prev.levelPrev, 'any', { optional: true });
+  /* Where the water stands is a choice, not a sign to type. One tap, and no keyboard has to carry a
+     minus key. The number box takes the distance and nothing else. */
+  const WHERE = [['below', { en: 'below the soil surface', fil: 'sa ilalim ng ibabaw ng lupa' }], ['above', { en: 'standing above the soil', fil: 'nakatayo sa ibabaw ng lupa' }]];
+  const levelWhere = selectInput('levelwhere', { en: 'Is that water above the soil or below it?', fil: 'Ang tubig ba ay nasa ibabaw ng lupa o sa ilalim?' }, WHERE, prev.levelWhere || 'below');
+  const levelPrevWhere = selectInput('levelprevwhere', { en: 'And the earlier reading?', fil: 'At ang naunang pagbása?' }, WHERE, prev.levelPrevWhere || 'below');
   /* The two reading dates, not "how many days ago". They give the span without the farmer doing
      arithmetic, and they anchor the answer on when the tube was actually read rather than on the
      moment the button was pressed. Read at seven, entered at nine at night, and the old card was
@@ -581,8 +614,8 @@ CARDS.rice = function (root) {
      farmer actually has. Given only temperature, FAO-56 fills in humidity from Eq. 48, sunlight from
      Eq. 50 and wind from Table 4, and names each substitution in the answer. Without this the split
      was only available to someone who had already worked through the watering card. */
-  const tmax = numInput('rtmax', { en: 'Afternoon high on the day of that reading, deg C. With the morning low, the card works out crop water use and can split your loss into its parts.', fil: 'Pinakamainit sa araw ng pagbásang iyon, deg C. Kasama ang pinakamalamig sa umaga, matatantiya ng card ang gamit na tubig ng pananim, at malalaman kung magkano ang tagas at tagimtim.' }, prev.tmax, 0.1, { optional: true });
-  const tmin = numInput('rtmin', { en: 'Morning low on that same day, deg C.', fil: 'Pinakamalamig sa umaga ng araw na iyon, deg C.' }, prev.tmin, 0.1, { optional: true });
+  const tmax = numInput('rtmax', { en: 'Afternoon high on the day of that reading, deg C. With the morning low, the card works out crop water use and can split your loss into its parts.', fil: 'Pinakamainit sa araw ng pagbásang iyon, deg C. Kasama ang pinakamalamig sa umaga, matatantiya ng card ang gamit na tubig ng pananim, at malalaman kung magkano ang tagas at tagimtim.' }, prev.tmax, 0.1, { optional: true, signed: true });
+  const tmin = numInput('rtmin', { en: 'Morning low on that same day, deg C.', fil: 'Pinakamalamig sa umaga ng araw na iyon, deg C.' }, prev.tmin, 0.1, { optional: true, signed: true });
   /* One optional number splits the measured loss into its parts. The watering card already prints it
      for rice, so it is carried across rather than asked for again when it is recent. */
   const banked = (store.riceEtc && isFinite(store.riceEtc.mm) && (Date.now() - new Date(store.riceEtc.d + 'T00:00:00')) / 86400000 <= 7) ? store.riceEtc : null;
@@ -590,7 +623,7 @@ CARDS.rice = function (root) {
   etc.input.min = 0;
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, method.row, season.row, est.row, flower.row, harvest.row, soil.row, level.row, levelWhere.row, levelDate.row, levelPrev.row, levelPrevWhere.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -622,6 +655,8 @@ CARDS.rice = function (root) {
     levelPrev.row.hidden = !(awd || cont);
     levelDate.row.hidden = !(awd || cont);
     levelPrevDate.row.hidden = !(awd || cont);
+    levelWhere.row.hidden = false;
+    levelPrevWhere.row.hidden = !(awd || cont);
     tmax.row.hidden = !(awd || cont); tmin.row.hidden = !(awd || cont);
     etc.row.hidden = !(awd || cont);
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : cont ? LEVEL_LABEL.cont : LEVEL_LABEL.int), level.row.firstChild);
@@ -643,7 +678,7 @@ CARDS.rice = function (root) {
   const out = el('div'); root.append(form, memo, out); syncForget();
   function run() {
     const inp = { plot: plot.value, method: method.input.value, season: season.input.value, est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
-                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
+                  soil: soil.input.value, level: num(level.input), levelPrev: num(levelPrev.input), levelWhere: levelWhere.input.value, levelPrevWhere: levelPrevWhere.input.value, levelDate: levelDate.input.value, levelPrevDate: levelPrevDate.input.value, tmax: num(tmax.input), tmin: num(tmin.input), etc: num(etc.input), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
     /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
@@ -657,9 +692,14 @@ CARDS.rice = function (root) {
       if (span <= 0) { dateFlags.push('reading_dates_out_of_order'); span = null; }
     } else if (inp.levelPrev != null) dateFlags.push('earlier_reading_date_missing');
     if (D(inp.levelDate) && (D(inp.levelDate) - new Date()) / dayMs > 1) dateFlags.push('reading_date_in_future');
+    /* Magnitude plus direction, combined here into the single signed level the engine works on. The
+       magnitude is taken as an absolute value so a stray minus typed on a desktop cannot cancel the
+       direction chosen underneath it. */
+    const signed = (mag, where) => mag == null ? null : (where === 'above' ? Math.abs(mag) : -Math.abs(mag));
+    const levelCm = signed(inp.level, inp.levelWhere), levelPrevCm = signed(inp.levelPrev, inp.levelPrevWhere);
     const F = riceFieldStats(inp.plot);
     const r = A.riceWaterDecision({ method: inp.method, daysAfterEstablish: inp.est ? -dd(inp.est) : null, daysToFlowering: dd(inp.flower), daysToHarvest: dd(inp.harvest),
-      season: inp.season, levelCm: inp.level, levelPrevCm: span != null ? inp.levelPrev : null, daysBetween: span,
+      season: inp.season, levelCm: levelCm, levelPrevCm: span != null ? levelPrevCm : null, daysBetween: span,
       fieldDropCmPerDay: F ? F.mean : null, fieldDropSigma: F ? F.sd : null, weedsManaged: inp.weeds, soil: inp.soil });
     /* The field only learns from a drawdown it actually measured. A rate carried over from its own
        history is not a new observation and must not be fed back in. */
@@ -680,6 +720,14 @@ CARDS.rice = function (root) {
                 : r.dropFrom === 'field_average' ? ', this field\'s usual rate, because these two readings cannot give one'
                 : ', the rate you entered';
       lines.push([bi({ en: 'Water loss', fil: 'Pagbaba ng tubig' }), fmt(r.dropCmPerDay, 1) + ' cm/day' + src]);
+    }
+    /* Say when the rule lifts, so "keep 2 to 3 cm" reads as a stage the crop is in rather than as the
+       only answer this card is capable of. */
+    if (r.startsInDays != null) {
+      lines.push([bi({ en: 'Safe AWD can start on', fil: 'Puwedeng simulan ang Safe AWD sa' }),
+        dmy(dayFrom(r.startsInDays)) + ', ' + r.startDays[0] + ' to ' + r.startDays[1] + ' days after transplanting (PhilRice). Until then keep ' + r.depthCm[0] + ' to ' + r.depthCm[1] + ' cm of water, whatever the tube shows.']);
+      if (r.levelCm != null) lines.push([bi({ en: 'Your reading', fil: 'Ang pagbása ninyo' }),
+        fmt(Math.abs(r.levelCm), 1) + ' cm ' + (r.levelCm < 0 ? 'below the soil surface' : 'above the soil') + ', recorded but not acted on yet']);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
@@ -829,7 +877,7 @@ CARDS.spray = function (root) {
   const prev = recall('spray');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
   form.appendChild(locationBlock());
-  const Tn = numInput('sT', { en: 'Air temperature now (°C)', fil: 'Temperatura ng hangin ngayon (°C)' }, prev.T, 0.1);
+  const Tn = numInput('sT', { en: 'Air temperature now (°C)', fil: 'Temperatura ng hangin ngayon (°C)' }, prev.T, 0.1, { signed: true });
   const RH = numInput('sRH', { en: 'Humidity now (%)', fil: 'Halumigmig ngayon (%)' }, prev.RH, 1);
   const bft = [['', { en: 'Choose from what you see', fil: 'Piliin mula sa nakikita' }], ['0.5', { en: 'Calm: smoke rises straight (under 1 km/h)', fil: 'Walang hangin: tuwid ang usok' }], ['4', { en: 'Smoke drifts, leaves still (2 to 5 km/h)', fil: 'Gumagalaw ang usok, tahimik ang dahon' }], ['9', { en: 'Leaves rustle, wind felt on face (7 to 11 km/h)', fil: 'Kumakaluskos ang dahon, ramdam sa mukha' }], ['16', { en: 'Leaves and twigs move all the time (13 to 19 km/h)', fil: 'Laging gumagalaw ang dahon at sanga' }], ['25', { en: 'Dust rises, small branches move (20 to 30 km/h)', fil: 'Tumataas ang alikabok, gumagalaw ang sanga' }]];
   const wsel = selectInput('sW', { en: 'Wind now', fil: 'Hangin ngayon' }, bft, prev.wsel || '');
@@ -864,7 +912,7 @@ CARDS.spray = function (root) {
 CARDS.dry = function (root) {
   const prev = recall('dry');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
-  const Tn = numInput('dT', { en: 'Air temperature at the drying area (°C)', fil: 'Temperatura sa bilaran (°C)' }, prev.T, 0.1);
+  const Tn = numInput('dT', { en: 'Air temperature at the drying area (°C)', fil: 'Temperatura sa bilaran (°C)' }, prev.T, 0.1, { signed: true });
   const RH = numInput('dRH', { en: 'Humidity (%)', fil: 'Halumigmig (%)' }, prev.RH, 1);
   const w = numInput('dW', { en: 'Wet palay weight (kg), or leave blank', fil: 'Bigat ng basâng palay (kg), o iwanang blangko' }, prev.w, 1, { optional: true });
   const cav = numInput('dCav', { en: 'or number of cavans', fil: 'o bilang ng kaban' }, prev.cav, 1, { optional: true });
@@ -900,7 +948,7 @@ CARDS.stress = function (root) {
   const PH = { germination: { en: 'Germination', fil: 'Pagsibol' }, seedling: { en: 'Seedling emergence', fil: 'Pagsulpot ng punla' }, rooting: { en: 'Rooting', fil: 'Pag-uugat' }, tillering: { en: 'Tillering', fil: 'Pagsusuwi' }, panicle_initiation: { en: 'Panicle initiation', fil: 'Pagbubuo ng uhay' }, panicle_differentiation: { en: 'Panicle differentiation (booting)', fil: 'Pagbubuntis' }, anthesis: { en: 'Flowering (anthesis)', fil: 'Pamumulaklak' }, ripening: { en: 'Ripening', fil: 'Paghihinog' }, vegetative: { en: 'Vegetative growth', fil: 'Paglaki ng dahon' }, flowering: { en: 'Flowering and pollination', fil: 'Pamumulaklak at polinasyon' }, grain_fill: { en: 'Grain filling', fil: 'Pagbubuo ng butil' }, cob_fill: { en: 'Cob fill', fil: 'Pagbubuo ng butil' }, head_formation: { en: 'Head formation', fil: 'Pagbubuo ng ulo' }, establishment: { en: 'Establishment and vegetative', fil: 'Pagtatatag at paglaki' }, tuber_initiation: { en: 'Tuber initiation', fil: 'Pagsisimula ng tubo' }, tuber_growth: { en: 'Tuber growth', fil: 'Paglaki ng tubo' }, maturation: { en: 'Maturation', fil: 'Paggulang' }, early_vegetative: { en: 'Early vegetative', fil: 'Maagang paglaki' }, fruit_growth: { en: 'Fruit growth', fil: 'Paglaki ng bunga' }, juvenile: { en: 'Juvenile', fil: 'Batang halaman' }, fruit: { en: 'Fruit development', fil: 'Pagbubunga' }, hearting: { en: 'Hearting', fil: 'Pagbubuo ng ulo' }, root_development: { en: 'Root development', fil: 'Paglaki ng ugat' }, curd_induction: { en: 'Curd induction', fil: 'Pagsisimula ng bulaklak' }, curd_growth: { en: 'Curd growth', fil: 'Paglaki ng bulaklak' }, head_growth: { en: 'Head growth', fil: 'Paglaki ng ulo' } };
   function fillPhases() { phase.innerHTML = ''; Object.keys(A.STRESS[crop.input.value].phases).forEach(p => { const s = PH[p] || { en: p, fil: p }; phase.appendChild(el('option', { value: p }, s.en + ' / ' + s.fil)); }); if (prev.phase && A.STRESS[crop.input.value].phases[prev.phase]) phase.value = prev.phase; }
   crop.input.addEventListener('change', fillPhases); fillPhases();
-  const d0x = numInput('x0x', { en: 'Today\'s high (°C)', fil: 'Pinakamainit ngayon (°C)' }, prev.d0x, 0.1), d0n = numInput('x0n', { en: 'Today\'s low (°C)', fil: 'Pinakamalamig ngayon (°C)' }, prev.d0n, 0.1);
+  const d0x = numInput('x0x', { en: 'Today\'s high (°C)', fil: 'Pinakamainit ngayon (°C)' }, prev.d0x, 0.1, { signed: true }), d0n = numInput('x0n', { en: 'Today\'s low (°C)', fil: 'Pinakamalamig ngayon (°C)' }, prev.d0n, 0.1, { signed: true });
   const d1x = numInput('x1x', { en: 'Yesterday\'s high, if known', fil: 'Pinakamainit kahapon, kung alam' }, prev.d1x, 0.1, { optional: true }), d1n = numInput('x1n', { en: 'Yesterday\'s low', fil: 'Pinakamalamig kahapon' }, prev.d1n, 0.1, { optional: true });
   const d2x = numInput('x2x', { en: 'Day before, high', fil: 'Noong isang araw, pinakamainit' }, prev.d2x, 0.1, { optional: true }), d2n = numInput('x2n', { en: 'Day before, low', fil: 'Noong isang araw, pinakamalamig' }, prev.d2n, 0.1, { optional: true });
   const g = el('div', { class: 'grid2' }); g.append(d0x.row, d0n.row, d1x.row, d1n.row, d2x.row, d2n.row);
@@ -935,7 +983,7 @@ CARDS.frost = function (root) {
   const prev = recall('frost');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
   form.appendChild(locationBlock());
-  const Tn = numInput('fT', { en: 'Air temperature at the time you read it (°C)', fil: 'Temperatura sa oras ng pagbása (°C)' }, prev.T, 0.1);
+  const Tn = numInput('fT', { en: 'Air temperature at the time you read it (°C)', fil: 'Temperatura sa oras ng pagbása (°C)' }, prev.T, 0.1, { signed: true });
   const RH = numInput('fRH', { en: 'Humidity at the same time (%)', fil: 'Halumigmig sa parehong oras (%)' }, prev.RH, 1);
   const sky = selectInput('fSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear, stars visible', fil: 'Maaliwalas, kita ang bituin' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast or foggy', fil: 'Maulap o maambon' }]], prev.sky || 'clear');
   const wind = selectInput('fWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy or windy', fil: 'Mahangin' }]], prev.wind || 'calm');
@@ -1027,7 +1075,7 @@ CARDS.frost = function (root) {
 CARDS.disease = function (root) {
   const prev = recall('disease');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
-  const Tn = numInput('zT', { en: 'Air temperature this evening (°C)', fil: 'Temperatura ngayong gabi (°C)' }, prev.T, 0.1);
+  const Tn = numInput('zT', { en: 'Air temperature this evening (°C)', fil: 'Temperatura ngayong gabi (°C)' }, prev.T, 0.1, { signed: true });
   const RH = numInput('zRH', { en: 'Humidity this evening (%)', fil: 'Halumigmig ngayong gabi (%)' }, prev.RH, 1);
   const sky = selectInput('zSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear', fil: 'Maaliwalas' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast', fil: 'Maulap' }]], prev.sky || 'clear');
   const wind = selectInput('zWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy', fil: 'Mahangin' }]], prev.wind || 'calm');
@@ -1043,8 +1091,8 @@ CARDS.disease = function (root) {
     fil: 'Binibilang ng Hutton Criteria ang mga oras na 90% pataas ang halumigmig sa buong araw at gabi, nang dalawang beses. Kailangan nito ng automatic weather station o data logger; hindi kaya ng hawak-kamay na hygrometer, at hindi huhulaan ng app na ito ang mga oras. Kung wala kayo nito, ang inilalarawan ng pamantayan ay dalawang magkasunod na araw ng malamig na gabi, hindi bababa sa 10 °C, na may mahabang panahong mahalumigmig. Bantayan ang ganitong pattern at magtanong sa inyong tekniko ng DA o BPI.'
   }));
   const hOn = checkInput('zLogger', { en: 'I have a data logger or weather station', fil: 'May data logger o weather station ako' }, prev.logger);
-  const a1 = numInput('zA1', { en: 'Yesterday: lowest temperature (°C)', fil: 'Kahapon: pinakamababang temperatura (°C)' }, prev.a1, 0.1, { optional: true }), a2 = numInput('zA2', { en: 'Yesterday: hours at or above 90% humidity', fil: 'Kahapon: oras na 90% pataas ang halumigmig' }, prev.a2, 0.5, { optional: true });
-  const b1 = numInput('zB1', { en: 'Day before: lowest temperature (°C)', fil: 'Noong isang araw: pinakamababang temperatura (°C)' }, prev.b1, 0.1, { optional: true }), b2 = numInput('zB2', { en: 'Day before: hours at or above 90% humidity', fil: 'Noong isang araw: oras na 90% pataas ang halumigmig' }, prev.b2, 0.5, { optional: true });
+  const a1 = numInput('zA1', { en: 'Yesterday: lowest temperature (°C)', fil: 'Kahapon: pinakamababang temperatura (°C)' }, prev.a1, 0.1, { optional: true, signed: true }), a2 = numInput('zA2', { en: 'Yesterday: hours at or above 90% humidity', fil: 'Kahapon: oras na 90% pataas ang halumigmig' }, prev.a2, 0.5, { optional: true });
+  const b1 = numInput('zB1', { en: 'Day before: lowest temperature (°C)', fil: 'Noong isang araw: pinakamababang temperatura (°C)' }, prev.b1, 0.1, { optional: true, signed: true }), b2 = numInput('zB2', { en: 'Day before: hours at or above 90% humidity', fil: 'Noong isang araw: oras na 90% pataas ang halumigmig' }, prev.b2, 0.5, { optional: true });
   /* This card prints sunrise, the reading window and the drying window, all of which come from the
      coordinates. Without the block a farmer on the app's starting location gets someone else's times
      with nothing on screen saying so, and the clock warnings never appear either. Elevation is not used
@@ -1150,7 +1198,7 @@ CARDS.timing = function (root) {
   const sow = dateInput('tSow', { en: 'Sowing date', fil: 'Petsa ng pagpunla' }, prev.sow, { prefilled: true });
   const h2 = el('h4', null, bi({ en: 'Corn heat units (tracker only)', fil: 'Init na naipon ng mais (pagsubaybay lang)' }));
   const plant = dateInput('tPlant', { en: 'Corn planting date', fil: 'Petsa ng pagtatanim ng mais' }, prev.plant, { optional: true });
-  const tx = numInput('tTx', { en: 'Typical afternoon high since planting (°C)', fil: 'Karaniwang pinakamainit mula nang itanim (°C)' }, prev.tx, 0.1, { optional: true }), tn = numInput('tTn', { en: 'Typical morning low since planting (°C)', fil: 'Karaniwang pinakamalamig mula nang itanim (°C)' }, prev.tn, 0.1, { optional: true });
+  const tx = numInput('tTx', { en: 'Typical afternoon high since planting (°C)', fil: 'Karaniwang pinakamainit mula nang itanim (°C)' }, prev.tx, 0.1, { optional: true, signed: true }), tn = numInput('tTn', { en: 'Typical morning low since planting (°C)', fil: 'Karaniwang pinakamalamig mula nang itanim (°C)' }, prev.tn, 0.1, { optional: true });
   form.append(variety.row, method.row, sow.row, h2, plant.row, tx.row, tn.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
