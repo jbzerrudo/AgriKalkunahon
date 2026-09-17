@@ -12,6 +12,9 @@ identifiers:
     value: 10.5281/zenodo.22726046
     description: Concept DOI, always resolves to the latest version
   - type: doi
+    value: 10.5281/zenodo.22799578
+    description: DOI for version 0.6.0
+  - type: doi
     value: 10.5281/zenodo.22748252
     description: DOI for version 0.5.1
   - type: doi
@@ -45,6 +48,6 @@ keywords:
   - Philippines
   - decision support
 license: PolyForm-Noncommercial-1.0.0
-version: 0.6.0
-date-released: "2026-09-16"
+version: 0.7.0
+date-released: "2026-09-17"
 doi: 10.5281/zenodo.22726046
