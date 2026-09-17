@@ -1176,7 +1176,7 @@ function frostPointRK(Tc, RH) {
 const DEWPOINT_SETS = [
   { id: 'fao56', b: 17.27, c: 237.3, ref: 'FAO56', name: 'FAO-56 (Tetens)' },
   { id: 'buck81', b: 17.502, c: 240.97, ref: 'BUCK1981', name: 'Buck (1981)' },
-  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), Bogel form' }
+  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), B\u00f6gel form' }
 ];
 function dewPointMagnus(Tc, RH, set) {
   const g = Math.log(RH / 100) + (set.d ? (set.b - Tc / set.d) : set.b) * Tc / (set.c + Tc);

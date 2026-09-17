@@ -1326,7 +1326,7 @@ function frostPointRK(Tc, RH) {
 const DEWPOINT_SETS = [
   { id: 'fao56', b: 17.27, c: 237.3, ref: 'FAO56', name: 'FAO-56 (Tetens)' },
   { id: 'buck81', b: 17.502, c: 240.97, ref: 'BUCK1981', name: 'Buck (1981)' },
-  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), Bogel form' }
+  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), B\u00f6gel form' }
 ];
 function dewPointMagnus(Tc, RH, set) {
   const g = Math.log(RH / 100) + (set.d ? (set.b - Tc / set.d) : set.b) * Tc / (set.c + Tc);
@@ -2015,7 +2015,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '435f4c45' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'ced6e413' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2738,8 +2738,12 @@ CARDS.frost = function (root) {
        frost one, and they are shown even when it is too early in the day to judge tonight. Appended
        rather than shown: one save button per card belongs to the card's own verdict, not to a
        readout, and the scroll should land on the frost answer. */
+    const dpNow = A.dewPointNow(inp.T, inp.RH);
+    const frostPointLine = dpNow.error ? null : (dpNow.frostPoint != null
+      ? fmt(dpNow.frostPoint, 1) + ' \u00b0C, the temperature a surface must fall to for this air to deposit ice on it directly (Romps 2021)'
+      : 'none for this air: its dew point is above freezing, so it would saturate over water first and what forms would be dew, not frost');
     const showDewPoint = function () {
-      const dp = A.dewPointNow(inp.T, inp.RH);
+      const dp = dpNow;
       if (dp.error) return;
       out.appendChild(result({ level: 'info',
         verdict: { en: 'The dew point is ' + fmt(dp.dewPoint, 1) + ' \u00b0C, and the air is ' + fmt(dp.depression, 1) + ' \u00b0C warmer than that.',
@@ -2761,7 +2765,7 @@ CARDS.frost = function (root) {
         limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
                  'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
                  'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.',
-                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one. Four published methods agree on the same reading to within a hundredth of a degree, as the comparison below shows.',
+                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one.',
                  'The frost point is the temperature a surface must reach, not the air. On Benguet frost mornings the air has been measured at 1.5 to 3.9 \u00b0C (Basquial et al. 2021) while the ground froze, because a leaf under a clear sky radiates heat away and cools below the air around it. Air sitting well above its frost point is therefore not evidence that the crop is safe.'],
         sources: ['FAO56', 'ROMPS2021', 'BUCK1981', 'BUCK1996', 'VOEMEL_VP', 'FAO_FROST'] }));
     };
@@ -2835,7 +2839,8 @@ CARDS.frost = function (root) {
     lines.push([bi({ en: 'You read this at', fil: 'Oras ng pagbása' }), hhmm(nowH) + ', ' + fmt(toMin, 1) + ' hours before the coldest hour'],
       [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')'],
       [bi({ en: 'Your location', fil: 'Lokasyon ninyo' }), fmt(L.lat, 2) + ' \u00b0N, ' + fmt(L.lon, 2) + ' \u00b0E' + (isFinite(L.elev) ? ' at ' + fmt(L.elev, 0) + ' m' : '') + ', ' + fmt(benguetKm, 0) + ' km from ' + A.BENGUET.place],
-      [bi({ en: 'Time of year', fil: 'Panahon ng taon' }), bi(seasonText)], [bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'at or below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none']);
+      [bi({ en: 'Time of year', fil: 'Panahon ng taon' }), bi(seasonText)], [bi({ en: 'Dew point now', fil: 'Dew point ngayon' }), fmt(r.dewPoint, 1) + ' °C (line used: 2 °C)'],
+      [bi({ en: 'Frost point', fil: 'Frost point' }), frostPointLine || '–'], [bi({ en: 'Radiation-frost conditions present', fil: 'Mga kondisyon ng andap na naroroon' }), ['clear sky', 'calm or light wind', 'low dew point', 'at or below 10 °C'].filter((_, i) => [c.clear, c.calm, c.lowDewPoint, c.cold][i]).join(', ') || 'none']);
     const why = ['Radiation frosts "are characterized by a clear sky, calm or very little wind, temperature inversion, low dew-point temperatures" (FAO frost manual, Snyder and de Melo-Abreu 2005).', 'The air keeps losing heat to the sky all night, so the minimum comes just before sunrise, when the sun starts to put heat back (FAO frost manual). That is the hour to look at the crop.', 'When dew forms, the released latent heat "reduces the rate of temperature drop" (FAO), so a low dew point lets the surface keep cooling; a high dew point sets a brake near the dew point.', 'Benguet frost (andap) is radiative frost of the northeast monsoon season in Atok, Buguias, Kabayan, Kibungan and Mankayan: weak monsoon flow, cloudless nights, air above freezing while surfaces frost. Marasigan (2017) found 70% of satellite-detected occurrences at land-surface temperatures at or below 10 °C (57% at or below 9 °C), consistent with farmers\' reports of frost at or below 10 °C; Basquial et al. (2021) measured 1.5 to 3.9 °C air temperature on frost mornings.', 'Atok farmers name the same precursors: a very cold, still evening, thick dew and no wind after a long dry spell; wind at dawn prevents frost; frost settles on low ground; and 9 °C without frost against 13 °C with frost shows that temperature alone is not enough (Launio et al. 2020).'];
     const assumptions = ['The reading time comes from this device\'s clock, and sunrise and sunset are computed for the same time zone, so the two agree wherever you are. If the device clock or zone is wrong, the hours before the coldest hour are wrong with it.', 'Sunrise from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone, at the location saved above. The one-hour window before it is where the minimum usually falls, not a computed minimum: this card forecasts no temperature.', 'The 2 °C dew-point line is a design assumption of this app. FAO prints no threshold; its method is a regression whose coefficients must be fitted from local records, and none exist for Benguet. The line tests how dry the air is, not how cold it is: the dew point is always at or below the air temperature, so 2 °C is reached on an ordinary dry night with the air near 10 °C.', 'Readings taken outdoors, away from walls, at about head height. The card does not know what time you read the thermometer: the later in the evening, the more the reading tells you about the night ahead.', 'The 10 °C line comes from Marasigan (2017), where it is a land surface temperature measured by satellite (passes near 10:30 p.m. and 1:30 a.m., model output at 2 a.m.), not an air temperature. At night the surface runs colder than the air at head height, so holding your air reading to 10 °C is stricter than her finding requires. The reading is also taken hours before the night minimum, so a reading above 10 °C does not mean the night will stay above 10 °C. That is why a clear, calm night is never reported as unlikely here.'];
     const limits = ['The season note is Benguet only. This app holds no frost climatology for any other part of the Philippines, and the conditions themselves are general physics, not local to Benguet.', 'The answer depends on when you read the thermometer, and the card cannot tell. On one clear, calm night the same air can read 14 °C at 7 p.m. and 5 °C by 2 a.m. Cloud, wind and dew point barely change with the hour; air temperature does.', 'No minimum temperature is forecast: FAO\'s forecast method needs local regression coefficients that do not exist for Benguet.', 'Leaves cool below the air temperature on clear nights (FAO), so frost can occur with the thermometer above 0 °C.', 'Where PAGASA issues an official frost advisory for your area, prefer it over this indicator.'];
@@ -3027,7 +3032,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 649 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build 435f4c45. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build ced6e413. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -3116,7 +3121,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 435f4c45)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build ced6e413)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -3128,7 +3133,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 435f4c45).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 435f4c45 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build ced6e413).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build ced6e413 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -3175,7 +3180,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 435f4c45.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build ced6e413.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

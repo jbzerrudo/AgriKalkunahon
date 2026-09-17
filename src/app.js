@@ -1199,7 +1199,7 @@ CARDS.frost = function (root) {
         limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
                  'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
                  'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.',
-                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one. Four published methods agree on the same reading to within a hundredth of a degree, as the comparison below shows.',
+                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one.',
                  'The frost point is the temperature a surface must reach, not the air. On Benguet frost mornings the air has been measured at 1.5 to 3.9 \u00b0C (Basquial et al. 2021) while the ground froze, because a leaf under a clear sky radiates heat away and cools below the air around it. Air sitting well above its frost point is therefore not evidence that the crop is safe.'],
         sources: ['FAO56', 'ROMPS2021', 'BUCK1981', 'BUCK1996', 'VOEMEL_VP', 'FAO_FROST'] }));
     };
