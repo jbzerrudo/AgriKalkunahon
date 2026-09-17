@@ -1258,10 +1258,99 @@ function dewTonight(T, RH, sky, wind) {
    Eq. 11 and 14. This is a property of the air at the moment and place it is read, so unlike the
    frost verdict it carries no time-of-day condition and no sky or wind term. It is reported on its
    own so that a reading taken at any hour still yields the two numbers it can honestly yield. */
+/* ---------- dew point and frost point from first principles ----------
+   Romps (2021) derives explicit analytic expressions for both the dew point and the frost point from
+   the Rankine-Kirchhoff approximations (ideal gas, fixed heat capacities, zero specific volume of
+   condensates). He reports them accurate to within a few hundredths of a degree against modern
+   laboratory measurements, over 230 to 330 K for the dew point and 180 to 273 K for the frost point.
+   The constants are the optimised set he carries over from Romps (2017). Kelvin throughout. */
+const RK = { cvv: 1418, ptrip: 611.65, Ttrip: 273.16, E0v: 2.3740e6, E0s: 0.3337e6, Rv: 461, cvl: 4119, cvs: 1861,
+             dewLoK: 230, dewHiK: 330, frostLoK: 180, frostHiK: 273 };
+RK.cpv = RK.cvv + RK.Rv;
+const ZEROC = 273.15;
+/* Eq. 3, saturation vapour pressure over liquid water, Pa */
+function pvLiquidRK(T) {
+  return RK.ptrip * Math.pow(T / RK.Ttrip, (RK.cpv - RK.cvl) / RK.Rv) *
+    Math.exp((RK.E0v - (RK.cvv - RK.cvl) * RK.Ttrip) / RK.Rv * (1 / RK.Ttrip - 1 / T));
+}
+/* Eq. 4, saturation vapour pressure over ice, Pa */
+function pvIceRK(T) {
+  return RK.ptrip * Math.pow(T / RK.Ttrip, (RK.cpv - RK.cvs) / RK.Rv) *
+    Math.exp((RK.E0v + RK.E0s - (RK.cvv - RK.cvs) * RK.Ttrip) / RK.Rv * (1 / RK.Ttrip - 1 / T));
+}
+/* Lambert W, lower branch, defined for -1/e <= x < 0. Halley iteration from the asymptotic start. */
+function lambertWm1(x) {
+  if (!(x < 0 && x >= -Math.exp(-1))) return NaN;
+  let w = Math.log(-x); w = w - Math.log(-w);
+  for (let i = 0; i < 100; i++) {
+    const e = Math.exp(w), f = w * e - x, d = e * (w + 1) - (w + 2) * f / (2 * w + 2), step = f / d;
+    w -= step;
+    if (Math.abs(step) < 1e-14 * Math.abs(w)) break;
+  }
+  return w;
+}
+/* Lambert W, principal branch. The frost point's argument overflows double precision, so it is
+   carried as its logarithm and expanded by the series of Corless et al. (1996) that Romps prints. */
+function lambertW0FromLog(L1) {
+  const L2 = Math.log(L1);
+  return L1 - L2 + L2 / L1 + L2 * (-2 + L2) / (2 * L1 * L1) + L2 * (6 - 9 * L2 + 2 * L2 * L2) / (6 * L1 * L1 * L1) +
+    L2 * (-12 + 36 * L2 - 22 * L2 * L2 + 3 * L2 * L2 * L2) / (12 * L1 * L1 * L1 * L1);
+}
+/* Eq. 5 and 6. T and the result in degrees Celsius, RH in percent. */
+function dewPointRK(Tc, RH) {
+  const T = Tc + ZEROC, c = (RK.E0v - (RK.cvv - RK.cvl) * RK.Ttrip) / ((RK.cpv - RK.cvl) * T);
+  return c / lambertWm1(Math.pow(RH / 100, RK.Rv / (RK.cvl - RK.cpv)) * c * Math.exp(c)) * T - ZEROC;
+}
+/* Eq. 7, 8 and 9. RH is given over liquid water, as a hygrometer reports it, and converted to the
+   humidity over ice that the frost point is defined against. */
+function frostPointRK(Tc, RH) {
+  const T = Tc + ZEROC, RHs = (RH / 100) * pvLiquidRK(T) / pvIceRK(T);
+  const c = (RK.E0v + RK.E0s - (RK.cvv - RK.cvs) * RK.Ttrip) / ((RK.cpv - RK.cvs) * T);
+  const logArg = (RK.Rv / (RK.cvs - RK.cpv)) * Math.log(RHs) + Math.log(c) + c;
+  let W;
+  if (logArg > 709) W = lambertW0FromLog(logArg);
+  else {
+    const x = Math.exp(logArg); W = Math.log(1 + x);
+    for (let i = 0; i < 100; i++) {
+      const e = Math.exp(W), f = W * e - x, d = e * (W + 1) - (W + 2) * f / (2 * W + 2), step = f / d;
+      W -= step;
+      if (Math.abs(step) < 1e-14 * Math.abs(W)) break;
+    }
+  }
+  return c / W * T - ZEROC;
+}
+/* Magnus-form coefficient sets, for the comparison the card reports. The leading constant cancels
+   when the input is a relative humidity, so only b and c are needed; the Buck (1996) form carries a
+   fourth constant d. Every set here was read from a source named in REFS: no set is included whose
+   published coefficients could not be checked. */
+const DEWPOINT_SETS = [
+  { id: 'fao56', b: 17.27, c: 237.3, ref: 'FAO56', name: 'FAO-56 (Tetens)' },
+  { id: 'buck81', b: 17.502, c: 240.97, ref: 'BUCK1981', name: 'Buck (1981)' },
+  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), Bogel form' }
+];
+function dewPointMagnus(Tc, RH, set) {
+  const g = Math.log(RH / 100) + (set.d ? (set.b - Tc / set.d) : set.b) * Tc / (set.c + Tc);
+  return set.c * g / (set.b - g);
+}
+/* One reading of temperature and humidity, and everything that reading alone supports. The dew point
+   the card leads with stays the FAO-56 one, because every other humidity quantity in this app is
+   FAO-56 and two saturation curves in one program would disagree with each other. The alternatives
+   are reported beside it so the reader can see how little the choice matters here. The frost point is
+   withheld above freezing: Romps states his frost point over 180 to 273 K, and above the triple point
+   the ice curve is an extrapolation with no ice to describe. */
 function dewPointNow(T, RH) {
   if (!isNum(T) || !isNum(RH) || RH <= 0 || RH > 100) return { error: 'need_temperature_and_humidity' };
   const td = tdewFromEa(es0(T) * RH / 100);
-  return { dewPoint: td, depression: T - td, T: T, RH: RH, sources: ['FAO56'] };
+  const compare = DEWPOINT_SETS.map(function (s) { return { id: s.id, name: s.name, ref: s.ref, dewPoint: dewPointMagnus(T, RH, s) }; });
+  compare.push({ id: 'romps', name: 'Romps (2021), from first principles', ref: 'ROMPS2021', dewPoint: dewPointRK(T, RH) });
+  const spread = Math.max.apply(null, compare.map(function (x) { return x.dewPoint; })) -
+                 Math.min.apply(null, compare.map(function (x) { return x.dewPoint; }));
+  const fp = frostPointRK(T, RH);
+  const frostPoint = (isNum(fp) && fp <= 0) ? fp : null;
+  return { dewPoint: td, depression: T - td, T: T, RH: RH,
+           compare: compare, compareSpreadC: spread,
+           frostPoint: frostPoint, frostPointWithheld: frostPoint === null ? 'above_freezing' : null,
+           sources: frostPoint === null ? ['FAO56', 'ROMPS2021'] : ['FAO56', 'ROMPS2021'] };
 }
 /* Jackson (2017), Pacific Pests and Pathogens fact sheet 252: on rice, "the leaves need to be wet for
    6-8 hours for spore germination", with 24 to 28 C favourable and humidity near 100% needed for
@@ -1356,6 +1445,10 @@ const REFS = {
   FAO56: { cls: 'primary', cite: 'Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56.', url: 'https://www.fao.org/4/x0490e/x0490e00.htm' },
   FAO_TM3: { cls: 'primary', cite: 'Brouwer, C., Heibloem, M. (1986). Irrigation Water Needs. FAO Irrigation Water Management Training Manual 3, Part II Ch. 4.2.', url: 'https://www.fao.org/4/s2022e/s2022e08.htm' },
   FAO_TM4: { cls: 'primary', cite: 'Brouwer, C., Prins, K., Heibloem, M. (1989). Irrigation Scheduling. FAO Irrigation Water Management Training Manual 4, Annex I.', url: 'https://www.fao.org/4/t7202e/t7202e08.htm' },
+  ROMPS2021: { cls: 'primary', cite: 'Romps, D.M. (2021). Accurate Expressions for the Dewpoint and Frost Point Derived from the Rankine-Kirchhoff Approximations. Journal of the Atmospheric Sciences 78(7): 2113-2116. Explicit analytic expressions for both points, accurate to within a few hundredths of a degree against laboratory measurement over 230 to 330 K for the dew point and 180 to 273 K for the frost point.', url: 'https://doi.org/10.1175/JAS-D-20-0301.1' },
+  BUCK1981: { cls: 'primary', cite: 'Buck, A.L. (1981). New Equations for Computing Vapor Pressure and Enhancement Factor. Journal of Applied Meteorology 20(12): 1527-1532. Coefficients as compiled by Voemel (see VOEMEL_VP).', url: 'https://doi.org/10.1175/1520-0450(1981)020<1527:NEFCVP>2.0.CO;2' },
+  BUCK1996: { cls: 'primary', cite: 'Buck, A.L. (1996). Buck Research CR-1A User\'s Manual, Appendix 1, revising the equations of Buck (1981). Coefficients as compiled by Voemel (see VOEMEL_VP).', url: 'https://doi.org/10.1175/1520-0450(1981)020<1527:NEFCVP>2.0.CO;2' },
+  VOEMEL_VP: { cls: 'secondary', cite: 'Voemel, H. Water Vapor Pressure Formulations. National Center for Atmospheric Research. The compilation from which the Buck (1981) and Buck (1996) coefficients used here were read.', url: 'https://cires1.colorado.edu/~voemel/vp.html' },
   FAO_FROST: { cls: 'primary', cite: 'Snyder, R.L., de Melo-Abreu, J.P. (2005). Frost Protection: fundamentals, practice and economics, Vol. 1. FAO Environment and Natural Resources Series 10.', url: 'https://www.fao.org/4/y7223e/y7223e00.htm' },
   YOSHIDA1981: { cls: 'primary', cite: 'Yoshida, S. (1981). Fundamentals of Rice Crop Science. International Rice Research Institute, Los Baños. Table 2.4, critical temperatures by growth stage (adapted from Yoshida 1977a), and section 2.3.6, spikelet sterility when temperature exceeds 35 °C at anthesis for more than 1 hour.', url: 'http://books.irri.org/9711040522_content.pdf' },
   CARRIJO2017: { cls: 'primary', cite: 'Carrijo, D.R., Lundy, M.E., Linquist, B.A. (2017). Rice yields and water use under alternate wetting and drying irrigation: A meta-analysis. Field Crops Research 203: 173-180. 56 studies, 528 comparisons.', url: 'https://doi.org/10.1016/j.fcr.2016.12.002' },
@@ -1459,7 +1552,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -1597,7 +1690,7 @@ const T = {
     clearLog: { en: 'Delete all saved readings', fil: 'Burahin lahat ng naitala' },
     clearAsk: { en: 'Delete every saved reading? This cannot be undone.', fil: 'Burahin lahat ng naitala? Hindi na ito maibabalik.' },
     compute: { en: 'Answer', fil: 'Sagot' }, why: { en: 'Why', fil: 'Bakit' }, sources: { en: 'Sources', fil: 'Sanggunian' },
-    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
+    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, otherMethods: { en: 'The same reading by other published methods', fil: 'Ang parehong pagbasa ayon sa ibang pamamaraan' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
     location: { en: 'Location', fil: 'Lokasyon' }, gps: { en: 'Use phone GPS', fil: 'Gamitin ang GPS ng smartphone' },
     lat: { en: 'Latitude (°N)', fil: 'Latitud (°H)' }, lon: { en: 'Longitude (°E)', fil: 'Longhitud (°S)' }, elev: { en: 'Elevation (m)', fil: 'Taas mula sa dagat (m)' },
     site: { en: 'Site', fil: 'Lugar' }, siteCoastal: { en: 'Near the sea (coastal)', fil: 'Malapit sa dagat' }, siteInterior: { en: 'Inland, far from the sea', fil: 'Malayo sa dagat' }, siteIsland: { en: 'Small island (20 km across or less)', fil: 'Maliit na isla (20 km o mas makitid)' },
@@ -1922,7 +2015,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'cfcedb2a' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '435f4c45' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -1968,6 +2061,7 @@ function result(spec) {
     return spec.card && u.cards && u.cards.indexOf(spec.card) >= 0 && (spec.suppress || []).indexOf(u.id) < 0;
   }).map(function (u) { return u.text; });
   det(T.ui.assumptions, declared.concat(spec.assumptions || []));
+  det(T.ui.otherMethods, spec.compare);
   det(T.ui.limits, spec.limits);
   if (spec.sources && spec.sources.length) {
     const d = el('details', null, el('summary', null, bi(T.ui.sources)));
@@ -2654,14 +2748,22 @@ CARDS.frost = function (root) {
           [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(dp.T, 1) + ' \u00b0C at ' + fmt(dp.RH, 0) + '% humidity, what you measured'],
           [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(dp.dewPoint, 1) + ' \u00b0C, the temperature the air must fall to before dew forms'],
           [bi({ en: 'Still to cool', fil: 'Lamig na kailangan pa' }), fmt(dp.depression, 1) + ' \u00b0C, the difference between the two figures above']
-        ],
+        ].concat(dp.frostPoint != null
+          ? [[bi({ en: 'Frost point', fil: 'Frost point' }), fmt(dp.frostPoint, 1) + ' \u00b0C, the temperature a surface must fall to for this air to deposit ice on it directly (Romps 2021)']]
+          : [[bi({ en: 'Frost point', fil: 'Frost point' }), 'none for this air: it would reach saturation over water first, so any deposit would be dew, not frost', 'minor']]),
+        compare: dp.compare.map(function (c) { return c.name + ': ' + fmt(c.dewPoint, 2) + ' \u00b0C'; })
+          .concat(['Spread across all four: ' + fmt(dp.compareSpreadC, 3) + ' \u00b0C. For comparison, a hygrometer reading three points off moves the dew point by more than a degree, and a thermometer half a degree off moves it by about one. The method is not where the error is.']),
         why: ['The dew point is the temperature the air must fall to before it is saturated and dew begins to form. It is computed from the temperature and humidity you measured, by FAO-56 Eq. 11 and 14.',
               'The difference between the air temperature and the dew point is how much cooling is still available before dew forms. A large difference means dry air with a long way to fall; a small one means the air is already close to saturation.',
-              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.'],
+              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.',
+              'The frost point is the matching temperature for ice: the temperature at which this air would deposit ice on a surface directly, without passing through liquid water. Below freezing it lies above the dew point, because ice holds its water molecules more tightly than supercooled liquid does and so releases vapour at a higher temperature. Romps (2021) derives both points from the Rankine-Kirchhoff approximations and reports them accurate to within a few hundredths of a degree against laboratory measurement.',
+              'A frost point is only reported when it falls at or below freezing. Romps states his frost point expression over 180 to 273 K, and above the triple point there is no ice for the relation to describe, so a number carried up there would be an extrapolation rather than a temperature anything reaches.'],
         limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
                  'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
-                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.'],
-        sources: ['FAO56', 'FAO_FROST'] }));
+                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.',
+                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one. Four published methods agree on the same reading to within a hundredth of a degree, as the comparison below shows.',
+                 'The frost point is the temperature a surface must reach, not the air. On Benguet frost mornings the air has been measured at 1.5 to 3.9 \u00b0C (Basquial et al. 2021) while the ground froze, because a leaf under a clear sky radiates heat away and cools below the air around it. Air sitting well above its frost point is therefore not evidence that the crop is safe.'],
+        sources: ['FAO56', 'ROMPS2021', 'BUCK1981', 'BUCK1996', 'VOEMEL_VP', 'FAO_FROST'] }));
     };
     const r = A.frostIndicator(inp);
     const c = r.conditions;
@@ -2924,8 +3026,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 622 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build cfcedb2a. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 649 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build 435f4c45. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -3014,7 +3116,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build cfcedb2a)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 435f4c45)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -3026,7 +3128,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build cfcedb2a).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build cfcedb2a ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 435f4c45).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 435f4c45 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -3073,7 +3175,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build cfcedb2a.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 435f4c45.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

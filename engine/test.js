@@ -524,6 +524,34 @@ ok('dew point readout: matches FAO-56 Eq. 14', A.dewPointNow(25, 80).dewPoint, A
 ok('dew point readout: depression is T minus dew point', A.dewPointNow(25, 80).depression, 25 - A.tdewFromEa(A.es0(25) * 0.80), 1e-9, 'C');
 eq('dew point readout: declines without humidity', A.dewPointNow(25, null).error, 'need_temperature_and_humidity');
 eq('dew point readout: declines on impossible humidity', A.dewPointNow(25, 140).error, 'need_temperature_and_humidity');
+
+console.log('\n== ROMPS (2021) DEW POINT AND FROST POINT (JAS 78, 2113) ==');
+/* Self-consistency: the dew point returned must reproduce the relative humidity it was built from,
+   through the paper's own Eq. 3, and the frost point likewise through Eq. 4. This tests the Lambert W
+   inversion rather than a printed fixture, which the paper does not give in tabular form. */
+[[10, 80], [25, 80], [3, 70], [1.5, 55], [-5, 60], [30, 85]].forEach(function (c) {
+  const T = c[0] + 273.15, RH = c[1] / 100;
+  const td = A.dewPointRK(c[0], c[1]) + 273.15, tf = A.frostPointRK(c[0], c[1]) + 273.15;
+  ok('Romps dew point inverts Eq. 3 at ' + c[0] + ' C, ' + c[1] + '%', A.pvLiquidRK(td) / A.pvLiquidRK(T), RH, 1e-9, '');
+  ok('Romps frost point inverts Eq. 4 at ' + c[0] + ' C, ' + c[1] + '%', A.pvIceRK(tf) / A.pvIceRK(T), RH * A.pvLiquidRK(T) / A.pvIceRK(T), 1e-9, '');
+});
+/* Below freezing the frost point lies above the dew point (ice binds more strongly than supercooled
+   liquid), which is the property the card states in words. */
+[[3, 70], [1.5, 55], [-5, 60], [0, 70]].forEach(function (c) {
+  const gap = A.frostPointRK(c[0], c[1]) - A.dewPointRK(c[0], c[1]);
+  eq('frost point above dew point at ' + c[0] + ' C, ' + c[1] + '%', gap > 0, true);
+});
+eq('frost point withheld above freezing', A.dewPointNow(25, 80).frostPoint, null);
+eq('frost point withheld above freezing, reason given', A.dewPointNow(25, 80).frostPointWithheld, 'above_freezing');
+eq('frost point reported when at or below freezing', A.dewPointNow(3, 70).frostPoint < 0, true);
+/* The whole point of the comparison: at the conditions this card serves, the choice of published
+   method is far below what the instrument can resolve. */
+[[3, 70], [8, 45], [10, 50], [15, 60]].forEach(function (c) {
+  eq('method spread under 0.05 C at ' + c[0] + ' C, ' + c[1] + '%', A.dewPointNow(c[0], c[1]).compareSpreadC < 0.05, true);
+});
+eq('four methods reported', A.dewPointNow(10, 60).compare.length, 4);
+/* Lambert W lower branch against its defining identity. */
+[-0.05, -0.2, -0.3].forEach(function (x) { ok('W(-1) identity at ' + x, A.lambertWm1(x) * Math.exp(A.lambertWm1(x)), x, 1e-12, ''); });
 eq('frost 10.0 C counts as cold (source says at or below 10)', A.frostIndicator({ T: 10, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, true);
 eq('frost 10.1 C does not', A.frostIndicator({ T: 10.1, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, false);
 eq('frost reading 09:08 is refused', A.frostReadingUsable(9.13, 17.8, 5.8), false);

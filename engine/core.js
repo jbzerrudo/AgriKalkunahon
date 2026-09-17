@@ -1108,10 +1108,99 @@ function dewTonight(T, RH, sky, wind) {
    Eq. 11 and 14. This is a property of the air at the moment and place it is read, so unlike the
    frost verdict it carries no time-of-day condition and no sky or wind term. It is reported on its
    own so that a reading taken at any hour still yields the two numbers it can honestly yield. */
+/* ---------- dew point and frost point from first principles ----------
+   Romps (2021) derives explicit analytic expressions for both the dew point and the frost point from
+   the Rankine-Kirchhoff approximations (ideal gas, fixed heat capacities, zero specific volume of
+   condensates). He reports them accurate to within a few hundredths of a degree against modern
+   laboratory measurements, over 230 to 330 K for the dew point and 180 to 273 K for the frost point.
+   The constants are the optimised set he carries over from Romps (2017). Kelvin throughout. */
+const RK = { cvv: 1418, ptrip: 611.65, Ttrip: 273.16, E0v: 2.3740e6, E0s: 0.3337e6, Rv: 461, cvl: 4119, cvs: 1861,
+             dewLoK: 230, dewHiK: 330, frostLoK: 180, frostHiK: 273 };
+RK.cpv = RK.cvv + RK.Rv;
+const ZEROC = 273.15;
+/* Eq. 3, saturation vapour pressure over liquid water, Pa */
+function pvLiquidRK(T) {
+  return RK.ptrip * Math.pow(T / RK.Ttrip, (RK.cpv - RK.cvl) / RK.Rv) *
+    Math.exp((RK.E0v - (RK.cvv - RK.cvl) * RK.Ttrip) / RK.Rv * (1 / RK.Ttrip - 1 / T));
+}
+/* Eq. 4, saturation vapour pressure over ice, Pa */
+function pvIceRK(T) {
+  return RK.ptrip * Math.pow(T / RK.Ttrip, (RK.cpv - RK.cvs) / RK.Rv) *
+    Math.exp((RK.E0v + RK.E0s - (RK.cvv - RK.cvs) * RK.Ttrip) / RK.Rv * (1 / RK.Ttrip - 1 / T));
+}
+/* Lambert W, lower branch, defined for -1/e <= x < 0. Halley iteration from the asymptotic start. */
+function lambertWm1(x) {
+  if (!(x < 0 && x >= -Math.exp(-1))) return NaN;
+  let w = Math.log(-x); w = w - Math.log(-w);
+  for (let i = 0; i < 100; i++) {
+    const e = Math.exp(w), f = w * e - x, d = e * (w + 1) - (w + 2) * f / (2 * w + 2), step = f / d;
+    w -= step;
+    if (Math.abs(step) < 1e-14 * Math.abs(w)) break;
+  }
+  return w;
+}
+/* Lambert W, principal branch. The frost point's argument overflows double precision, so it is
+   carried as its logarithm and expanded by the series of Corless et al. (1996) that Romps prints. */
+function lambertW0FromLog(L1) {
+  const L2 = Math.log(L1);
+  return L1 - L2 + L2 / L1 + L2 * (-2 + L2) / (2 * L1 * L1) + L2 * (6 - 9 * L2 + 2 * L2 * L2) / (6 * L1 * L1 * L1) +
+    L2 * (-12 + 36 * L2 - 22 * L2 * L2 + 3 * L2 * L2 * L2) / (12 * L1 * L1 * L1 * L1);
+}
+/* Eq. 5 and 6. T and the result in degrees Celsius, RH in percent. */
+function dewPointRK(Tc, RH) {
+  const T = Tc + ZEROC, c = (RK.E0v - (RK.cvv - RK.cvl) * RK.Ttrip) / ((RK.cpv - RK.cvl) * T);
+  return c / lambertWm1(Math.pow(RH / 100, RK.Rv / (RK.cvl - RK.cpv)) * c * Math.exp(c)) * T - ZEROC;
+}
+/* Eq. 7, 8 and 9. RH is given over liquid water, as a hygrometer reports it, and converted to the
+   humidity over ice that the frost point is defined against. */
+function frostPointRK(Tc, RH) {
+  const T = Tc + ZEROC, RHs = (RH / 100) * pvLiquidRK(T) / pvIceRK(T);
+  const c = (RK.E0v + RK.E0s - (RK.cvv - RK.cvs) * RK.Ttrip) / ((RK.cpv - RK.cvs) * T);
+  const logArg = (RK.Rv / (RK.cvs - RK.cpv)) * Math.log(RHs) + Math.log(c) + c;
+  let W;
+  if (logArg > 709) W = lambertW0FromLog(logArg);
+  else {
+    const x = Math.exp(logArg); W = Math.log(1 + x);
+    for (let i = 0; i < 100; i++) {
+      const e = Math.exp(W), f = W * e - x, d = e * (W + 1) - (W + 2) * f / (2 * W + 2), step = f / d;
+      W -= step;
+      if (Math.abs(step) < 1e-14 * Math.abs(W)) break;
+    }
+  }
+  return c / W * T - ZEROC;
+}
+/* Magnus-form coefficient sets, for the comparison the card reports. The leading constant cancels
+   when the input is a relative humidity, so only b and c are needed; the Buck (1996) form carries a
+   fourth constant d. Every set here was read from a source named in REFS: no set is included whose
+   published coefficients could not be checked. */
+const DEWPOINT_SETS = [
+  { id: 'fao56', b: 17.27, c: 237.3, ref: 'FAO56', name: 'FAO-56 (Tetens)' },
+  { id: 'buck81', b: 17.502, c: 240.97, ref: 'BUCK1981', name: 'Buck (1981)' },
+  { id: 'buck96', b: 18.678, c: 257.14, d: 234.5, ref: 'BUCK1996', name: 'Buck (1996), Bogel form' }
+];
+function dewPointMagnus(Tc, RH, set) {
+  const g = Math.log(RH / 100) + (set.d ? (set.b - Tc / set.d) : set.b) * Tc / (set.c + Tc);
+  return set.c * g / (set.b - g);
+}
+/* One reading of temperature and humidity, and everything that reading alone supports. The dew point
+   the card leads with stays the FAO-56 one, because every other humidity quantity in this app is
+   FAO-56 and two saturation curves in one program would disagree with each other. The alternatives
+   are reported beside it so the reader can see how little the choice matters here. The frost point is
+   withheld above freezing: Romps states his frost point over 180 to 273 K, and above the triple point
+   the ice curve is an extrapolation with no ice to describe. */
 function dewPointNow(T, RH) {
   if (!isNum(T) || !isNum(RH) || RH <= 0 || RH > 100) return { error: 'need_temperature_and_humidity' };
   const td = tdewFromEa(es0(T) * RH / 100);
-  return { dewPoint: td, depression: T - td, T: T, RH: RH, sources: ['FAO56'] };
+  const compare = DEWPOINT_SETS.map(function (s) { return { id: s.id, name: s.name, ref: s.ref, dewPoint: dewPointMagnus(T, RH, s) }; });
+  compare.push({ id: 'romps', name: 'Romps (2021), from first principles', ref: 'ROMPS2021', dewPoint: dewPointRK(T, RH) });
+  const spread = Math.max.apply(null, compare.map(function (x) { return x.dewPoint; })) -
+                 Math.min.apply(null, compare.map(function (x) { return x.dewPoint; }));
+  const fp = frostPointRK(T, RH);
+  const frostPoint = (isNum(fp) && fp <= 0) ? fp : null;
+  return { dewPoint: td, depression: T - td, T: T, RH: RH,
+           compare: compare, compareSpreadC: spread,
+           frostPoint: frostPoint, frostPointWithheld: frostPoint === null ? 'above_freezing' : null,
+           sources: frostPoint === null ? ['FAO56', 'ROMPS2021'] : ['FAO56', 'ROMPS2021'] };
 }
 /* Jackson (2017), Pacific Pests and Pathogens fact sheet 252: on rice, "the leaves need to be wet for
    6-8 hours for spore germination", with 24 to 28 C favourable and humidity near 100% needed for
@@ -1206,6 +1295,10 @@ const REFS = {
   FAO56: { cls: 'primary', cite: 'Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration: guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56.', url: 'https://www.fao.org/4/x0490e/x0490e00.htm' },
   FAO_TM3: { cls: 'primary', cite: 'Brouwer, C., Heibloem, M. (1986). Irrigation Water Needs. FAO Irrigation Water Management Training Manual 3, Part II Ch. 4.2.', url: 'https://www.fao.org/4/s2022e/s2022e08.htm' },
   FAO_TM4: { cls: 'primary', cite: 'Brouwer, C., Prins, K., Heibloem, M. (1989). Irrigation Scheduling. FAO Irrigation Water Management Training Manual 4, Annex I.', url: 'https://www.fao.org/4/t7202e/t7202e08.htm' },
+  ROMPS2021: { cls: 'primary', cite: 'Romps, D.M. (2021). Accurate Expressions for the Dewpoint and Frost Point Derived from the Rankine-Kirchhoff Approximations. Journal of the Atmospheric Sciences 78(7): 2113-2116. Explicit analytic expressions for both points, accurate to within a few hundredths of a degree against laboratory measurement over 230 to 330 K for the dew point and 180 to 273 K for the frost point.', url: 'https://doi.org/10.1175/JAS-D-20-0301.1' },
+  BUCK1981: { cls: 'primary', cite: 'Buck, A.L. (1981). New Equations for Computing Vapor Pressure and Enhancement Factor. Journal of Applied Meteorology 20(12): 1527-1532. Coefficients as compiled by Voemel (see VOEMEL_VP).', url: 'https://doi.org/10.1175/1520-0450(1981)020<1527:NEFCVP>2.0.CO;2' },
+  BUCK1996: { cls: 'primary', cite: 'Buck, A.L. (1996). Buck Research CR-1A User\'s Manual, Appendix 1, revising the equations of Buck (1981). Coefficients as compiled by Voemel (see VOEMEL_VP).', url: 'https://doi.org/10.1175/1520-0450(1981)020<1527:NEFCVP>2.0.CO;2' },
+  VOEMEL_VP: { cls: 'secondary', cite: 'Voemel, H. Water Vapor Pressure Formulations. National Center for Atmospheric Research. The compilation from which the Buck (1981) and Buck (1996) coefficients used here were read.', url: 'https://cires1.colorado.edu/~voemel/vp.html' },
   FAO_FROST: { cls: 'primary', cite: 'Snyder, R.L., de Melo-Abreu, J.P. (2005). Frost Protection: fundamentals, practice and economics, Vol. 1. FAO Environment and Natural Resources Series 10.', url: 'https://www.fao.org/4/y7223e/y7223e00.htm' },
   YOSHIDA1981: { cls: 'primary', cite: 'Yoshida, S. (1981). Fundamentals of Rice Crop Science. International Rice Research Institute, Los Baños. Table 2.4, critical temperatures by growth stage (adapted from Yoshida 1977a), and section 2.3.6, spikelet sterility when temperature exceeds 35 °C at anthesis for more than 1 hour.', url: 'http://books.irri.org/9711040522_content.pdf' },
   CARRIJO2017: { cls: 'primary', cite: 'Carrijo, D.R., Lundy, M.E., Linquist, B.A. (2017). Rice yields and water use under alternate wetting and drying irrigation: A meta-analysis. Field Crops Research 203: 173-180. 56 studies, 528 comparisons.', url: 'https://doi.org/10.1016/j.fcr.2016.12.002' },
@@ -1309,7 +1402,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

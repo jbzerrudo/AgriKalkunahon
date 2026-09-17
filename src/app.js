@@ -124,7 +124,7 @@ const T = {
     clearLog: { en: 'Delete all saved readings', fil: 'Burahin lahat ng naitala' },
     clearAsk: { en: 'Delete every saved reading? This cannot be undone.', fil: 'Burahin lahat ng naitala? Hindi na ito maibabalik.' },
     compute: { en: 'Answer', fil: 'Sagot' }, why: { en: 'Why', fil: 'Bakit' }, sources: { en: 'Sources', fil: 'Sanggunian' },
-    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
+    assumptions: { en: 'Assumptions', fil: 'Mga palagay' }, limits: { en: 'Not valid for', fil: 'Hindi para sa' }, otherMethods: { en: 'The same reading by other published methods', fil: 'Ang parehong pagbasa ayon sa ibang pamamaraan' }, back: { en: 'Main Menu', fil: 'Pangunahing Menu' },
     location: { en: 'Location', fil: 'Lokasyon' }, gps: { en: 'Use phone GPS', fil: 'Gamitin ang GPS ng smartphone' },
     lat: { en: 'Latitude (°N)', fil: 'Latitud (°H)' }, lon: { en: 'Longitude (°E)', fil: 'Longhitud (°S)' }, elev: { en: 'Elevation (m)', fil: 'Taas mula sa dagat (m)' },
     site: { en: 'Site', fil: 'Lugar' }, siteCoastal: { en: 'Near the sea (coastal)', fil: 'Malapit sa dagat' }, siteInterior: { en: 'Inland, far from the sea', fil: 'Malayo sa dagat' }, siteIsland: { en: 'Small island (20 km across or less)', fil: 'Maliit na isla (20 km o mas makitid)' },
@@ -495,6 +495,7 @@ function result(spec) {
     return spec.card && u.cards && u.cards.indexOf(spec.card) >= 0 && (spec.suppress || []).indexOf(u.id) < 0;
   }).map(function (u) { return u.text; });
   det(T.ui.assumptions, declared.concat(spec.assumptions || []));
+  det(T.ui.otherMethods, spec.compare);
   det(T.ui.limits, spec.limits);
   if (spec.sources && spec.sources.length) {
     const d = el('details', null, el('summary', null, bi(T.ui.sources)));
@@ -1181,14 +1182,22 @@ CARDS.frost = function (root) {
           [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(dp.T, 1) + ' \u00b0C at ' + fmt(dp.RH, 0) + '% humidity, what you measured'],
           [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(dp.dewPoint, 1) + ' \u00b0C, the temperature the air must fall to before dew forms'],
           [bi({ en: 'Still to cool', fil: 'Lamig na kailangan pa' }), fmt(dp.depression, 1) + ' \u00b0C, the difference between the two figures above']
-        ],
+        ].concat(dp.frostPoint != null
+          ? [[bi({ en: 'Frost point', fil: 'Frost point' }), fmt(dp.frostPoint, 1) + ' \u00b0C, the temperature a surface must fall to for this air to deposit ice on it directly (Romps 2021)']]
+          : [[bi({ en: 'Frost point', fil: 'Frost point' }), 'none for this air: it would reach saturation over water first, so any deposit would be dew, not frost', 'minor']]),
+        compare: dp.compare.map(function (c) { return c.name + ': ' + fmt(c.dewPoint, 2) + ' \u00b0C'; })
+          .concat(['Spread across all four: ' + fmt(dp.compareSpreadC, 3) + ' \u00b0C. For comparison, a hygrometer reading three points off moves the dew point by more than a degree, and a thermometer half a degree off moves it by about one. The method is not where the error is.']),
         why: ['The dew point is the temperature the air must fall to before it is saturated and dew begins to form. It is computed from the temperature and humidity you measured, by FAO-56 Eq. 11 and 14.',
               'The difference between the air temperature and the dew point is how much cooling is still available before dew forms. A large difference means dry air with a long way to fall; a small one means the air is already close to saturation.',
-              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.'],
+              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.',
+              'The frost point is the matching temperature for ice: the temperature at which this air would deposit ice on a surface directly, without passing through liquid water. Below freezing it lies above the dew point, because ice holds its water molecules more tightly than supercooled liquid does and so releases vapour at a higher temperature. Romps (2021) derives both points from the Rankine-Kirchhoff approximations and reports them accurate to within a few hundredths of a degree against laboratory measurement.',
+              'A frost point is only reported when it falls at or below freezing. Romps states his frost point expression over 180 to 273 K, and above the triple point there is no ice for the relation to describe, so a number carried up there would be an extrapolation rather than a temperature anything reaches.'],
         limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
                  'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
-                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.'],
-        sources: ['FAO56', 'FAO_FROST'] }));
+                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.',
+                 'The instrument sets the accuracy here, not the arithmetic. A hygrometer reading three points off moves the dew point by more than a degree, and a thermometer off by half a degree moves it by about one. Four published methods agree on the same reading to within a hundredth of a degree, as the comparison below shows.',
+                 'The frost point is the temperature a surface must reach, not the air. On Benguet frost mornings the air has been measured at 1.5 to 3.9 \u00b0C (Basquial et al. 2021) while the ground froze, because a leaf under a clear sky radiates heat away and cools below the air around it. Air sitting well above its frost point is therefore not evidence that the crop is safe.'],
+        sources: ['FAO56', 'ROMPS2021', 'BUCK1981', 'BUCK1996', 'VOEMEL_VP', 'FAO_FROST'] }));
     };
     const r = A.frostIndicator(inp);
     const c = r.conditions;
