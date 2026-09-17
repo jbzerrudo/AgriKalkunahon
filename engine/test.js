@@ -520,6 +520,10 @@ eq('dew: near-saturated air dews even under cloud', A.dewTonight(18, 94, 'overca
 eq('dew: dry air under cloud does not', A.dewTonight(18, 40, 'overcast', 'calm').code, 'dew_less_likely');
 eq('dew: dry air on a clear calm night may', A.dewTonight(18, 40, 'clear', 'calm').code, 'dew_likely_if_cools_to_dewpoint');
 ok('dew: depression is reported', A.dewTonight(18, 94, 'overcast', 'calm').depression, 18 - A.tdewFromEa(A.es0(18) * 0.94), 1e-9, 'C');
+ok('dew point readout: matches FAO-56 Eq. 14', A.dewPointNow(25, 80).dewPoint, A.tdewFromEa(A.es0(25) * 0.80), 1e-9, 'C');
+ok('dew point readout: depression is T minus dew point', A.dewPointNow(25, 80).depression, 25 - A.tdewFromEa(A.es0(25) * 0.80), 1e-9, 'C');
+eq('dew point readout: declines without humidity', A.dewPointNow(25, null).error, 'need_temperature_and_humidity');
+eq('dew point readout: declines on impossible humidity', A.dewPointNow(25, 140).error, 'need_temperature_and_humidity');
 eq('frost 10.0 C counts as cold (source says at or below 10)', A.frostIndicator({ T: 10, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, true);
 eq('frost 10.1 C does not', A.frostIndicator({ T: 10.1, RH: 40, sky: 'clear', wind: 'calm' }).conditions.cold, false);
 eq('frost reading 09:08 is refused', A.frostReadingUsable(9.13, 17.8, 5.8), false);

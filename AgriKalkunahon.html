@@ -1254,6 +1254,15 @@ function dewTonight(T, RH, sky, wind) {
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
+/* Dew point and dew point depression from one reading of air temperature and humidity, FAO-56
+   Eq. 11 and 14. This is a property of the air at the moment and place it is read, so unlike the
+   frost verdict it carries no time-of-day condition and no sky or wind term. It is reported on its
+   own so that a reading taken at any hour still yields the two numbers it can honestly yield. */
+function dewPointNow(T, RH) {
+  if (!isNum(T) || !isNum(RH) || RH <= 0 || RH > 100) return { error: 'need_temperature_and_humidity' };
+  const td = tdewFromEa(es0(T) * RH / 100);
+  return { dewPoint: td, depression: T - td, T: T, RH: RH, sources: ['FAO56'] };
+}
 /* Jackson (2017), Pacific Pests and Pathogens fact sheet 252: on rice, "the leaves need to be wet for
    6-8 hours for spore germination", with 24 to 28 C favourable and humidity near 100% needed for
    infection. Germination is the first step, not a diseased crop. */
@@ -1450,7 +1459,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -1913,7 +1922,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '23ed9c0e' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'cfcedb2a' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2630,6 +2639,30 @@ CARDS.frost = function (root) {
     remember('frost', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
+    /* The dew point and the depression are properties of the air at the moment it is read. They owe
+       nothing to the sky, the wind or the hour, so they are reported as their own answer below the
+       frost one, and they are shown even when it is too early in the day to judge tonight. Appended
+       rather than shown: one save button per card belongs to the card's own verdict, not to a
+       readout, and the scroll should land on the frost answer. */
+    const showDewPoint = function () {
+      const dp = A.dewPointNow(inp.T, inp.RH);
+      if (dp.error) return;
+      out.appendChild(result({ level: 'info',
+        verdict: { en: 'The dew point is ' + fmt(dp.dewPoint, 1) + ' \u00b0C, and the air is ' + fmt(dp.depression, 1) + ' \u00b0C warmer than that.',
+                   fil: 'Ang dew point ay ' + fmt(dp.dewPoint, 1) + ' \u00b0C, at mas mainit ang hangin nang ' + fmt(dp.depression, 1) + ' \u00b0C kaysa rito.' },
+        lines: [
+          [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(dp.T, 1) + ' \u00b0C at ' + fmt(dp.RH, 0) + '% humidity, what you measured'],
+          [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(dp.dewPoint, 1) + ' \u00b0C, the temperature the air must fall to before dew forms'],
+          [bi({ en: 'Still to cool', fil: 'Lamig na kailangan pa' }), fmt(dp.depression, 1) + ' \u00b0C, the difference between the two figures above']
+        ],
+        why: ['The dew point is the temperature the air must fall to before it is saturated and dew begins to form. It is computed from the temperature and humidity you measured, by FAO-56 Eq. 11 and 14.',
+              'The difference between the air temperature and the dew point is how much cooling is still available before dew forms. A large difference means dry air with a long way to fall; a small one means the air is already close to saturation.',
+              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.'],
+        limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
+                 'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
+                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.'],
+        sources: ['FAO56', 'FAO_FROST'] }));
+    };
     const r = A.frostIndicator(inp);
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
@@ -2651,6 +2684,7 @@ CARDS.frost = function (root) {
         why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
         limits: ['The time comes from this device\'s clock, and sun times are computed for this device\'s time zone.'],
         sources: ['FAO_FROST'] }));
+      showDewPoint();
       return;
     }
     const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
@@ -2711,6 +2745,7 @@ CARDS.frost = function (root) {
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
     if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
     show(out, result({ card: 'frost', level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
+    showDewPoint();
   }
 };
 
@@ -2889,8 +2924,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 618 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build 23ed9c0e. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 622 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.6.0, build cfcedb2a. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
@@ -2979,7 +3014,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 23ed9c0e)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build cfcedb2a)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -2991,7 +3026,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 23ed9c0e).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 23ed9c0e ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build cfcedb2a).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build cfcedb2a ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -3038,7 +3073,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 23ed9c0e.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build cfcedb2a.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

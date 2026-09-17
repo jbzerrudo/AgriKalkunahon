@@ -1104,6 +1104,15 @@ function dewTonight(T, RH, sky, wind) {
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST'] };
 }
+/* Dew point and dew point depression from one reading of air temperature and humidity, FAO-56
+   Eq. 11 and 14. This is a property of the air at the moment and place it is read, so unlike the
+   frost verdict it carries no time-of-day condition and no sky or wind term. It is reported on its
+   own so that a reading taken at any hour still yields the two numbers it can honestly yield. */
+function dewPointNow(T, RH) {
+  if (!isNum(T) || !isNum(RH) || RH <= 0 || RH > 100) return { error: 'need_temperature_and_humidity' };
+  const td = tdewFromEa(es0(T) * RH / 100);
+  return { dewPoint: td, depression: T - td, T: T, RH: RH, sources: ['FAO56'] };
+}
 /* Jackson (2017), Pacific Pests and Pathogens fact sheet 252: on rice, "the leaves need to be wet for
    6-8 hours for spore germination", with 24 to 28 C favourable and humidity near 100% needed for
    infection. Germination is the first step, not a diseased crop. */
@@ -1300,7 +1309,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

@@ -1166,6 +1166,30 @@ CARDS.frost = function (root) {
     remember('frost', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
+    /* The dew point and the depression are properties of the air at the moment it is read. They owe
+       nothing to the sky, the wind or the hour, so they are reported as their own answer below the
+       frost one, and they are shown even when it is too early in the day to judge tonight. Appended
+       rather than shown: one save button per card belongs to the card's own verdict, not to a
+       readout, and the scroll should land on the frost answer. */
+    const showDewPoint = function () {
+      const dp = A.dewPointNow(inp.T, inp.RH);
+      if (dp.error) return;
+      out.appendChild(result({ level: 'info',
+        verdict: { en: 'The dew point is ' + fmt(dp.dewPoint, 1) + ' \u00b0C, and the air is ' + fmt(dp.depression, 1) + ' \u00b0C warmer than that.',
+                   fil: 'Ang dew point ay ' + fmt(dp.dewPoint, 1) + ' \u00b0C, at mas mainit ang hangin nang ' + fmt(dp.depression, 1) + ' \u00b0C kaysa rito.' },
+        lines: [
+          [bi({ en: 'Air temperature now', fil: 'Temperatura ng hangin ngayon' }), fmt(dp.T, 1) + ' \u00b0C at ' + fmt(dp.RH, 0) + '% humidity, what you measured'],
+          [bi({ en: 'Dew point', fil: 'Dew point' }), fmt(dp.dewPoint, 1) + ' \u00b0C, the temperature the air must fall to before dew forms'],
+          [bi({ en: 'Still to cool', fil: 'Lamig na kailangan pa' }), fmt(dp.depression, 1) + ' \u00b0C, the difference between the two figures above']
+        ],
+        why: ['The dew point is the temperature the air must fall to before it is saturated and dew begins to form. It is computed from the temperature and humidity you measured, by FAO-56 Eq. 11 and 14.',
+              'The difference between the air temperature and the dew point is how much cooling is still available before dew forms. A large difference means dry air with a long way to fall; a small one means the air is already close to saturation.',
+              'When dew forms, the latent heat it releases "reduces the rate of temperature drop" (FAO frost manual, Snyder and de Melo-Abreu 2005), so the fall slows near the dew point. Dry air has no such brake, which is why a low dew point is one of the conditions for radiation frost.'],
+        limits: ['This describes the air where and when you read it. The dew point changes through the night, and a hollow does not hold the same air as the ridge above it, so one reading is a snapshot.',
+                 'Nothing is forecast here. These are the two figures the reading itself supports, not what the air will be at dawn.',
+                 'This readout does not judge frost. That is the separate answer above, which also weighs the sky, the wind and the hour you read at.'],
+        sources: ['FAO56', 'FAO_FROST'] }));
+    };
     const r = A.frostIndicator(inp);
     const c = r.conditions;
     const season = A.frostSeason(new Date().getMonth() + 1);
@@ -1187,6 +1211,7 @@ CARDS.frost = function (root) {
         why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
         limits: ['The time comes from this device\'s clock, and sun times are computed for this device\'s time zone.'],
         sources: ['FAO_FROST'] }));
+      showDewPoint();
       return;
     }
     const toMin = ((st.sunrise - nowH) % 24 + 24) % 24;      // hours from now until sunrise
@@ -1247,6 +1272,7 @@ CARDS.frost = function (root) {
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
     if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
     show(out, result({ card: 'frost', level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
+    showDewPoint();
   }
 };
 
