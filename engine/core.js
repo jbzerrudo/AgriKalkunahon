@@ -364,6 +364,60 @@ function irrigationDecision(inp) {
            pumpHours: pumpHours, stressBegun: stressed, trajectory: traj, sources: ['FAO56', 'FAO_TM4'] };
 }
 
+/* Land preparation water requirement for lowland rice, PNS 217 Annex H.4 and H.5:
+     LSR  = [n - (RMC x As)] x drz / 100      land soaking, mm
+     LPWR = LSR + SW + ETo                    mm, ETo summed over the land preparation days
+   The standard's definition 3.14 also names seepage and percolation among land preparation losses, but
+   its normative formula H.5 does not carry them, and the formula is what is computed here.
+   RMC, the residual moisture content before the first irrigation, has no default in the standard. When
+   the farmer gives one it is used. When not, the soaking is worked out at the Table F.1 wilting point and
+   at its field capacity for the texture, both are returned, and the drier case is the one carried into
+   the requirement, because it asks for more water (PNS_RMC_RANGE). A soil drier than wilting point, as
+   after a long dry fallow, needs more still. Where RMC x As reaches the porosity the soil is already
+   saturated and the soaking is zero. */
+function pnsLandPrep(inp) {
+  const s = PNS217.soilsF1[inp.soil];
+  if (!s) return { error: 'pns_soil_not_in_table_f1' };
+  if (!isNum(inp.etoPerDay) || inp.etoPerDay < 0) return { error: 'need_eto' };
+  if (!isNum(inp.days) || inp.days <= 0) return { error: 'need_land_prep_days' };
+  const flags = [];
+  const sw = isNum(inp.swMm) && inp.swMm >= 0 ? inp.swMm : PNS217.standingWaterMm;
+  const lsrAt = rmc => Math.max(0, (s.n - rmc * s.As) * PNS217.drzRiceMm / 100);
+  const evap = inp.etoPerDay * inp.days;
+  let lsr, rmcFrom, lsrAtPwp = null, lsrAtFc = null;
+  if (isNum(inp.rmcPct) && inp.rmcPct >= 0) {
+    rmcFrom = 'entered'; lsr = lsrAt(inp.rmcPct);
+    if (inp.rmcPct * s.As >= s.n) flags.push('pns_rmc_saturated');
+  } else {
+    rmcFrom = 'table_f1'; lsrAtPwp = lsrAt(s.pwp); lsrAtFc = lsrAt(s.fc); lsr = lsrAtPwp;
+  }
+  return { soil: s, drz: PNS217.drzRiceMm, sw: sw, evap: evap, lsr: lsr, rmcFrom: rmcFrom, lsrAtPwp: lsrAtPwp, lsrAtFc: lsrAtFc,
+           lpwr: lsr + sw + evap, lpwrAtFc: lsrAtFc == null ? null : lsrAtFc + sw + evap, flags: flags, sources: ['PNS217'] };
+}
+
+/* The same FAO-56 daily balance carried past today on forecast days. Dr0 is the depletion at the end
+   of today, from irrigationDecision; days are [{eto, kc, rain}] from tomorrow on, built from the
+   forecast the farmer typed in. Nothing new is modelled here: it is waterBalance on more days, so the
+   0.2 ETo rain rule and the no-runoff assumption carry over unchanged, and heavy forecast rain is
+   counted in full up to the depletion, the rest leaving as deep percolation (FAO-56 Eq. 88).
+   reachDay counts from tomorrow as 1: the first day by whose end the depletion reaches the readily
+   available water, which is where irrigationDecision says to water. refillDay is the first day on
+   which the forecast rain alone brings the depletion back below that point, where it had already
+   been reached. No rule is drawn from either: FAO-56 gives none for waiting on rain that is only
+   forecast, so the card reports them and leaves the choice to the farmer (WATER_FORECAST_NO_WAIT). */
+function forecastBalance(Dr0, days, taw, p, opts) {
+  if (!isNum(Dr0) || !isNum(taw) || taw <= 0 || !Array.isArray(days)) return { error: 'bad_forecast_input' };
+  const traj = waterBalance(days, taw, p, Dr0, opts);
+  let reachDay = null, refillDay = null;
+  for (let i = 0; i < traj.length; i++) {
+    if (reachDay == null && traj[i].DrEnd >= traj[i].raw) reachDay = i + 1;
+    if (refillDay == null && traj[i].rainUsed > 0 && (i === 0 ? Dr0 : traj[i - 1].DrEnd) >= traj[i].raw && traj[i].DrStart < traj[i].raw) refillDay = i + 1;
+  }
+  return { trajectory: traj, reachDay: reachDay, refillDay: refillDay,
+           rainCounted: traj.reduce((a, t) => a + t.rainUsed, 0), deepPercolation: traj.reduce((a, t) => a + t.dp, 0),
+           DrEnd: traj.length ? traj[traj.length - 1].DrEnd : Dr0, sources: ['FAO56'] };
+}
+
 /* =====================================================================
    6. LOWLAND RICE: SAFE AWD AND CONTINUOUS FLOODING  [IRRI_AWD, BOUMAN2007, DA_AO25, PHILRICE_AWD, PINOYRICE_WELL, PALAYCHECK]
    ===================================================================== */
@@ -794,6 +848,103 @@ function awdDecision(inp) {
    7. EFFECTIVE RAINFALL (monthly planning)  [FAO_TM3]
    ===================================================================== */
 function effectiveRainMonthly(P) { if (!isNum(P) || P <= 0) return 0; return Math.max(0, P > 75 ? 0.8 * P - 25 : 0.6 * P - 10); }
+/* How much of the rain met the crop's need, and how much of the need is left. Both figures are in the
+   same millimetres over the same period, so this is arithmetic, not a model. The need is whatever the
+   caller supplies: the farmer's own figure, the PNS 217 requirement below, or FAO-56 ETc. */
+function rainAgainstNeed(needMm, usefulRainMm) {
+  if (!isNum(needMm) || needMm < 0 || !isNum(usefulRainMm) || usefulRainMm < 0) return null;
+  return { need: needMm, rain: usefulRainMm, shortfall: Math.max(0, needMm - usefulRainMm), surplus: Math.max(0, usefulRainMm - needMm) };
+}
+
+/* ---------- Philippine National Standard: crop water requirement  [PNS217, PAGASA_CIA] ----------
+   PNS/BAFS/PAES 217:2017, Determination of Irrigation Water Requirements (DA Bureau of Agriculture and
+   Fisheries Standards). PAGASA's monthly Climate Impact Assessment for Philippine Agriculture states
+   that it follows this standard for rice. Carried here is the standard's crop water requirement and
+   its effective rainfall, and nothing downstream of them:
+     CWR = ETa + (S&P)field        Annex H.1, mm/day
+     ETa = ETo x kc                Annex H.2
+   kc is Table 4, whose columns are "Growth Stage in Percent of Total Growth Duration": 0-20, 20-40,
+   40-70, 70-90 and Harvest, with the source line "David, W.P. Lysimeter studies, 1983". This is the
+   David (1983) that PAGASA cites for rice. The Harvest column is taken here as the remaining 90 to 100
+   per cent; the table does not say so, and the choice is declared as PNS_HARVEST_BAND. A value on a
+   column edge goes to the earlier column.
+   Seepage and percolation is Table 5, by soil texture, with the source line "NIA - Design Guides and
+   Criteria for Irrigation Canals". Only the six textures the table prints are carried, and nothing is
+   interpolated for any other: a field of another texture needs its own measured rate, which the rice
+   card can supply.
+   Effective rainfall is Annex E, the ADB method. E.4: "Rainfall values below the determined decadal
+   crop water requirement shall be the effective rainfall and the values above become surface waste."
+   The standard applies that cut to rainfall averaged over at least ten years (E.1, E.2), for design.
+   This app applies the same cut to one ten-day period that the farmer measured or was forecast, which
+   is declared as PNS_ADB_ONE_PERIOD.
+   Left out, and declared as PNS_LAND_PREP: the land preparation water requirement (Annex H.5), whose
+   land soaking term needs the soil's residual moisture content (Annex F.3), which a farmer cannot read.
+   Also left out: application, farm ditch and conveyance losses, which describe the delivery system, not
+   the crop. */
+const PNS217 = {
+  kcBandsPct: [20, 40, 70, 90],   // upper edges of the first four columns; past 90 is the Harvest column
+  kc: {                           // Table 4, David (1983)
+    rice:    [0.95, 1.05, 1.10, 1.10, 0.61],   // Lowland rice
+    corn:    [0.40, 0.70, 0.90, 0.80, 0.55],   // Corn (grain)
+    legumes: [0.60, 0.70, 0.90, 0.75, 0.50],   // Soybean, cowpea and mungbean
+    peanut:  [0.40, 0.55, 0.85, 0.90, 0.50],
+    tobacco: [0.40, 0.60, 0.75, 0.75, 0.75],
+    cabbage: [0.40, 0.60, 0.70, 0.70, 0.65],
+    wheat:   [0.50, 0.65, 0.90, 0.80, 0.50]
+  },
+  percolationMmDay: { clay: 1.25, silty_clay: 1.5, clay_loam: 1.75, silty_clay_loam: 1.75, sandy_clay_loam: 2, sandy_loam: 4 },   // Table 5, NIA
+  /* Table F.1, "Representative physical properties of soils": total pore space n (%), apparent specific
+     gravity As, field capacity and permanent wilting point (%). The table prints a normal range beside
+     each value; the representative value is used. Six textures, not the same six as Table 5. */
+  soilsF1: {
+    sandy:      { n: 38, As: 1.65, fc: 9,  pwp: 4 },
+    sandy_loam: { n: 43, As: 1.50, fc: 14, pwp: 6 },
+    loam:       { n: 47, As: 1.40, fc: 22, pwp: 10 },
+    clay_loam:  { n: 49, As: 1.35, fc: 27, pwp: 13 },
+    silty_clay: { n: 51, As: 1.30, fc: 31, pwp: 15 },
+    clay:       { n: 53, As: 1.25, fc: 35, pwp: 17 }
+  },
+  drzRiceMm: 300,                 // Annex F.2: "For lowland rice, drz = 300 mm."
+  standingWaterMm: 10,            // 7.3 NOTE: "The recommended value for standing water during land preparation is 10 mm."
+  decadeDays: 10                  // Annex E works on decades of ten days
+};
+/* kc for a crop at a point in its season, pct = days since planting / total growth duration x 100. */
+function pnsKc(crop, pct) {
+  const row = PNS217.kc[crop];
+  if (!row || !isNum(pct) || pct < 0) return null;
+  const b = PNS217.kcBandsPct;
+  const i = pct <= b[0] ? 0 : pct <= b[1] ? 1 : pct <= b[2] ? 2 : pct <= b[3] ? 3 : 4;
+  return { kc: row[i], column: i, pastDuration: pct > 100 };
+}
+/* inp: {crop, daysSincePlanting, growthDays, etoPerDay, soil, spMmDay, periodDays, rainMm}
+   spMmDay, when given, is the farmer's own measured seepage and percolation and takes precedence over
+   Table 5. Returns the requirement over the period and the ADB split of the rain against it. */
+function pnsWaterRequirement(inp) {
+  if (!PNS217.kc[inp.crop]) return { error: 'unknown_crop' };
+  if (!isNum(inp.growthDays) || inp.growthDays <= 0) return { error: 'need_growth_duration' };
+  if (!isNum(inp.daysSincePlanting) || inp.daysSincePlanting < 0) return { error: 'need_days_since_planting' };
+  if (!isNum(inp.etoPerDay) || inp.etoPerDay < 0) return { error: 'need_eto' };
+  const flags = [];
+  const pct = 100 * inp.daysSincePlanting / inp.growthDays;
+  const k = pnsKc(inp.crop, pct);
+  if (k.pastDuration) flags.push('pns_past_growth_duration');
+  let sp = null, spFrom = null;
+  if (isNum(inp.spMmDay) && inp.spMmDay >= 0) { sp = inp.spMmDay; spFrom = 'measured'; }
+  else if (PNS217.percolationMmDay[inp.soil] != null) { sp = PNS217.percolationMmDay[inp.soil]; spFrom = 'table5'; }
+  else flags.push('pns_sp_unknown');
+  const n = isNum(inp.periodDays) && inp.periodDays > 0 ? inp.periodDays : PNS217.decadeDays;
+  const eta = inp.etoPerDay * k.kc;
+  const cwrDay = sp == null ? null : eta + sp;
+  const cwr = cwrDay == null ? null : cwrDay * n;
+  let er = null, waste = null, shortfall = null;
+  if (cwr != null && isNum(inp.rainMm) && inp.rainMm >= 0) {
+    er = Math.min(inp.rainMm, cwr);                 // Annex E.4: rain up to the requirement is effective
+    waste = Math.max(0, inp.rainMm - cwr);          // and the rest is surface waste
+    shortfall = cwr - er;
+  }
+  return { pct: pct, kc: k.kc, column: k.column, eta: eta, etaPeriod: eta * n, sp: sp, spFrom: spFrom, cwrDay: cwrDay, cwr: cwr,
+           periodDays: n, er: er, waste: waste, shortfall: shortfall, flags: flags, sources: ['PNS217', 'PAGASA_CIA'] };
+}
 
 /* =====================================================================
    8. SPRAY WINDOW  [GRDC2025, GRDC2022, GRDC_MANUAL, APVMA_LABEL, AGVIC]
@@ -817,7 +968,8 @@ const SPRAY = {
   ],
   maxAirTempC: 30                                                       // GRDC Weather essentials 2022
 };
-/* inp: {T, RH, P, windKmh, hoursToSunset, hoursAfterSunrise, mistFogDew, smokeHanging, labelMaxWindKmh} */
+/* inp: {T, RH, P, windKmh, hoursToSunset, hoursAfterSunrise, mistFogDew, smokeHanging, labelMaxWindKmh,
+        rainAfterH, labelRainFreeH} */
 function sprayWindow(inp) {
   /* BEAUFORT is cited whether or not the farmer used the descriptor picker, because the card cannot tell
      from the speed alone which way it was obtained, and a source list that changes with the input is
@@ -856,6 +1008,17 @@ function sprayWindow(inp) {
   if (inp.mistFogDew || inp.smokeHanging) { level = 2; reasons.push('inversion_indicators'); }
   // temperature
   if (inp.T > SPRAY.maxAirTempC) { level = Math.max(level, 1); reasons.push('temp_above_30'); }
+  /* Rain forecast after spraying. Rainfastness belongs to the product, so the label decides and the card
+     applies it: rain due inside the label's rain-free period means do not spray. Without the label's
+     figure the card cannot judge the product, so it says so and asks for caution rather than borrowing
+     another product's period. No rainfall amount enters: the labels read for this app state a time
+     before rain, not a depth. */
+  if (isNum(inp.rainAfterH) && inp.rainAfterH >= 0) {
+    if (isNum(inp.labelRainFreeH) && inp.labelRainFreeH > 0) {
+      if (inp.rainAfterH < inp.labelRainFreeH) { level = 2; reasons.push('rain_inside_label_period'); }
+      else reasons.push('rain_after_label_period');
+    } else { level = Math.max(level, 1); reasons.push('rain_forecast_label_unknown'); }
+  }
   const code = (windUnknown && level < 2) ? 'need_wind' : ['good', 'caution', 'do_not_spray'][level];
   return { code: code, deltaT: dT, deltaTBand: dtBand, wetBulb: inp.T - dT, reasons: reasons, sources: src };
 }
@@ -971,6 +1134,25 @@ function stressCheck(cropId, phase, days) {
            runBarC: isNum(bar) ? bar : null, runDays: STRESS_RUN.days, sources: c.src };
 }
 
+/* The same thresholds and the same QDAF run rule applied to forecast days. observed is what stressCheck
+   was given, oldest first; forecast is [{Tmax, Tmin}] from tomorrow on. The run rule is tested on every
+   three-day window that ends on a forecast day, so a run that starts in the readings and ends in the
+   forecast counts. runEndsOn counts from tomorrow as 1. This adds no threshold and no advice: the card
+   still says what is crossed and not what to do (STRESS_NO_ACTION). */
+function stressForecast(cropId, phase, observed, forecast) {
+  const base = stressCheck(cropId, phase, (observed || []).concat(forecast || []));
+  if (base.error) return base;
+  const nObs = (observed || []).length, all = (observed || []).concat(forecast || []);
+  const perForecast = base.perDay.slice(nObs);
+  let runEndsOn = null;
+  if (isNum(base.runBarC)) {
+    for (let e = Math.max(nObs, STRESS_RUN.days - 1); e < all.length; e++) {
+      if (all.slice(e - STRESS_RUN.days + 1, e + 1).every(d => d.Tmax >= base.runBarC)) { runEndsOn = e - nObs + 1; break; }
+    }
+  }
+  return { thresholds: base.thresholds, perForecastDay: perForecast, runBarC: base.runBarC, runDays: STRESS_RUN.days, runEndsOn: runEndsOn, sources: base.sources };
+}
+
 /* =====================================================================
    11. FROST INDICATOR (qualitative)  [FAO_FROST, MARASIGAN2017, BASQUIAL2021, LAUNIO2020]
    ===================================================================== */
@@ -1079,6 +1261,33 @@ function frostIndicator(inp) {
   return { code: code, ruledOutBy: ruledOutBy, dewPoint: td, conditions: conds, assumption: 'dew_point_line_2C', readingTimeSensitive: true, sources: ['FAO_FROST', 'MARASIGAN2017', 'BASQUIAL2021', 'LAUNIO2020'] };
 }
 
+/* A forecast minimum temperature against the air read this evening. Frost is still not forecast here:
+   the minimum is PAGASA's, typed in by the farmer. The card compares it with two things.
+   First, the evening air's own dew point and frost point, on the stated assumption that the air keeps
+   the water vapour it holds this evening until it saturates (FORECAST_VAPOUR_HELD). Reaching the dew
+   point is where dew begins; reaching the frost point, which exists only below freezing, is where ice
+   deposits directly.
+   Second, the air temperatures recorded on Benguet frost days. Basquial et al. (2021): "In Atok, andap
+   or frost was experienced on February 15 and 16, 2017 with air temperature of 1.8 and 1.5 C,
+   respectively", and "Another andap occurred on March 8 and 19, 2017 having an ambient temperature of
+   3.3 and 3.9 C, respectively". Four days at one site in one season, with no measurement height given,
+   so 3.9 C is the warmest air a recorded Benguet frost has come with, not a threshold: frost has not
+   been shown impossible above it. */
+const FROST_RECORD_AIR = { loC: 1.5, hiC: 3.9, days: 4, site: 'Atok, Benguet', year: 2017, source: 'BASQUIAL2021' };
+function frostForecastCheck(TminF, T, RH) {
+  if (!isNum(TminF) || !isNum(T) || !isNum(RH)) return { error: 'need_inputs' };
+  const dp = tdewFromEa(es0(T) * RH / 100);
+  /* Withheld above freezing, exactly as dewPointNow withholds it: Romps states the frost point relation
+     over 180 to 273 K only. */
+  const fpRaw = frostPointRK(T, RH), fp = (isNum(fpRaw) && fpRaw <= 0) ? fpRaw : null;
+  let code;
+  if (TminF <= 0) code = 'air_at_or_below_freezing';
+  else if (TminF <= FROST_RECORD_AIR.hiC) code = 'within_recorded_frost_air';
+  else code = 'above_recorded_frost_air';
+  return { code: code, forecastMin: TminF, dewPoint: dp, frostPoint: fp, reachesDewPoint: TminF <= dp, reachesFrostPoint: fp !== null && TminF <= fp,
+           record: FROST_RECORD_AIR, sources: ['BASQUIAL2021', 'ROMPS2021', 'FAO_FROST'] };
+}
+
 /* =====================================================================
    12. DISEASE WEATHER (minimal)  [SENTELHAS2008, HUTTON]
    ===================================================================== */
@@ -1103,6 +1312,19 @@ function dewTonight(T, RH, sky, wind) {
   else if (clearCalm) code = 'dew_likely_if_cools_to_dewpoint';
   else code = 'dew_less_likely';
   return { dewPoint: td, depression: depression, clearCalm: clearCalm, assumption: 'dew_near_saturation_2C', code: code, sources: ['FAO56', 'FAO_FROST', 'RAO1998'] };
+}
+/* A forecast night minimum against this evening's dew point, by the onset criterion of Rao, Gillespie
+   and Schaafsma (1998): the dew point depression model starts wetness at 1.8 C and ends it at 2.2 C.
+   Only onset is applied here, at the forecast minimum, with the evening's water vapour assumed held
+   until saturation (FORECAST_VAPOUR_HELD). The criterion was fitted to maize ears in Ontario, which the
+   registry already declares for this card. */
+const RAO_DPD = { onsetC: 1.8, dryC: 2.2 };
+function wetForecastCheck(TminF, T, RH) {
+  if (!isNum(TminF) || !isNum(T) || !isNum(RH)) return { error: 'need_inputs' };
+  const dp = tdewFromEa(es0(T) * RH / 100);
+  const dpd = TminF - dp;
+  return { code: dpd <= RAO_DPD.onsetC ? 'wet_by_minimum' : 'dry_at_minimum', forecastMin: TminF, dewPoint: dp, depressionAtMin: dpd,
+           reachesDewPoint: TminF <= dp, onsetC: RAO_DPD.onsetC, sources: ['RAO1998', 'FAO56'] };
 }
 /* Dew point and dew point depression from one reading of air temperature and humidity, FAO-56
    Eq. 11 and 14. This is a property of the air at the moment and place it is read, so unlike the
@@ -1296,6 +1518,10 @@ const REFS = {
   FAO_P46: { cls: 'primary', cite: 'Smith, M. (1992). CROPWAT: a computer program for irrigation planning and management. FAO Irrigation and Drainage Paper 46, FAO Land and Water Development Division, Rome. Section 5.1.3 sets out four effective rainfall options, the second of which is the FAO/AGLW Dependable Rain formula.', url: 'https://www.fao.org/land-water/databases-and-software/cropwat/en/' },
   FAO_TM3: { cls: 'primary', cite: 'Brouwer, C., Heibloem, M. (1986). Irrigation Water Needs. FAO Irrigation Water Management Training Manual 3, Part II Ch. 4.2.', url: 'https://www.fao.org/4/s2022e/s2022e08.htm' },
   FAO_TM4: { cls: 'primary', cite: 'Brouwer, C., Prins, K., Heibloem, M. (1989). Irrigation Scheduling. FAO Irrigation Water Management Training Manual 4, Annex I.', url: 'https://www.fao.org/4/t7202e/t7202e08.htm' },
+  PNS217: { cls: 'primary', cite: 'Bureau of Agriculture and Fisheries Standards (2017). PNS/BAFS/PAES 217:2017, Determination of Irrigation Water Requirements. Philippine National Standard, Department of Agriculture. Annex H.1 and H.2 (crop water requirement), Table 4 (crop coefficients by percent of growth duration, from David, W.P., Lysimeter studies, 1983), Table 5 (percolation by soil texture, from NIA), Annex E (effective rainfall, ADB method).', url: 'https://amtec.uplb.edu.ph/wp-content/uploads/2020/06/PNS-BAFS-PAES-217_2017-Determination-of-Irrigation-Water-Requirements.pdf' },
+  PAGASA_CIA: { cls: 'extension', cite: 'DOST-PAGASA. Climate Impact Assessment for Philippine Agriculture, issued monthly. Its methodology states that crop water requirement follows the Philippine National Standards (2017), with rice coefficients from David (1983) and PNS/BAFS/PAES 2017, corn coefficients from Gonzales et al. (2019), and potential evapotranspiration by Thornthwaite (1948) from satellite land surface temperature.', url: 'https://www.pagasa.dost.gov.ph/agri-weather/impact-assessment-for-agriculture', url2: 'https://www.pagasa.dost.gov.ph/agri-weather/impact-assessment-for-agriculture_2', urllabel: 'assessment', url2label: 'methodology' },
+  PHILMECH_RM4: { cls: 'extension', cite: 'PHilMech (2020). Reference Manual on Grain Drying: A Compilation of Resources, RM No. 4. Philippine Center for Postharvest Development and Mechanization, Department of Agriculture. ISBN 978-971-9947-14-1. p. 1: rice grain "must be dried as soon as possible after harvest (ideally within 12 hours)". p. 21: sun drying "is not possible during rainy season and at night", and unstable temperature "may cause overheating or re-wetting of grains that can lead into low milling quality". p. 23: layers of 2 to 4 cm, mixing every 30 minutes, and "Plastic sheets or canvass may be useful in protecting the spread paddy from sudden downpours"; sun drying in humid tropical climates "is only successful during a few hours in the mid-day".', url: 'https://rcef.philmech.gov.ph/resources/knowledge-bank/4-drying/documents/rm04.pdf' },
+  PHILMECH_TL04: { cls: 'extension', cite: 'PHilMech (n.d.). Techno Leaflet No. 4: Mechanized Grain Drying. RCEF Mechanization Program. The mobile grain dryer "can be operated either day or night"; the batch recirculating dryer "can be used day or night"; the flatbed dryer "is a climate-resilient technology which can be operated even during rainy days".', url: 'https://rcef.philmech.gov.ph/resources/knowledge-bank/4-drying/documents/tl04.pdf' },
   ROMPS2021: { cls: 'primary', cite: 'Romps, D.M. (2021). Accurate Expressions for the Dewpoint and Frost Point Derived from the Rankine-Kirchhoff Approximations. Journal of the Atmospheric Sciences 78(7): 2113-2116. Explicit analytic expressions for both points, accurate to within a few hundredths of a degree against laboratory measurement over 230 to 330 K for the dew point and 180 to 273 K for the frost point.', url: 'https://doi.org/10.1175/JAS-D-20-0301.1' },
   BUCK1981: { cls: 'primary', cite: 'Buck, A.L. (1981). New Equations for Computing Vapor Pressure and Enhancement Factor. Journal of Applied Meteorology 20(12): 1527-1532. Coefficients as compiled by Voemel (see VOEMEL_VP).', url: 'https://doi.org/10.1175/1520-0450(1981)020<1527:NEFCVP>2.0.CO;2' },
   BUCK1996: { cls: 'primary', cite: 'Buck, A.L. (1996). Buck Research CR-1A User\'s Manual, Appendix 1, revising the equations of Buck (1981). This is a manual appendix and carries no DOI; the equations used here were read from the Voemel compilation.', url: 'https://cires1.colorado.edu/~voemel/vp.html', urllabel: 'equations as compiled by Voemel' },
@@ -1378,7 +1604,15 @@ const UNVERIFIED = [
   { id: 'FROST_READING_WINDOW', cards: ['frost', 'disease'], text: 'This card accepts a reading only from two hours after sunset until sunrise, which is when the FAO frost manual takes its own readings for the regression that predicts the night minimum. Applying that time here is an assumption of this app: the manual set it for a regression this card cannot run, because no local fit exists for Benguet, while what this card actually tests, a clear sky and a still night with dry air, is already visible before sunset. The card follows the published reading time rather than a wider one chosen here, and the cost is that a reading taken at dusk is refused even though the sky may already have told you the answer. Look again two hours after the sun goes down.' },
   { id: 'BEAUFORT_MIDPOINT', cards: ['spray'], text: 'Where the wind speed is chosen from what the trees are doing rather than measured, the description and the band are the WMO Beaufort scale, forces 0 to 4. The scale gives a band, not a number, and this card uses the midpoint of the band. That choice is an assumption of this app. A reading near the edge of a band can therefore sit on the wrong side of the 15 km/h spray limit, so where the answer is close to that limit the wind is worth measuring rather than judging.' },
   { id: 'READING_PRECISION', cards: ['rice'], text: 'The rice card dates the next irrigation by projecting the water level forward at the loss rate the farmer measured. Two figures in that projection are design assumptions of this app, not published values. The first is that a reading off a hand-marked tube or stick is good to about one centimetre, which is what sets the width of the date window and the rule that the level must have fallen at least about 3 cm between readings before a rate is worth using. The centimetre gradation itself is an addition of this app: the PhilRice observation well and the IRRI field water tube are both look-and-see devices, marked only at the depth that calls for water, and the published rule is whether water can still be seen in the well rather than how far down it is. The second is the one-week horizon beyond which the card gives no date, chosen because the canopy and the weather both change over longer periods. No published study gives the reading precision of a farmer-made AWD tube. The loss rate itself is not assumed: it is measured in the field, and compared against the Philippine seepage and percolation bands of Bouman et al. (1994). The projection is a planning aid in any case: the decision rule is the tube reading itself, as DA Administrative Order 25-09 and IRRI state it.' },
-  { id: 'STRESS_NO_ACTION', cards: ['stress'], text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter developed at Benguet State University under DOST-PCAARRD by a project J.F. Malamug led (Domingo 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' }
+  { id: 'STRESS_NO_ACTION', cards: ['stress'], text: 'This app tells you when a temperature threshold has been crossed. It does not tell you what to do about it, because no published work ties a management response to a threshold being crossed under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter developed at Benguet State University under DOST-PCAARRD by a project J.F. Malamug led (Domingo 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist on what to do.' },
+  { id: 'PNS_HARVEST_BAND', cards: ['rain'], text: 'PNS/BAFS/PAES 217:2017 Table 4 heads its crop coefficient columns 0-20, 20-40, 40-70 and 70-90 per cent of total growth duration, then Harvest, without saying what share of the season Harvest covers. This app takes it as the remaining 90 to 100 per cent. A day on a column edge is given the earlier column. The standard also does not say whether growth duration counts from sowing or from transplanting; the card counts from the planting date the farmer gives.' },
+  { id: 'PNS_ADB_ONE_PERIOD', cards: ['rain'], text: 'The ADB effective rainfall method in PNS/BAFS/PAES 217:2017 Annex E is a design method: it averages at least ten years of daily rainfall into ten-day periods and counts the rain below the crop water requirement as effective, the rest as surface waste. This app applies that same cut to a single ten-day period, the one you measured or were forecast. The cut is the standard\'s; applying it to one period rather than a ten-year average is this app\'s adaptation.' },
+  { id: 'PNS_LAND_PREP', cards: ['rain'], text: 'Land preparation is left out unless you tick it. PNS/BAFS/PAES 217:2017 adds it for lowland rice (Annex H.5): land soaking, plus 10 mm of standing water, plus evaporation over the land preparation days. Its land soaking term needs the residual moisture content of the soil before the first irrigation (Annex F.3), which a farmer cannot measure in the field and for which the standard gives no default. Application, farm ditch and conveyance losses are left out in every case, because they describe the delivery system rather than the crop.' },
+  { id: 'PNS_RMC_RANGE', cards: ['rain'], text: 'Where you tick land preparation but give no residual moisture content, the card works the land soaking out twice from the standard\'s own Table F.1 for your soil: once with the soil as dry as its wilting point and once at field capacity. It shows both and carries the drier case into the requirement, because that one asks for more water. This choice is the app\'s, not the standard\'s. Soil left longer in a dry fallow can be drier than wilting point and will need more. The standard\'s definition of land preparation water also names seepage and percolation, but its formula (Annex H.5) does not include them, and the formula is what is computed.' },
+  { id: 'PNS_ETO_METHOD', cards: ['rain'], text: 'This card follows the standard PAGASA\'s Climate Impact Assessment follows, but it will not reproduce PAGASA\'s figures. PAGASA computes potential evapotranspiration by Thornthwaite (1948) from satellite land surface temperature; this app computes reference evapotranspiration by FAO-56 Penman-Monteith from the temperatures you enter, with FAO-56\'s documented fallbacks for missing humidity, sunshine and wind. Penman-Monteith is one of the four methods PNS/BAFS/PAES 217:2017 Annex B allows. For corn, PAGASA uses crop coefficients from Gonzales et al. (2019), which this app could not obtain; the card uses the standard\'s own Table 4 corn row instead.' },
+  { id: 'FORECAST_VAPOUR_HELD', cards: ['frost', 'disease'], text: 'Where a forecast minimum temperature is compared with this evening\'s dew point or frost point, the air is assumed to keep the water vapour it holds this evening until it saturates. A change of air mass overnight, such as a surge of the northeast monsoon, breaks that assumption, and the comparison then says nothing about the morning.' },
+  { id: 'WATER_FORECAST_NO_WAIT', cards: ['water'], text: 'FAO-56 gives no rule for putting off irrigation because rain is forecast. Where the field is already at the irrigation point and the forecast brings rain, this card shows both and does not tell you to wait: a forecast can miss, and the crop is already drawing on water it cannot spare. The crop coefficient is held at today\'s value across the forecast days.' },
+  { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' }
 ];
 
 const API = {
@@ -1399,7 +1633,9 @@ const API = {
   noInstrumentDecision,
   READ_SIGMA_CM, MIN_FALL_CM, PROJECT_HORIZON_DAYS,
   // rain
-  effectiveRainMonthly,
+  effectiveRainMonthly, rainAgainstNeed, PNS217, pnsKc, pnsWaterRequirement, pnsLandPrep,
+  // forecasts
+  forecastBalance, stressForecast, FROST_RECORD_AIR, frostForecastCheck, RAO_DPD, wetForecastCheck,
   // spray
   SPRAY, sprayWindow,
   // drying

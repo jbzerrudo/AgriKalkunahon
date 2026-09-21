@@ -589,7 +589,7 @@ console.log('\n== REFERENCES ==');
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the fourteen items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION'); }
+  eq('UNVERIFIED list names the twenty-two items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION,PNS_HARVEST_BAND,PNS_ADB_ONE_PERIOD,PNS_LAND_PREP,PNS_RMC_RANGE,PNS_ETO_METHOD,FORECAST_VAPOUR_HELD,WATER_FORECAST_NO_WAIT,RICE_FORECAST_RAIN_BELOW_SURFACE'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
@@ -636,6 +636,66 @@ eq('more than a day is rejected', A.leafWetnessReport(0, 25).code, 'lw_out_of_ra
 eq('negative hours are rejected', A.leafWetnessReport(-1, 4).code, 'lw_out_of_range');
 eq('one figure alone is not enough', A.leafWetnessReport(0, null).code, 'lw_need_both');
 eq('a blank pair is rejected, not treated as zero', A.leafWetnessReport(null, null).code, 'lw_need_both');
+
+
+console.log('\n== PNS/BAFS/PAES 217:2017: CROP WATER REQUIREMENT (Table 4, Table 5, Annex E, F, H) ==');
+/* Table 4 as printed, one day inside each column, for the two crops PAGASA assesses. */
+[['rice', [0.95, 1.05, 1.10, 1.10, 0.61]], ['corn', [0.40, 0.70, 0.90, 0.80, 0.55]]].forEach(([c, row]) =>
+  [10, 30, 55, 80, 95].forEach((pct, i) => ok('Table 4 ' + c + ' at ' + pct + '% of growth duration', A.pnsKc(c, pct).kc, row[i], 1e-12)));
+ok('Table 4 legumes, 40-70 column', A.pnsKc('legumes', 50).kc, 0.90, 1e-12);
+ok('Table 4 cabbage, Harvest column', A.pnsKc('cabbage', 99).kc, 0.65, 1e-12);
+ok('a day on a column edge takes the earlier column (20%)', A.pnsKc('rice', 20).kc, 0.95, 1e-12);
+ok('just past the edge takes the next column', A.pnsKc('rice', 20.01).kc, 1.05, 1e-12);
+eq('past 100% is flagged', A.pnsKc('rice', 105).pastDuration, true);
+eq('an unknown crop gives nothing', A.pnsKc('durian', 50), null);
+ok('Table 5 clay percolation', A.PNS217.percolationMmDay.clay, 1.25, 1e-12, 'mm/d');
+ok('Table 5 sandy loam percolation', A.PNS217.percolationMmDay.sandy_loam, 4, 1e-12, 'mm/d');
+eq('Table 5 has no loam: nothing is interpolated', A.PNS217.percolationMmDay.loam, undefined);
+const pw = A.pnsWaterRequirement({ crop: 'rice', daysSincePlanting: 50, growthDays: 110, etoPerDay: 4, soil: 'clay', rainMm: 30 });
+ok('H.1 CWR = ETo x kc + S&P, rice mid-season on clay', pw.cwrDay, 4 * 1.10 + 1.25, 1e-12, 'mm/d');
+ok('over one decade', pw.cwr, 56.5, 1e-9, 'mm');
+ok('E.4 rain below the requirement is all effective', pw.er, 30, 1e-12, 'mm');
+ok('and the shortfall is the rest of the requirement', pw.shortfall, 26.5, 1e-9, 'mm');
+const pw2 = A.pnsWaterRequirement({ crop: 'rice', daysSincePlanting: 50, growthDays: 110, etoPerDay: 4, soil: 'clay', rainMm: 80 });
+ok('E.4 rain above the requirement: effective up to it', pw2.er, 56.5, 1e-9, 'mm');
+ok('and the rest becomes surface waste', pw2.waste, 23.5, 1e-9, 'mm');
+ok('with no shortfall', pw2.shortfall, 0, 1e-12, 'mm');
+const pw3 = A.pnsWaterRequirement({ crop: 'corn', daysSincePlanting: 10, growthDays: 90, etoPerDay: 4, soil: 'loam', rainMm: 30 });
+eq('a texture outside Table 5 leaves S&P unknown', pw3.flags.indexOf('pns_sp_unknown') >= 0, true);
+eq('and the requirement is withheld, not guessed', pw3.cwr, null);
+ok('a measured S&P takes precedence over Table 5', A.pnsWaterRequirement({ crop: 'rice', daysSincePlanting: 50, growthDays: 110, etoPerDay: 4, soil: 'clay', spMmDay: 6 }).cwrDay, 4.4 + 6, 1e-12, 'mm/d');
+ok('H.4 land soaking, clay at wilting point (Table F.1)', A.pnsLandPrep({ soil: 'clay', etoPerDay: 4, days: 30 }).lsrAtPwp, (53 - 17 * 1.25) * 300 / 100, 1e-9, 'mm');
+ok('H.4 land soaking, clay at field capacity', A.pnsLandPrep({ soil: 'clay', etoPerDay: 4, days: 30 }).lsrAtFc, (53 - 35 * 1.25) * 300 / 100, 1e-9, 'mm');
+ok('H.5 LPWR = LSR + 10 mm standing water + ETo over the days, drier case carried', A.pnsLandPrep({ soil: 'clay', etoPerDay: 4, days: 30 }).lpwr, 95.25 + 10 + 120, 1e-9, 'mm');
+ok('an entered soil moisture is used as given', A.pnsLandPrep({ soil: 'loam', etoPerDay: 5, days: 10, rmcPct: 20 }).lsr, (47 - 20 * 1.40) * 3, 1e-9, 'mm');
+eq('a moisture that fills the pore space is flagged saturated', A.pnsLandPrep({ soil: 'clay', etoPerDay: 4, days: 10, rmcPct: 50 }).flags[0], 'pns_rmc_saturated');
+ok('and needs no soaking', A.pnsLandPrep({ soil: 'clay', etoPerDay: 4, days: 10, rmcPct: 50 }).lsr, 0, 1e-12, 'mm');
+eq('Table F.1 has no silty clay loam: land soaking refused', A.pnsLandPrep({ soil: 'silty_clay_loam', etoPerDay: 4, days: 10 }).error, 'pns_soil_not_in_table_f1');
+ok('rain against need: shortfall', A.rainAgainstNeed(60, 45).shortfall, 15, 1e-12, 'mm');
+ok('rain against need: surplus', A.rainAgainstNeed(40, 45).surplus, 5, 1e-12, 'mm');
+
+console.log('\n== FORECASTS: FAO-56 BALANCE CARRIED FORWARD, THRESHOLDS AHEAD ==');
+const dry5 = [1, 2, 3, 4, 5].map(() => ({ eto: 5, kc: 1, rain: 0 }));
+eq('no rain: the depletion reaches RAW on day 2 (40 + 5 + 5 = 50 of 50)', A.forecastBalance(40, dry5, 100, 0.5, { adjustP: false }).reachDay, 2);
+eq('20 mm forecast on day 1 pushes it to day 6: not reached in five days', A.forecastBalance(40, [{ eto: 5, kc: 1, rain: 20 }].concat(dry5.slice(1)), 100, 0.5, { adjustP: false }).reachDay, null);
+eq('already past RAW, forecast rain on day 1 refills it', A.forecastBalance(55, [{ eto: 5, kc: 1, rain: 20 }].concat(dry5.slice(1)), 100, 0.5, { adjustP: false }).refillDay, 1);
+ok('rain beyond the depletion leaves as deep percolation (Eq. 88)', A.forecastBalance(10, [{ eto: 5, kc: 1, rain: 30 }], 100, 0.5, { adjustP: false }).deepPercolation, 30 - 5 - 10, 1e-9, 'mm');
+eq('rain below 0.2 ETo is not counted in the forecast either', A.forecastBalance(40, [{ eto: 5, kc: 1, rain: 0.9 }], 100, 0.5, { adjustP: false }).rainCounted, 0);
+const sf = A.stressForecast('maize', 'flowering', [{ Tmax: 36, Tmin: 22 }, { Tmax: 38, Tmin: 23 }], [{ Tmax: 38, Tmin: 24 }, { Tmax: 37.5, Tmin: 24 }]);
+ok('QDAF bar for maize at flowering is the threshold plus 2', sf.runBarC, 37, 1e-12, 'C');
+eq('a run that starts in the readings and ends in the forecast is found, on day 2', sf.runEndsOn, 2);
+eq('forecast day 1 is past the heat threshold', sf.perForecastDay[0].indexOf('heat_above_threshold') >= 0, true);
+eq('rice thresholds carry no QDAF run, so none is claimed', A.stressForecast('rice', 'anthesis', [{ Tmax: 36, Tmin: 25 }], [{ Tmax: 37, Tmin: 25 }, { Tmax: 37, Tmin: 25 }]).runEndsOn, null);
+eq('forecast minimum at 0 C: the air itself freezes', A.frostForecastCheck(0, 8, 60).code, 'air_at_or_below_freezing');
+eq('at 3.9 C: the warmest air of a recorded Benguet frost (Basquial et al. 2021)', A.frostForecastCheck(3.9, 8, 60).code, 'within_recorded_frost_air');
+eq('at 4.0 C: above every recorded frost day', A.frostForecastCheck(4.0, 8, 60).code, 'above_recorded_frost_air');
+eq('frost point withheld for air whose frost point is above freezing', A.frostForecastCheck(2, 15, 90).frostPoint, null);
+eq('a dry evening at 5 C, 40%: a minimum of -7 C reaches the frost point', A.frostForecastCheck(-7, 5, 40).reachesFrostPoint, true);
+eq('Rao onset: a minimum 1.56 C above the dew point wets the leaves', A.wetForecastCheck(18, 20, 80).code, 'wet_by_minimum');
+eq('Rao onset: 2.06 C above it does not', A.wetForecastCheck(18.5, 20, 80).code, 'dry_at_minimum');
+eq('spray: rain due inside the label\'s rain-free period means do not spray', A.sprayWindow({ T: 25, RH: 60, P: 101.3, windKmh: 8, hoursToSunset: 5, hoursAfterSunrise: 5, rainAfterH: 2, labelRainFreeH: 4 }).code, 'do_not_spray');
+eq('spray: rain after the label\'s period leaves a good window good', A.sprayWindow({ T: 25, RH: 60, P: 101.3, windKmh: 8, hoursToSunset: 5, hoursAfterSunrise: 5, rainAfterH: 6, labelRainFreeH: 4 }).code, 'good');
+eq('spray: rain with no label period entered asks for caution', A.sprayWindow({ T: 25, RH: 60, P: 101.3, windKmh: 8, hoursToSunset: 5, hoursAfterSunrise: 5, rainAfterH: 6 }).code, 'caution');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exitCode = fail ? 1 : 0;

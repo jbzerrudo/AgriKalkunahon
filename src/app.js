@@ -244,7 +244,10 @@ const CODES = {
   deltaT_below_2: 'Delta T below 2: very moist air, droplets survive and drift further; inversion risk (GRDC).', deltaT_8_10: 'Delta T 8 to 10: fast droplet evaporation, spray with caution (GRDC 2025).', deltaT_10_12: 'Delta T 10 to 12: only very coarse droplets (GRDC 2025).', deltaT_above_12: 'Delta T above 12: avoid spraying (GRDC 2025).',
   wind_below_3: 'Wind below 3 km/h: too still, direction unpredictable, inversion likely (BOM, Agriculture Victoria, APVMA label 3 to 20 km/h).', wind_3_5_variable: 'Wind 3 to 5 km/h: direction may shift (GRDC 2022 prefers above 5 km/h).', wind_above_max: 'Wind above the limit (15 km/h, or the label limit up to 20 km/h).', wind_unknown: 'Wind not entered: the wind checks were skipped.',
   inversion_window: 'Within the surface inversion window (1 to 2 h before sunset until 1 to 2 h after sunrise) with wind under 11 km/h: labels prohibit spraying under hazardous inversions (APVMA label, GRDC).', inversion_window_windy: 'Within the inversion window but wind above 11 km/h: inversion less likely, still caution (GRDC).', inversion_indicators: 'Mist, fog, dew or hanging smoke indicate an inversion (GRDC 10.4 checklist).', temp_above_30: 'Air above 30 °C: GRDC 2022 says avoid spraying.',
-  maturity_basis_not_stated_for_method: 'PhilRice gives one maturity figure for this variety without saying whether it is for transplanted or direct-seeded crops.'
+  maturity_basis_not_stated_for_method: 'PhilRice gives one maturity figure for this variety without saying whether it is for transplanted or direct-seeded crops.',
+  rain_inside_label_period: 'Rain is forecast to start before the rain-free period printed on the label has passed. The label sets that period for this product, and rain inside it can wash the spray off.',
+  rain_after_label_period: 'The forecast rain starts after the rain-free period printed on the label, so the label\'s condition is met.',
+  rain_forecast_label_unknown: 'Rain is in the forecast, but no rain-free period was entered from the label. How soon rain may fall after spraying is set by each product\'s label, so read it before you start: this card will not borrow another product\'s figure.'
 };
 
 /* ---------- shared location block ---------- */
@@ -537,9 +540,27 @@ CARDS.water = function (root) {
   function setZr() { const c = A.CROPS[crop.input.value]; if (c && !zr.input.value) zr.input.value = c.zr[0]; }
   crop.input.addEventListener('change', () => { zr.input.value = ''; setZr(); }); setZr();
   const rainBox = el('div', { class: 'grid2' }); rainRows.forEach(r => rainBox.append(r.mm.row, r.ago.row));
+  /* PAGASA's forecast for the days after the date above, typed in by the farmer. Up to five days, and a
+     day is used only where both its high and its low are given, so the forecast ends at the first gap.
+     Hidden until asked for: most days a farmer has no forecast to hand and should not face fifteen boxes. */
+  const FC_DAYS = 5;
+  const fcOn = checkInput('wFc', { en: 'I have a PAGASA forecast for the coming days', fil: 'May forecast ako ng PAGASA para sa mga susunod na araw' }, prev.fcOn);
+  const fcRows = [];
+  const fcBox = el('div');
+  for (let k = 1; k <= FC_DAYS; k++) {
+    const fx = numInput('wFx' + k, { en: 'High (°C)', fil: 'Pinakamainit (°C)' }, prev['fx' + k], 0.1, { signed: true });
+    const fn = numInput('wFn' + k, { en: 'Low (°C)', fil: 'Pinakamalamig (°C)' }, prev['fn' + k], 0.1, { signed: true });
+    const fr = numInput('wFr' + k, { en: 'Rain (mm)', fil: 'Ulan (mm)' }, prev['fr' + k], 0.1, { optional: true });
+    const g = el('div', { class: 'grid2' }); g.append(fx.row, fn.row);
+    fcBox.append(el('p', { class: 'hint' }, bi({ en: k === 1 ? 'The day after the date above' : k + ' days after the date above', fil: k === 1 ? 'Ang araw pagkatapos ng petsa sa itaas' : k + ' araw pagkatapos ng petsa sa itaas' })), g, fr.row);
+    fcRows.push({ fx, fn, fr });
+  }
+  const syncFc = () => { fcBox.hidden = !fcOn.input.checked; };
+  fcOn.input.addEventListener('change', syncFc); syncFc();
   form.append(el('h4', null, bi(T.ui.crop)), crop.row, stage.row, soil.row, zr.row,
     el('h4', null, bi({ en: 'Weather today', fil: 'Panahon ngayon' })), date.row, tmax.row, tmin.row, rhmax.row, rhmin.row, wind.row, sun.row,
     el('h4', null, bi({ en: 'Water since the last soaking', fil: 'Tubig mula sa huling pagkabasâ' })), days.row, el('p', { class: 'hint' }, bi(T.ui.rains)), rainBox,
+    el('h4', null, bi({ en: 'The days ahead', fil: 'Mga susunod na araw' })), fcOn.row, fcBox,
     el('h4', null, bi({ en: 'Your irrigation', fil: 'Pagpapatubig mo' })), method.row, area.row, pump.row,
     el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div');
@@ -547,6 +568,8 @@ CARDS.water = function (root) {
   function run() {
     const inp = { crop: crop.input.value, stage: stage.input.value, soil: soil.input.value, zr: num(zr.input), date: date.input.value, tmax: num(tmax.input), tmin: num(tmin.input), rhmax: num(rhmax.input), rhmin: num(rhmin.input), wind: wind.input.value, sun: num(sun.input), days: num(days.input), method: method.input.value, area: num(area.input), pump: num(pump.input) };
     rainRows.forEach((r, i) => { inp['rmm' + i] = num(r.mm.input); inp['rago' + i] = num(r.ago.input); });
+    inp.fcOn = fcOn.input.checked;
+    fcRows.forEach((r, i) => { inp['fx' + (i + 1)] = num(r.fx.input); inp['fn' + (i + 1)] = num(r.fn.input); inp['fr' + (i + 1)] = num(r.fr.input); });
     remember('water', inp);
     out.innerHTML = '';
     if (inp.tmax == null || inp.tmin == null) { show(out, result({ level: 'info', verdict: { en: 'Enter the afternoon high and the morning low.', fil: 'Ilagay ang pinakamainit sa hapon at pinakamalamig sa umaga.' } })); return; }
@@ -580,6 +603,46 @@ CARDS.water = function (root) {
     const assumptions = ['Soil water holding taken as the midpoint of the FAO-56 Table 19 range for ' + t(T.soils[inp.soil]).en + ' (θFC ' + fmt(s.fc, 2) + ', θWP ' + fmt(s.wp, 2) + ').', 'Root depth ' + fmt(zrUse, 2) + ' m (FAO-56 Table 22 gives ' + c.zr[0] + ' to ' + c.zr[1] + ' m; the lower value is for scheduling).', 'No runoff and no capillary rise (water table assumed more than 1 m below the roots).', 'Stage coefficient: ' + t(T.stages[inp.stage]).en + (inp.stage === 'development' || inp.stage === 'late' ? ', taken at the middle of the stage' : '') + '.', 'Application efficiency ' + Math.round(eff * 100) + '% (FAO Training Manual 4, Table 8: surface 60, sprinkler 75, drip 90).'];
     const limits = LIMITS_ETO.concat(['Vegetable and corn stage lengths differ from FAO-56\'s regional examples; choose the stage from what you see in the field.']);
     show(out, result({ level, verdict: t(T.verdicts[dec.code], ph), lines, why, flags, assumptions, limits, sources: ['FAO56', 'FAO_TM4'] }));
+    /* The days ahead, on PAGASA's forecast. A second answer under the first, never mixed into it: the
+       first rests on what has happened, this one on what is forecast, and the farmer should be able to see
+       which is which. Each forecast day gets its own ETo from its own high and low, with the same location,
+       wind and fallbacks as today; the crop coefficient is held at today's. */
+    if (!inp.fcOn) return;
+    const fdays = [];
+    for (let k = 1; k <= FC_DAYS; k++) {
+      const hx = inp['fx' + k], hn = inp['fn' + k], hr = inp['fr' + k];
+      if (hx == null || hn == null) break;
+      if (hx < hn) { out.appendChild(result({ level: 'info', verdict: { en: 'Forecast day ' + k + ': the high must be above the low.', fil: 'Araw ' + k + ' ng forecast: dapat mas mataas ang pinakamainit kaysa pinakamalamig.' } })); return; }
+      if (hr != null && hr < 0) { out.appendChild(result({ level: 'info', verdict: { en: 'Forecast day ' + k + ': rain cannot be below zero.', fil: 'Araw ' + k + ' ng forecast: hindi maaaring mas mababa sa sero ang ulan.' } })); return; }
+      const ek = A.eto({ Tmax: hx, Tmin: hn, u2: u2, lat: L.lat, elev: L.elev, J: todayJ(new Date(d.getTime() + k * 86400000)), site: L.site });
+      fdays.push({ eto: ek.eto, kc: kcNow, rain: hr || 0, hx: hx, hn: hn, date: new Date(d.getTime() + k * 86400000) });
+    }
+    if (!fdays.length) { out.appendChild(result({ level: 'info', verdict: { en: 'Enter at least the high and low for the day after the date above to use the forecast.', fil: 'Ilagay man lang ang pinakamainit at pinakamalamig sa araw pagkatapos ng petsa sa itaas para magamit ang forecast.' } })); return; }
+    const fb = A.forecastBalance(dec.Dr, fdays, dec.taw, c.p, { adjustP: true });
+    const dd = x => x.toDateString().slice(0, 10);
+    const n = fdays.length;
+    let fv, flev;
+    if (dec.code === 'water_now') {
+      flev = 'info';
+      fv = fb.refillDay
+        ? { en: 'If the forecast holds, rain on ' + dd(fdays[fb.refillDay - 1].date) + ' would refill the root zone. It is at the irrigation point today.', fil: 'Kung matutupad ang forecast, mapupuno muli ng ulan sa ' + dd(fdays[fb.refillDay - 1].date) + ' ang lupa sa ugat. Nasa punto na ito ng pagpapatubig ngayon.' }
+        : { en: 'The forecast brings no rain that refills the root zone in the next ' + n + ' day' + (n === 1 ? '' : 's') + '.', fil: 'Walang ulan sa forecast na makapupuno muli sa lupa sa ugat sa susunod na ' + n + ' araw.' };
+    } else if (fb.reachDay) {
+      flev = fb.reachDay <= 1 ? 'caution' : 'go';
+      fv = { en: 'If the forecast holds, the root zone reaches the irrigation point on ' + dd(fdays[fb.reachDay - 1].date) + '. Water then.', fil: 'Kung matutupad ang forecast, aabot ang lupa sa ugat sa punto ng pagpapatubig sa ' + dd(fdays[fb.reachDay - 1].date) + '. Magpatubig sa araw na iyon.' };
+    } else {
+      flev = 'go';
+      fv = { en: 'If the forecast holds, no need to water in the next ' + n + ' day' + (n === 1 ? '' : 's') + '.', fil: 'Kung matutupad ang forecast, hindi kailangang magpatubig sa susunod na ' + n + ' araw.' };
+    }
+    const flines = fdays.map((fd, i) => {
+      const tr = fb.trajectory[i];
+      return [bi({ en: dd(fd.date), fil: dd(fd.date) }), fmt(fd.hx, 1) + ' / ' + fmt(fd.hn, 1) + ' °C, ETo ' + fmt(fd.eto, 1) + ' mm; rain ' + fmt(fd.rain, 0) + ' mm' + (fd.rain > 0 && tr.rainUsed === 0 ? ' (below 0.2 ETo, not counted)' : '') + '; used from the root zone by evening ' + fmt(tr.DrEnd, 0) + ' of ' + fmt(tr.raw, 0) + ' mm readily available'];
+    });
+    if (fb.deepPercolation > 0) flines.push([bi({ en: 'Rain beyond what the root zone holds', fil: 'Ulang lampas sa kayang hawakan ng lupa sa ugat' }), fmt(fb.deepPercolation, 0) + ' mm, lost below the roots (FAO-56 Eq. 88)']);
+    out.appendChild(result({ card: 'water', level: flev, verdict: fv, lines: flines,
+      why: ['The same FAO-56 Chapter 8 balance as the answer above, carried forward one day at a time on the forecast you entered: each day\'s crop water use from its own high and low, each day\'s rain added at the start of the day, rain below 0.2 ETo ignored, and anything above what the root zone can hold lost to deep percolation.'],
+      limits: ['A forecast, not a measurement. If the rain does not come, the soil keeps drying at the rate shown and the day it reaches the irrigation point comes sooner.', 'Heavy rain is counted in full up to what the root zone can take, as the balance above assumes no runoff. On sloping or crusted ground part of a downpour runs off and less reaches the roots.'],
+      sources: ['FAO56', 'PAGASA_FWFA'] }));
   }
 };
 
@@ -661,9 +724,12 @@ CARDS.rice = function (root) {
   const banked = (store.riceEtc && isFinite(store.riceEtc.mm) && (Date.now() - new Date(store.riceEtc.d + 'T00:00:00')) / 86400000 <= 7) ? store.riceEtc : null;
   const etc = numInput('retc', { en: 'Crop water use, mm/day. Fill this in only if you already have it from the watering card. Leave it blank and the two temperatures above are used instead.', fil: 'Gamit na tubig ng pananim, mm/day. Punan lamang ito kung mayroon ka nang galing sa card ng pagpapatubig. Iwanang blangko at gagamitin ang dalawang temperatura sa itaas.' }, prev.etc != null ? prev.etc : (banked ? Math.round(banked.mm * 10) / 10 : null), 0.5, { optional: true });
   etc.input.min = 0;
+  /* Rain PAGASA forecasts before the next re-flood date. Reported against the date, never used to move
+     it: below the soil surface no published figure says how far the tube rises per millimetre. */
+  const fcRain = numInput('rFcRain', { en: 'Rain in the PAGASA forecast before the next re-flood date (mm)', fil: 'Ulan sa forecast ng PAGASA bago ang susunod na pagpapatubig (mm)' }, prev.fcRain, 0.1, { optional: true });
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -726,6 +792,7 @@ CARDS.rice = function (root) {
     etc.row.hidden = !hasTube;
     level.row.hidden = !hasTube;
     levelPrev.row.hidden = !hasTube;
+    fcRain.row.hidden = !hasTube;
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : LEVEL_LABEL.cont), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
   };
@@ -738,6 +805,7 @@ CARDS.rice = function (root) {
     levelDate.input.value = prev.levelDate || new Date().toISOString().slice(0, 10); levelPrevDate.input.value = prev.levelPrevDate || '';
     tmax.input.value = prev.tmax != null ? prev.tmax : ''; tmin.input.value = prev.tmin != null ? prev.tmin : '';
     etc.input.value = prev.etc != null ? prev.etc : ''; weeds.input.checked = prev.weeds !== false;
+    fcRain.input.value = prev.fcRain != null ? prev.fcRain : '';
     syncMethod(); syncForget();
   };
   plot.addEventListener('change', loadPlot);
@@ -758,7 +826,7 @@ CARDS.rice = function (root) {
                   season: valOf(season, 'dry'), est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
                   soil: soil.input.value, level: numOf(level), levelPrev: numOf(levelPrev),
                   levelDate: valOf(levelDate, ''), levelPrevDate: valOf(levelPrevDate, ''),
-                  tmax: numOf(tmax), tmin: numOf(tmin), etc: numOf(etc), weeds: weeds.input.checked };
+                  tmax: numOf(tmax), tmin: numOf(tmin), etc: numOf(etc), fcRain: numOf(fcRain), weeds: weeds.input.checked };
     store.ricePlotLast = inp.plot; remember('rice:' + ricePlotKey(inp.plot), inp); syncPlotList(); out.innerHTML = '';
     const now = new Date(); const dd = s => s ? Math.round((new Date(s + 'T00:00:00') - now) / 86400000) : null;
     /* Everything downstream is measured from the reading, not from now. anchor is the day the tube
@@ -850,6 +918,12 @@ CARDS.rice = function (root) {
       lines.push([bi(lab), val]);
     });
     if (r.code === 'not_yet') lines.push([bi({ en: 'Still to go', fil: 'Natitira pa' }), fmt(r.remainingCm, 0) + ' cm before the trigger']);
+    if (inp.fcRain != null && inp.fcRain >= 0 && (r.projections || []).length) {
+      const above = isFinite(inp.level) && inp.level > 0;
+      lines.push([bi({ en: 'Rain in the forecast before then', fil: 'Ulan sa forecast bago ang petsang iyon' }), bi(above
+        ? { en: fmt(inp.fcRain, 1) + ' mm. With water standing on the field that adds ' + fmt(inp.fcRain / 10, 1) + ' cm on top, before the field\'s own losses, so if it falls the date comes later. The date above is not moved for it: read the water again after the rain.', fil: fmt(inp.fcRain, 1) + ' mm. Kung may nakatayong tubig sa bukid, dagdag itong ' + fmt(inp.fcRain / 10, 1) + ' cm sa ibabaw, bago ang sariling pagkawala ng tubig ng bukid, kaya kung uulan ay mauurong ang petsa. Hindi ginalaw ang petsa sa itaas: basáhin uli ang tubig pagkatapos ng ulan.' }
+        : { en: fmt(inp.fcRain, 1) + ' mm. With the water below the soil surface, how far the tube rises for that rain depends on how much of the soil is empty, and no published figure gives it, so the date above is not moved. If it rains, read the tube again: the reading decides.', fil: fmt(inp.fcRain, 1) + ' mm. Kung nasa ilalim ng lupa ang tubig, ang taas na aakyat sa tubo dahil sa ulang iyon ay depende sa kung gaano kalaki ang bakanteng bahagi ng lupa, at walang nailathalang bilang para rito, kaya hindi ginalaw ang petsa sa itaas. Kung umulan, basáhin uli ang tubo: ang pagbása ang masusunod.' })]);
+    }
     /* Only shown when the card is actually calling for water. It used to print under "not yet" as well,
        so the answer read "do not water yet" and "water to add: 19 cm" together. The breakdown into
        "so many cm up to the surface" only makes sense while the water is below the surface; with water
@@ -976,7 +1050,7 @@ CARDS.rice = function (root) {
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
         'A reading is taken as good to about one centimetre. Neither PhilRice nor IRRI publishes a graduated well: both are marked only at the depth that calls for water, and the published rule is whether water can still be seen. The centimetre marking, the precision and the width of the date window that follows from it are additions of this app, not published values.']),
-      limits, sources: r.sources }));
+      limits, sources: inp.fcRain != null ? r.sources.concat(['PAGASA_FWFA']) : r.sources }));
   }
 };
 
@@ -992,6 +1066,7 @@ function riceSuppress(inp) {
   const usesTens = inp.instrument === 'tensiometer' || (inp.instrument === 'both' && inp.bothMode !== 'tube');
   if (!usesTens) out.push('TENSIOMETER_DEPTH');
   if (inp.season !== 'nodry') out.push('AWD_NO_DRY_SEASON');
+  if (inp.fcRain == null) out.push('RICE_FORECAST_RAIN_BELOW_SURFACE');
   return out;
 }
 function riceAssumptions(inp) {
@@ -1005,30 +1080,240 @@ function riceAssumptions(inp) {
 CARDS.rain = function (root) {
   const prev = recall('rain');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
+  /* Two ways to know the crop's need and two ways to count the rain, each with its own default. The need
+     is the farmer's own figure by default, as a technician or PAGASA gives it; working it out here follows
+     the Philippine National Standard PAGASA's Climate Impact Assessment follows. The rain is counted by
+     the FAO monthly formula by default where the farmer supplies the need, which is what this card has
+     always done, and by the standard's ten-day ADB cut where the card works the need out. Either can be
+     switched. A row is shown only where the chosen method reads it. */
+  const route = selectInput('rRoute', { en: 'The crop\'s water need', fil: 'Pangangailangan ng pananim sa tubig' }, [
+    ['entered', { en: 'I have the figure, or I will leave it out', fil: 'Alam ko ang bilang, o hindi ko ito ilalagay' }],
+    ['compute', { en: 'Work it out here (Philippine National Standard PNS 217, which PAGASA follows)', fil: 'Kalkulahin dito (Philippine National Standard PNS 217, na sinusunod ng PAGASA)' }]
+  ], prev.route || 'entered');
+  const ERM_DEFAULT = { entered: 'tm3', compute: 'adb' };
+  const erm = selectInput('rER', { en: 'How the rain is counted (used for the period and for the rain that counts)', fil: 'Paano binibilang ang ulan (ginagamit sa panahon at sa ulang napakinabangan)' }, [
+    ['adb', { en: 'Ten days: rain up to the crop\'s need counts (PNS 217, ADB method)', fil: 'Sampung araw: ang ulan hanggang sa pangangailangan ng pananim ang napakinabangan (PNS 217, ADB)' }],
+    ['tm3', { en: 'One month: FAO formula (FAO Training Manual 3)', fil: 'Isang buwan: pormula ng FAO (FAO Training Manual 3)' }]
+  ], prev.erm || ERM_DEFAULT[route.input.value]);
+  const src = selectInput('rSrc', { en: 'The rain figure is', fil: 'Ang bilang ng ulan ay' }, [
+    ['measured', { en: 'What fell, from my rain gauge or a PAGASA station', fil: 'Ang bumagsak, mula sa panukat ng ulan (ulansukod) o istasyon ng PAGASA' }],
+    ['forecast', { en: 'A PAGASA forecast for the period ahead', fil: 'Forecast ng PAGASA para sa darating na panahon' }]
+  ], prev.src || 'measured');
+  const P10 = numInput('rP10', { en: 'Rain over the ten days (mm)', fil: 'Ulan sa loob ng sampung araw (mm)' }, prev.P10, 0.1);
   const P = numInput('P', { en: 'Rain this month (mm)', fil: 'Ulan ngayong buwan (mm)' }, prev.P, 1);
+  const d0 = dateInput('rD0', { en: 'First of the ten days', fil: 'Unang araw ng sampung araw' }, prev.d0, { prefilled: true });
+  const MON = [['1', { en: 'January', fil: 'Enero' }], ['2', { en: 'February', fil: 'Pebrero' }], ['3', { en: 'March', fil: 'Marso' }], ['4', { en: 'April', fil: 'Abril' }], ['5', { en: 'May', fil: 'Mayo' }], ['6', { en: 'June', fil: 'Hunyo' }], ['7', { en: 'July', fil: 'Hulyo' }], ['8', { en: 'August', fil: 'Agosto' }], ['9', { en: 'September', fil: 'Setyembre' }], ['10', { en: 'October', fil: 'Oktubre' }], ['11', { en: 'November', fil: 'Nobyembre' }], ['12', { en: 'December', fil: 'Disyembre' }]];
+  const month = selectInput('rMon', { en: 'Month', fil: 'Buwan' }, MON, prev.month || String(fieldNow().getMonth() + 1));
+  const need = numInput('rNeed', { en: 'Crop water need over the same period (mm), from your technician or PAGASA. The ten-day method needs it; with the monthly formula you may leave it blank to see only how much of the rain counts.', fil: 'Pangangailangan ng pananim sa tubig sa parehong panahon (mm), mula sa technician o PAGASA. Kailangan ito ng sampung-araw na pamamaraan; sa buwanang pormula, maaaring iwanang blangko para makita lang kung gaano karaming ulan ang napakinabangan.' }, prev.need, 0.1, { optional: true });
+  /* Working the need out: the crop coefficient, the soil, the weather over the period, and for lowland
+     rice, land preparation. */
+  const locWrap = el('div'); locWrap.appendChild(locationBlock());
+  const kcsrc = selectInput('rKc', { en: 'Crop coefficient from', fil: 'Crop coefficient mula sa' }, [
+    ['pns', { en: 'PNS 217 Table 4 (David 1983), the national standard', fil: 'PNS 217 Table 4 (David 1983), ang pambansang pamantayan' }],
+    ['fao56', { en: 'FAO-56 Table 12, adjusted for the climate', fil: 'FAO-56 Table 12, inangkop sa klima' }]
+  ], prev.kcsrc || 'pns');
+  const PNS_CROPS = [['rice', { en: 'Lowland rice', fil: 'Palay sa patubigan' }], ['corn', { en: 'Corn (grain)', fil: 'Mais (butil)' }], ['legumes', { en: 'Soybean, cowpea or mungbean', fil: 'Soya, paayap o munggo' }], ['peanut', { en: 'Peanut', fil: 'Mani' }], ['cabbage', { en: 'Cabbage', fil: 'Repolyo' }], ['tobacco', { en: 'Tobacco', fil: 'Tabako' }], ['wheat', { en: 'Wheat', fil: 'Trigo' }]];
+  const pnsCrop = selectInput('rPC', T.ui.crop, PNS_CROPS, prev.pnsCrop || 'rice');
+  const faoCrop = selectInput('rFC', T.ui.crop, Object.keys(A.CROPS).map(k => [k, T.crops[k]]), prev.faoCrop || 'rice');
+  const faoStage = selectInput('rFS', T.ui.stage, Object.keys(T.stages).map(k => [k, T.stages[k]]), prev.faoStage || 'mid');
+  const plant = dateInput('rPlant', { en: 'Planting date (transplanting date for transplanted rice)', fil: 'Petsa ng pagtatanim (petsa ng paglilipat-tanim kung inilipat ang palay)' }, prev.plant, { optional: true });
+  const dur = numInput('rDur', { en: 'Days from planting to harvest for this variety (for rice, PhilRice lists it per variety; the harvest card has the list)', fil: 'Bilang ng araw mula pagtatanim hanggang ani ng barayting ito (sa palay, nakalista sa PhilRice bawat barayti; nasa card ng ani ang listahan)' }, prev.dur, 1);
+  const SOIL_OPTS = [['clay', { en: 'Clay', fil: 'Luwad (clay)' }], ['silty_clay', { en: 'Silty clay', fil: 'Silty clay' }], ['silty_clay_loam', { en: 'Silty clay loam', fil: 'Silty clay loam' }], ['clay_loam', { en: 'Clay loam', fil: 'Clay loam' }], ['sandy_clay_loam', { en: 'Sandy clay loam', fil: 'Sandy clay loam' }], ['loam', { en: 'Loam', fil: 'Katamtamang lupa (loam)' }], ['sandy_loam', { en: 'Sandy loam', fil: 'Mabuhanging lupa' }], ['sandy', { en: 'Sandy', fil: 'Buhangin' }]];
+  const soil = selectInput('rSoil', T.ui.soil, SOIL_OPTS, prev.soil || 'clay');
+  const spMode = selectInput('rSPm', { en: 'Seepage and percolation', fil: 'Tagas at pagsipsip pailalim' }, [
+    ['table', { en: 'From the soil above (PNS 217 Table 5)', fil: 'Mula sa lupa sa itaas (PNS 217 Table 5)' }],
+    ['measured', { en: 'My own measured rate', fil: 'Sariling sukat ko' }],
+    ['none', { en: 'Leave out, as FAO-56 does (not the national standard)', fil: 'Huwag isama, gaya ng FAO-56 (hindi ang pambansang pamantayan)' }]
+  ], prev.spMode || 'table');
+  const spRate = numInput('rSP', { en: 'Measured seepage and percolation (mm per day; the rice card gives it in cm per day, so multiply by 10)', fil: 'Nasukat na tagas at pagsipsip pailalim (mm kada araw; cm kada araw ang ibinibigay ng card ng palay, kaya i-multiply sa 10)' }, prev.spRate, 0.1);
+  const tx = numInput('rTx', { en: 'Typical afternoon high over the period (°C)', fil: 'Karaniwang pinakamainit sa hapon sa panahong ito (°C)' }, prev.tx, 0.1, { signed: true });
+  const tn = numInput('rTn', { en: 'Typical morning low over the period (°C)', fil: 'Karaniwang pinakamalamig sa umaga sa panahong ito (°C)' }, prev.tn, 0.1, { signed: true });
+  const lp = checkInput('rLP', { en: 'This period is land preparation for lowland rice (the standard\'s land soaking, standing water and evaporation are added)', fil: 'Paghahanda ng lupa para sa palay ang panahong ito (idinadagdag ang pagbababad ng lupa, nakatayong tubig at pagsingaw ayon sa pamantayan)' }, prev.lp);
+  const lpDays = numInput('rLPd', { en: 'Days of land preparation within this period (leave blank for the whole period)', fil: 'Bilang ng araw ng paghahanda ng lupa sa loob ng panahong ito (iwanang blangko kung buong panahon)' }, prev.lpDays, 1, { optional: true });
+  const rmc = numInput('rRMC', { en: 'Soil moisture before the first irrigation (% by weight), if a laboratory measured it. Leave blank and the card works it out at wilting point and at field capacity.', fil: 'Halumigmig ng lupa bago ang unang patubig (% ayon sa bigat), kung nasukat sa laboratoryo. Iwanang blangko at kakalkulahin ng card sa wilting point at sa field capacity.' }, prev.rmc, 0.1, { optional: true });
+  const sw = numInput('rSW', { en: 'Standing water for land preparation (mm; the standard recommends 10)', fil: 'Nakatayong tubig sa paghahanda ng lupa (mm; 10 ang rekomendasyon ng pamantayan)' }, prev.sw == null ? A.PNS217.standingWaterMm : prev.sw, 1, { prefilled: true });
   const area = numInput('rArea', { en: 'Your field (hectares). It changes only the litres, never the millimetres.', fil: 'Lawak ng bukid (ektarya). Ang litro lang ang binabago nito, hindi ang milimetro.' }, prev.area, 0.01, { optional: true });
-  form.append(P.row, area.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  const computeRows = el('div');
+  computeRows.append(locWrap, kcsrc.row, pnsCrop.row, faoCrop.row, faoStage.row, plant.row, dur.row, soil.row, spMode.row, spRate.row, tx.row, tn.row, lp.row, lpDays.row, rmc.row, sw.row);
+  form.append(route.row, erm.row, src.row, d0.row, month.row, P10.row, P.row, need.row, computeRows, area.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  function sync() {
+    const r = route.input.value, m = erm.input.value, comp = r === 'compute', pns = kcsrc.input.value === 'pns';
+    const rice = comp && (pns ? pnsCrop.input.value === 'rice' : faoCrop.input.value === 'rice');
+    d0.row.hidden = m !== 'adb'; P10.row.hidden = m !== 'adb';
+    month.row.hidden = m !== 'tm3'; P.row.hidden = m !== 'tm3';
+    need.row.hidden = comp;
+    computeRows.hidden = !comp;
+    pnsCrop.row.hidden = !pns; faoCrop.row.hidden = pns; faoStage.row.hidden = pns;
+    plant.row.hidden = !pns; dur.row.hidden = !pns;
+    spRate.row.hidden = spMode.input.value !== 'measured';
+    soil.row.hidden = !(spMode.input.value === 'table' || (rice && lp.input.checked));
+    lp.row.hidden = !rice;
+    [lpDays, rmc, sw].forEach(x => { x.row.hidden = !(rice && lp.input.checked); });
+  }
+  route.input.addEventListener('change', () => { erm.input.value = ERM_DEFAULT[route.input.value]; sync(); });
+  [erm, kcsrc, pnsCrop, faoCrop, spMode].forEach(x => x.input.addEventListener('change', sync));
+  lp.input.addEventListener('change', sync);
+  sync();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { P: num(P.input), area: num(area.input) }; remember('rain', inp); out.innerHTML = '';
-    if (inp.P == null) return;
-    if (inp.area != null && inp.area <= 0) { show(out, result({ level: 'info', verdict: { en: 'Field area must be greater than zero.', fil: 'Dapat mas malaki sa sero ang lawak ng bukid.' } })); return; }
-    const pe = A.effectiveRainMonthly(inp.P);
+    const inp = { route: route.input.value, erm: erm.input.value, src: src.input.value, P10: num(P10.input), P: num(P.input), d0: d0.input.value, month: month.input.value, need: num(need.input),
+      kcsrc: kcsrc.input.value, pnsCrop: pnsCrop.input.value, faoCrop: faoCrop.input.value, faoStage: faoStage.input.value, plant: plant.input.value, dur: num(dur.input), soil: soil.input.value,
+      spMode: spMode.input.value, spRate: num(spRate.input), tx: num(tx.input), tn: num(tn.input), lp: lp.input.checked, lpDays: num(lpDays.input), rmc: num(rmc.input), sw: num(sw.input), area: num(area.input) };
+    remember('rain', inp); out.innerHTML = '';
+    const adb = inp.erm === 'adb', comp = inp.route === 'compute', fc = inp.src === 'forecast';
+    const rain = adb ? inp.P10 : inp.P;
+    if (rain == null) return;
+    const info = v => show(out, result({ level: 'info', verdict: v }));
+    if (rain < 0) return info({ en: 'Rain cannot be below zero.', fil: 'Hindi maaaring mas mababa sa sero ang ulan.' });
+    if (inp.area != null && inp.area <= 0) return info({ en: 'Field area must be greater than zero.', fil: 'Dapat mas malaki sa sero ang lawak ng bukid.' });
+    /* The period. Ten days from the date given for the ADB cut; the calendar month for the FAO formula,
+       in this year, so February has its right length. */
+    const now0 = fieldNow();
+    const start = adb ? new Date((inp.d0 || now0.toISOString().slice(0, 10)) + 'T00:00:00') : new Date(now0.getFullYear(), (+inp.month) - 1, 1);
+    const nDays = adb ? A.PNS217.decadeDays : new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    const dayMs = 86400000, dayAt = k => new Date(start.getTime() + k * dayMs);
+    const MON_EN = MON.map(x => x[1].en), MON_FIL = MON.map(x => x[1].fil);
+    const periodEn = adb ? 'the ten days from ' + dmy(start) : MON_EN[start.getMonth()] + ' ' + start.getFullYear();
+    const periodFil = adb ? 'ang sampung araw mula ' + dmy(start) : MON_FIL[start.getMonth()] + ' ' + start.getFullYear();
+    /* ---- the need ---- */
+    let needMm = comp ? null : inp.need, calc = null;
+    const lines = [], why = [], assumptions = [], limits = [], flags = [], suppress = [];
+    let sources = [];
+    if (comp) {
+      if (inp.tx == null || inp.tn == null) return info({ en: 'Enter the typical afternoon high and morning low over the period, so the card can work out the crop\'s water use.', fil: 'Ilagay ang karaniwang pinakamainit sa hapon at pinakamalamig sa umaga sa panahong ito, para makalkula ng card ang gamit na tubig ng pananim.' });
+      if (inp.tx < inp.tn) return info(T.verdicts.bad_minmax);
+      const L = store.loc, midJ = todayJ(dayAt(Math.floor(nDays / 2)));
+      const e = A.eto({ Tmax: inp.tx, Tmin: inp.tn, lat: L.lat, elev: L.elev, J: midJ, site: L.site, monthly: !adb });
+      if (e.error) return info({ en: 'The location is incomplete, so reference evapotranspiration cannot be worked out. Check latitude and elevation above.', fil: 'Kulang ang lokasyon, kaya hindi makalkula ang reference evapotranspiration. Tingnan ang latitud at taas sa itaas.' });
+      /* Crop water use day by day across the period, ETo x kc, then seepage and percolation on top. With
+         the PNS table, kc follows the crop's age on each day, so a period that crosses a column edge is
+         counted on both sides of it; days before planting carry no crop. With FAO-56, kc is the stage
+         value the farmer picked, held through the period, as the water card holds it. */
+      let etaSum = 0, cropDays = 0, pctLo = null, pctHi = null, kcs = [], past = false;
+      if (inp.kcsrc === 'pns') {
+        if (!inp.plant) return info({ en: 'Enter the planting date, so the card knows how far into its season the crop is.', fil: 'Ilagay ang petsa ng pagtatanim, para malaman ng card kung nasaan na ang pananim sa panahon nito.' });
+        if (inp.dur == null || inp.dur <= 0) return info({ en: 'Enter the days from planting to harvest for this variety.', fil: 'Ilagay ang bilang ng araw mula pagtatanim hanggang ani ng barayting ito.' });
+        const p0 = new Date(inp.plant + 'T00:00:00');
+        for (let k = 0; k < nDays; k++) {
+          const age = Math.round((dayAt(k) - p0) / dayMs);
+          if (age < 0) continue;
+          const pct = 100 * age / inp.dur, kk = A.pnsKc(inp.pnsCrop, pct);
+          if (kk.pastDuration) past = true;
+          etaSum += e.eto * kk.kc; cropDays++; kcs.push(kk.kc);
+          pctLo = pctLo == null ? pct : Math.min(pctLo, pct); pctHi = pctHi == null ? pct : Math.max(pctHi, pct);
+        }
+        if (past) flags.push('Part of this period falls after the growth duration you gave. The Harvest column of Table 4 is used there.');
+      } else {
+        const kc = A.cropKc(inp.faoCrop, { u2: e.u2, Tmin: inp.tn, Tmax: inp.tx, riceHumidity: 'subhumid', riceWind: e.u2 <= 1 ? 'light' : (e.u2 >= 4 ? 'strong' : 'moderate') });
+        const k = { initial: kc.kcIni, development: (kc.kcIni + kc.kcMid) / 2, mid: kc.kcMid, late: (kc.kcMid + kc.kcEnd) / 2 }[inp.faoStage];
+        etaSum = e.eto * k * nDays; cropDays = nDays; kcs = [k];
+        kc.flags.forEach(f => { if (CODES[f]) flags.push(CODES[f]); });
+      }
+      let sp = null, spFrom = null;
+      if (inp.spMode === 'measured') { if (inp.spRate == null || inp.spRate < 0) return info({ en: 'Enter your measured seepage and percolation, in mm per day.', fil: 'Ilagay ang nasukat na tagas at pagsipsip pailalim, sa mm kada araw.' }); sp = inp.spRate; spFrom = 'measured'; }
+      else if (inp.spMode === 'table') { const t5 = A.PNS217.percolationMmDay[inp.soil]; if (t5 != null) { sp = t5; spFrom = 'table5'; } }
+      const spSum = sp == null ? 0 : sp * cropDays;
+      needMm = etaSum + spSum;
+      let land = null;
+      const rice = inp.kcsrc === 'pns' ? inp.pnsCrop === 'rice' : inp.faoCrop === 'rice';
+      if (rice && inp.lp) {
+        const days = inp.lpDays != null ? inp.lpDays : nDays;
+        land = A.pnsLandPrep({ soil: inp.soil, etoPerDay: e.eto, days: days, rmcPct: inp.rmc, swMm: inp.sw });
+        if (land.error === 'pns_soil_not_in_table_f1') return info({ en: 'PNS 217 Table F.1 gives no soil properties for this texture, so land soaking cannot be worked out. It covers sandy, sandy loam, loam, clay loam, silty clay and clay.', fil: 'Walang katangian ng lupa sa PNS 217 Table F.1 para sa ganitong lupa, kaya hindi makalkula ang pagbababad. Sakop nito ang sandy, sandy loam, loam, clay loam, silty clay at clay.' });
+        if (land.error) return info({ en: 'Enter the days of land preparation within this period.', fil: 'Ilagay ang bilang ng araw ng paghahanda ng lupa sa loob ng panahong ito.' });
+        needMm += land.lpwr;
+      }
+      if (cropDays === 0 && !land) return info({ en: 'By the planting date you gave, the crop is not yet in the field during this period, so it needs no water yet. If this period is land preparation for rice, tick that box.', fil: 'Ayon sa petsa ng pagtatanim na ibinigay ninyo, wala pa ang pananim sa bukid sa panahong ito, kaya hindi pa ito nangangailangan ng tubig. Kung paghahanda ng lupa para sa palay ang panahong ito, lagyan ng tsek ang kahong iyon.' });
+      calc = { e, etaSum, cropDays, kcs, pctLo, pctHi, sp, spFrom, spSum, land };
+      /* lines for the worked need */
+      lines.push([bi({ en: 'Reference evapotranspiration (FAO-56)', fil: 'Reference evapotranspiration (FAO-56)' }), fmt(e.eto, 1) + ' mm/day from ' + fmt(inp.tx, 1) + ' / ' + fmt(inp.tn, 1) + ' °C']);
+      const kcTxt = inp.kcsrc === 'pns'
+        ? (kcs.length ? (Math.min.apply(null, kcs) === Math.max.apply(null, kcs) ? fmt(kcs[0], 2) : fmt(Math.min.apply(null, kcs), 2) + ' to ' + fmt(Math.max.apply(null, kcs), 2)) + ', at ' + fmt(pctLo, 0) + (pctHi > pctLo ? ' to ' + fmt(pctHi, 0) : '') + '% of the growth duration (PNS 217 Table 4, David 1983)' : 'none: the crop is not yet planted in this period')
+        : fmt(kcs[0], 2) + ' (FAO-56 Table 12, ' + t(T.stages[inp.faoStage]).en.toLowerCase() + ', adjusted for the climate)';
+      lines.push([bi({ en: 'Crop coefficient', fil: 'Crop coefficient' }), kcTxt]);
+      lines.push([bi({ en: 'Crop water use over the period', fil: 'Gamit na tubig ng pananim sa panahong ito' }), fmt(etaSum, 0) + ' mm over ' + cropDays + ' day' + (cropDays === 1 ? '' : 's') + ' with the crop in the field']);
+      lines.push([bi({ en: 'Seepage and percolation', fil: 'Tagas at pagsipsip pailalim' }),
+        spFrom === 'table5' ? fmt(sp, 2) + ' mm/day for ' + t(SOIL_OPTS.find(o => o[0] === inp.soil)[1]).en.toLowerCase() + ' (PNS 217 Table 5, from NIA): ' + fmt(spSum, 0) + ' mm'
+        : spFrom === 'measured' ? fmt(sp, 1) + ' mm/day, your measurement: ' + fmt(spSum, 0) + ' mm'
+        : inp.spMode === 'none' ? 'left out, as FAO-56 does; the national standard adds it'
+        : 'not counted: PNS 217 Table 5 gives no rate for ' + t(SOIL_OPTS.find(o => o[0] === inp.soil)[1]).en.toLowerCase() + '. Measure it, or choose another texture if yours is listed.', sp == null ? 'minor' : '']);
+      if (land) {
+        lines.push([bi({ en: 'Land preparation (PNS 217 Annex H.5)', fil: 'Paghahanda ng lupa (PNS 217 Annex H.5)' }),
+          fmt(land.lpwr, 0) + ' mm: land soaking ' + fmt(land.lsr, 0) + ' mm' + (land.rmcFrom === 'table_f1' ? ' (soil as dry as wilting point; at field capacity it would be ' + fmt(land.lsrAtFc, 0) + ' mm, and the total ' + fmt(land.lpwrAtFc, 0) + ' mm)' : ' (from your soil moisture)') + ', standing water ' + fmt(land.sw, 0) + ' mm, evaporation ' + fmt(land.evap, 0) + ' mm']);
+        if (land.flags.indexOf('pns_rmc_saturated') >= 0) flags.push('The soil moisture you gave already fills the soil\'s pore space, so no land soaking is needed.');
+      }
+      lines.push([bi({ en: 'The crop\'s water need over the period', fil: 'Pangangailangan ng pananim sa tubig sa panahong ito' }), fmt(needMm, 0) + ' mm', 'key']);
+      e.fallbacks.forEach(f => { const c = CODES[{ humidity_from_tmin: 'eq48_tdew_eq_tmin', radiation_from_temperature: 'eq50_temperature_range', wind_default_2ms: 'table4_default_2ms', radiation_island_monthly: 'eq51_island' }[f]]; if (c) flags.push(c); });
+      e.flags.forEach(f => { if (CODES[f]) flags.push(CODES[f]); });
+      /* The standard's framing applies where any of its parts is in use. FAO-56 coefficients with no
+         seepage and percolation and no land preparation are plain FAO-56 crop evapotranspiration, and the
+         card says so rather than lending it the standard's name. */
+      const pnsFramed = inp.kcsrc === 'pns' || inp.spMode !== 'none' || !!land;
+      if (pnsFramed) why.push('The need follows PNS/BAFS/PAES 217:2017, the Philippine National Standard for irrigation water requirements: crop water requirement = ETo × kc + seepage and percolation (Annex H.1 and H.2). PAGASA\'s Climate Impact Assessment for Philippine Agriculture states that it follows this standard for rice.');
+      else why.push('With FAO-56 coefficients and seepage and percolation left out, the need is FAO-56 crop evapotranspiration, ETo × Kc, as the water card computes it. The national standard would add seepage and percolation.');
+      if (inp.kcsrc === 'pns') why.push('The crop coefficient comes from Table 4 of the standard, which gives it by the share of the growth duration the crop has reached (0 to 20, 20 to 40, 40 to 70, 70 to 90 per cent, and Harvest). The table\'s own source line is W.P. David, lysimeter studies, 1983: the "David (1983)" PAGASA cites for rice. Each day of the period gets the coefficient for the crop\'s age that day.');
+      else why.push('The crop coefficient comes from FAO-56 Table 12 for the stage you chose, adjusted for this climate with FAO-56 Eq. 62 and 65, as the water card does. It is held at that value through the period.');
+      why.push('Reference evapotranspiration by FAO-56 Penman-Monteith from the typical high and low you entered, one of the four methods the standard allows (Annex B.1.1).');
+      if (land) why.push('Land preparation water, PNS 217 Annex H.4 and H.5: land soaking = [porosity − (soil moisture × apparent specific gravity)] × 300 mm root zone / 100, plus standing water, plus evaporation over the land preparation days. Porosity, specific gravity, wilting point and field capacity for your soil come from the standard\'s Table F.1.');
+      sources = sources.concat(pnsFramed ? ['PNS217', 'PAGASA_CIA', 'FAO56'] : ['FAO56']);
+      if (inp.kcsrc !== 'pns') suppress.push('PNS_HARVEST_BAND');
+      if (!pnsFramed) suppress.push('PNS_ETO_METHOD');
+      if (!rice) suppress.push('PNS_LAND_PREP');
+      if (!(land && land.rmcFrom === 'table_f1')) suppress.push('PNS_RMC_RANGE');
+    } else {
+      ['PNS_HARVEST_BAND', 'PNS_LAND_PREP', 'PNS_RMC_RANGE', 'PNS_ETO_METHOD'].forEach(id => suppress.push(id));
+      if (needMm != null && needMm < 0) return info({ en: 'The crop\'s need cannot be below zero.', fil: 'Hindi maaaring mas mababa sa sero ang pangangailangan ng pananim.' });
+      if (needMm != null) lines.push([bi({ en: 'The crop\'s water need over the period', fil: 'Pangangailangan ng pananim sa tubig sa panahong ito' }), fmt(needMm, 0) + ' mm, the figure you entered', 'key']);
+    }
+    /* ---- the rain that counts ---- */
     /* Millimetres mean nothing to most farmers until they are shown as a depth of standing water and as
        a volume per hectare. Both are exact conversions, not estimates: 1 mm is 1 litre per square metre. */
     const ha = inp.area != null ? inp.area : 1;
     const cm = v => fmt(v / 10, 1), m3 = v => fmt(A.mmToM3PerHa(v) * ha, 0);
     /* Litres read badly past a million as "5000 thousand"; switch unit rather than pile on zeroes. */
-    const lit = (v, word) => { const L = A.mmToM3PerHa(v) * ha * 1000; return L >= 1e6 ? fmt(L / 1e6, 2) + (word === 'en' ? ' million litres' : ' milyong litro') : fmt(L / 1e3, 0) + (word === 'en' ? ' thousand litres' : ' libong litro'); };
+    const lit = (v, word) => { const Lt = A.mmToM3PerHa(v) * ha * 1000; return Lt >= 1e6 ? fmt(Lt / 1e6, 2) + (word === 'en' ? ' million litres' : ' milyong litro') : fmt(Lt / 1e3, 0) + (word === 'en' ? ' thousand litres' : ' libong litro'); };
     const onArea = { en: inp.area != null ? 'on your ' + fmt(ha, 2) + ' ha' : 'on one hectare', fil: inp.area != null ? 'sa ' + fmt(ha, 2) + ' ektarya ninyo' : 'sa isang ektarya' };
-    show(out, result({ card: 'rain', level: 'info', verdict: { en: 'Of ' + fmt(inp.P, 0) + ' mm, about ' + fmt(pe, 0) + ' mm counts for the crop this month.', fil: 'Sa ' + fmt(inp.P, 0) + ' mm, mga ' + fmt(pe, 0) + ' mm ang napakinabangan ng pananim ngayong buwan.' },
-      lines: [[bi({ en: 'The ' + fmt(pe, 0) + ' mm that counts, as water', fil: 'Ang ' + fmt(pe, 0) + ' mm na napakinabangan, bilang tubig' }), bi({ en: cm(pe) + ' cm deep, the same depth on a field of any size: ' + m3(pe) + ' m\u00b3 (' + lit(pe, 'en') + ') ' + onArea.en + '.', fil: cm(pe) + ' cm ang lalim, pareho sa bukid na anumang laki: ' + m3(pe) + ' m\u00b3 (' + lit(pe, 'fil') + ') ' + onArea.fil + '.' }), 'key'],
-              [bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(inp.P - pe, 0) + ' mm'],
-              [bi({ en: 'All ' + fmt(inp.P, 0) + ' mm, as water', fil: 'Lahat ng ' + fmt(inp.P, 0) + ' mm, bilang tubig' }), bi({ en: cm(inp.P) + ' cm deep standing on the field, if none ran off or soaked away: ' + m3(inp.P) + ' m\u00b3 (' + lit(inp.P, 'en') + ') ' + onArea.en + '.', fil: cm(inp.P) + ' cm ang lalim ng tubig sa bukid, kung walang umagos o sumipsip pailalim: ' + m3(inp.P) + ' m\u00b3 (' + lit(inp.P, 'fil') + ') ' + onArea.fil + '.' }), 'minor'],
-              [bi({ en: 'What a millimetre is', fil: 'Ano ang isang milimetro' }), bi({ en: '1 mm of rain is 1 litre on every square metre. The depth is the same whatever the size of your field; only the volume changes.', fil: 'Ang 1 mm na ulan ay 1 litro sa bawat metro kuwadrado. Pareho ang lalim gaano man kalaki ang bukid ninyo; ang dami lang ang nagbabago.' }), 'minor']],
-      why: ['FAO Training Manual 3: Pe = 0.8 P − 25 for P above 75 mm/month, Pe = 0.6 P − 10 below, never negative.'],
-      limits: ['A monthly planning number for rain spread over the month on slopes up to 4 to 5% (FAO). Not for a single storm: 400 mm in three days is mostly runoff although the formula still returns 295 mm.', 'For today\'s watering decision the water card takes your gauge rainfall directly (FAO-56 water balance).'],
-      sources: ['FAO_TM3', 'FAO_P46'] }));
+    const asWater = v => bi({ en: cm(v) + ' cm deep, the same depth on a field of any size: ' + m3(v) + ' m\u00b3 (' + lit(v, 'en') + ') ' + onArea.en + '.', fil: cm(v) + ' cm ang lalim, pareho sa bukid na anumang laki: ' + m3(v) + ' m\u00b3 (' + lit(v, 'fil') + ') ' + onArea.fil + '.' });
+    let counts, waste = null;
+    if (adb) {
+      if (needMm == null) return info({ en: 'The ten-day ADB method counts rain against the crop\'s need, so it needs that figure. Enter the need, work it out here, or switch to the FAO monthly formula.', fil: 'Binibilang ng ADB na sampung-araw na pamamaraan ang ulan laban sa pangangailangan ng pananim, kaya kailangan nito ang bilang na iyon. Ilagay ang pangangailangan, kalkulahin dito, o lumipat sa buwanang pormula ng FAO.' });
+      counts = Math.min(rain, needMm); waste = Math.max(0, rain - needMm);
+      lines.push([bi({ en: 'Rain that counts (up to the need)', fil: 'Ulang napakinabangan (hanggang sa pangangailangan)' }), fmt(counts, 0) + ' mm of the ' + fmt(rain, 0) + ' mm']);
+      if (waste > 0) lines.push([bi({ en: 'Rain beyond the need (surface waste in PNS 217)', fil: 'Ulang lampas sa pangangailangan (surface waste sa PNS 217)' }), fmt(waste, 0) + ' mm']);
+      why.push('Rain is counted by the ADB method of PNS 217 Annex E: "Rainfall values below the determined decadal crop water requirement shall be the effective rainfall and the values above become surface waste." So in a ten-day period, rain up to the crop\'s need counts and the rest does not.');
+      limits.push('The ADB cut does not look at how hard the rain fell. A downpour that runs off the field is counted up to the need just as gentle rain is.');
+      sources = sources.concat(['PNS217']);
+      suppress.push('SMITH1992');
+    } else {
+      counts = A.effectiveRainMonthly(rain);
+      lines.push([bi({ en: 'Rain that counts (FAO formula)', fil: 'Ulang napakinabangan (pormula ng FAO)' }), fmt(counts, 0) + ' mm of the ' + fmt(rain, 0) + ' mm']);
+      lines.push([bi({ en: 'Lost to runoff and deep drainage', fil: 'Nawala sa pag-agos at pagsipsip pailalim' }), fmt(rain - counts, 0) + ' mm']);
+      why.push('FAO Training Manual 3: Pe = 0.8 P − 25 for P above 75 mm/month, Pe = 0.6 P − 10 below, never negative.');
+      limits.push('A monthly planning number for rain spread over the month on slopes up to 4 to 5% (FAO). Not for a single storm: 400 mm in three days is mostly runoff although the formula still returns 295 mm.');
+      sources = sources.concat(['FAO_TM3', 'FAO_P46']);
+      suppress.push('PNS_ADB_ONE_PERIOD');
+    }
+    lines.push([bi({ en: 'The ' + fmt(counts, 0) + ' mm that counts, as water', fil: 'Ang ' + fmt(counts, 0) + ' mm na napakinabangan, bilang tubig' }), asWater(counts), needMm == null ? 'key' : '']);
+    lines.push([bi({ en: 'All ' + fmt(rain, 0) + ' mm, as water', fil: 'Lahat ng ' + fmt(rain, 0) + ' mm, bilang tubig' }), bi({ en: cm(rain) + ' cm deep standing on the field, if none ran off or soaked away: ' + m3(rain) + ' m\u00b3 (' + lit(rain, 'en') + ') ' + onArea.en + '.', fil: cm(rain) + ' cm ang lalim ng tubig sa bukid, kung walang umagos o sumipsip pailalim: ' + m3(rain) + ' m\u00b3 (' + lit(rain, 'fil') + ') ' + onArea.fil + '.' }), 'minor']);
+    /* ---- against the need ---- */
+    const vs = needMm == null ? null : A.rainAgainstNeed(needMm, counts);
+    if (vs && vs.shortfall > 0) lines.push([bi({ en: 'Still to supply', fil: 'Kailangan pang ibigay' }), bi({ en: fmt(vs.shortfall, 0) + ' mm: ' + cm(vs.shortfall) + ' cm, ' + m3(vs.shortfall) + ' m\u00b3 (' + lit(vs.shortfall, 'en') + ') ' + onArea.en + ', before any irrigation losses.', fil: fmt(vs.shortfall, 0) + ' mm: ' + cm(vs.shortfall) + ' cm, ' + m3(vs.shortfall) + ' m\u00b3 (' + lit(vs.shortfall, 'fil') + ') ' + onArea.fil + ', bago ang anumang nasasayang sa pagpapatubig.' }), 'key']);
+    lines.push([bi({ en: 'What a millimetre is', fil: 'Ano ang isang milimetro' }), bi({ en: '1 mm of rain is 1 litre on every square metre. The depth is the same whatever the size of your field; only the volume changes.', fil: 'Ang 1 mm na ulan ay 1 litro sa bawat metro kuwadrado. Pareho ang lalim gaano man kalaki ang bukid ninyo; ang dami lang ang nagbabago.' }), 'minor']);
+    /* ---- the verdict ---- */
+    const pre = fc ? { en: 'If the forecast holds: ', fil: 'Kung matutupad ang forecast: ' } : { en: '', fil: '' };
+    let verdict, level = 'info';
+    if (!vs) verdict = { en: pre.en + 'of ' + fmt(rain, 0) + ' mm, about ' + fmt(counts, 0) + ' mm counts for the crop over ' + periodEn + '.', fil: pre.fil + 'sa ' + fmt(rain, 0) + ' mm, mga ' + fmt(counts, 0) + ' mm ang napakinabangan ng pananim sa ' + periodFil + '.' };
+    else if (vs.shortfall > 0) { level = 'caution'; verdict = { en: pre.en + 'the rain covers ' + fmt(counts, 0) + ' of the ' + fmt(needMm, 0) + ' mm the crop needs over ' + periodEn + '. Short by ' + fmt(vs.shortfall, 0) + ' mm.', fil: pre.fil + fmt(counts, 0) + ' sa ' + fmt(needMm, 0) + ' mm na kailangan ng pananim sa ' + periodFil + ' ang natutugunan ng ulan. Kulang ng ' + fmt(vs.shortfall, 0) + ' mm.' }; }
+    else { level = 'go'; verdict = { en: pre.en + 'the rain covers the ' + fmt(needMm, 0) + ' mm the crop needs over ' + periodEn + '.', fil: pre.fil + 'natutugunan ng ulan ang ' + fmt(needMm, 0) + ' mm na kailangan ng pananim sa ' + periodFil + '.' }; }
+    /* Verdict text starts lower-case after the forecast prefix; capitalise when there is none. */
+    if (!fc) { verdict.en = verdict.en.charAt(0).toUpperCase() + verdict.en.slice(1); verdict.fil = verdict.fil.charAt(0).toUpperCase() + verdict.fil.slice(1); }
+    if (fc) {
+      why.push('The rain is a PAGASA forecast, so the answer holds only as far as the forecast does. Check it against what your rain gauge catches.');
+      sources = sources.concat(['PAGASA_FWFA']);
+    }
+    limits.push('For today\'s watering decision the water card takes your gauge rainfall directly (FAO-56 water balance).');
+    if (comp) limits.push('A planning figure for the crop, not a delivery figure: water lost between the source and the field, and in applying it, comes on top.');
+    show(out, result({ card: 'rain', level: level, verdict: verdict, lines: lines, why: why, flags: flags, assumptions: assumptions, limits: limits, suppress: suppress, sources: sources.filter((x, i, a) => a.indexOf(x) === i) }));
   }
 };
 
@@ -1054,25 +1339,43 @@ CARDS.spray = function (root) {
   const mist = checkInput('sMist', { en: 'Mist, fog, dew or frost present', fil: 'May ambon, ulap sa lupa, hamog o andap' }, prev.mist);
   const smoke = checkInput('sSmoke', { en: 'Smoke or dust hangs and moves sideways near the ground', fil: 'Nakabitin ang usok o alikabok at pahalang ang galaw' }, prev.smoke);
   const timeRow = numInput('sHour', { en: 'Time now (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras ngayon (24 oras, hal. 15.5 para sa 3:30 ng hapon)' }, fieldHourNow().toFixed(1), 0.1, { prefilled: true });
-  form.append(Tn.row, RH.row, wsel.row, wkmh.row, label.row, mist.row, smoke.row, timeRow.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* The same rules applied either to what the farmer reads now or to PAGASA's forecast for a time the
+     farmer plans to spray. Mist and hanging smoke are things seen, not forecast, so they are asked only
+     of a reading taken now. */
+  const mode = selectInput('sMode', { en: 'The weather figures below are', fil: 'Ang mga bilang ng panahon sa ibaba ay' }, [
+    ['now', { en: 'What I measure now', fil: 'Ang nasusukat ko ngayon' }],
+    ['forecast', { en: 'PAGASA forecast for the time I plan to spray', fil: 'Forecast ng PAGASA para sa oras na balak kong mag-spray' }]
+  ], prev.mode || 'now');
+  const rainAfter = numInput('sRainH', { en: 'Rain in the forecast: hours from spraying until it starts (optional)', fil: 'Ulan sa forecast: ilang oras mula sa pag-spray bago ito magsimula (opsyonal)' }, prev.rainAfter, 0.5, { optional: true });
+  const labelRain = numInput('sLblRain', { en: 'Rain-free period printed on the label, if any (hours)', fil: 'Oras na dapat walang ulan ayon sa label, kung meron (oras)' }, prev.labelRain, 0.5, { optional: true });
+  const timeLabel = { now: { en: 'Time now (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras ngayon (24 oras, hal. 15.5 para sa 3:30 ng hapon)' }, forecast: { en: 'Time you plan to spray (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras na balak mag-spray (24 oras, hal. 15.5 para sa 3:30 ng hapon)' } };
+  const syncMode = () => { const fc = mode.input.value === 'forecast'; mist.row.hidden = fc; smoke.row.hidden = fc; timeRow.row.replaceChild(bi(timeLabel[mode.input.value]), timeRow.row.firstChild); };
+  mode.input.addEventListener('change', syncMode);
+  form.append(mode.row, Tn.row, RH.row, wsel.row, wkmh.row, label.row, mist.row, smoke.row, timeRow.row, rainAfter.row, labelRain.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  syncMode();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), wsel: wsel.input.value, wkmh: num(wkmh.input), label: num(label.input), mist: mist.input.checked, smoke: smoke.input.checked, hour: num(timeRow.input) };
+    const inp = { mode: mode.input.value, T: num(Tn.input), RH: num(RH.input), wsel: wsel.input.value, wkmh: num(wkmh.input), label: num(label.input), mist: mist.input.checked, smoke: smoke.input.checked, hour: num(timeRow.input), rainAfter: num(rainAfter.input), labelRain: num(labelRain.input) };
+    const fcMode = inp.mode === 'forecast';
     remember('spray', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L = store.loc, J = todayJ(fieldNow()), st = A.sunTimes(L.lat, L.lon, J, fieldTz());
     const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel ? parseFloat(inp.wsel) : null);
     const hoursToSunset = st.sunset - inp.hour, hoursAfterSunrise = inp.hour - st.sunrise;
-    const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: inp.mist, smokeHanging: inp.smoke, labelMaxWindKmh: inp.label });
+    const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: fcMode ? false : inp.mist, smokeHanging: fcMode ? false : inp.smoke, labelMaxWindKmh: inp.label, rainAfterH: inp.rainAfter, labelRainFreeH: inp.labelRain });
     const level = { good: 'go', caution: 'caution', do_not_spray: 'stop', need_wind: 'info' }[r.code];
     const hhmm = h => { const x = ((h % 24) + 24) % 24; return String(Math.floor(x)).padStart(2, '0') + ':' + String(Math.round((x % 1) * 60)).padStart(2, '0'); };
     const lines = [[bi({ en: 'Delta T (dry bulb minus wet bulb)', fil: 'Delta T' }), fmt(r.deltaT, 1) + ' °C (wet bulb ' + fmt(r.wetBulb, 1) + ' °C); good range 2 to 8'], [bi({ en: 'Wind', fil: 'Hangin' }), wind == null ? 'not entered' : fmt(wind, 0) + ' km/h; good range 3 to 15'], [bi({ en: 'Sunrise and sunset here today', fil: 'Sikat at lubog ng araw dito ngayon' }), hhmm(st.sunrise) + ' and ' + hhmm(st.sunset) + '; avoid from ' + hhmm(st.sunset - 2) + ' to ' + hhmm(st.sunrise + 2)]];
     const why = r.reasons.map(c => CODES[c]).filter(Boolean);
-    if (!why.length) why.push('Delta T 2 to 8, wind 3 to 15 km/h, outside the inversion window, no inversion signs, air at or below 30 °C (GRDC, BOM, Agriculture Victoria, APVMA label).');
+    if (!r.reasons.filter(c => c !== 'rain_after_label_period').length) why.unshift('Delta T 2 to 8, wind 3 to 15 km/h, outside the inversion window, no inversion signs, air at or below 30 °C (GRDC, BOM, Agriculture Victoria, APVMA label).');
     why.push('Rainfastness is product-specific: check the label. BASF Philippine labels say do not spray within 24 h of heavy rain and do not apply when windy.');
-    show(out, result({ card: 'spray', level, verdict: t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone.', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
-      limits: ['Thresholds come from Australian grain-industry guidance for boom spraying; they describe the weather, not knapsack equipment.', 'Wind is at 2 m over the field; a 10 m station wind can be twice the field wind (GRDC).'], sources: r.sources }));
+    if (inp.rainAfter != null) lines.push([bi({ en: 'Rain in the forecast', fil: 'Ulan sa forecast' }), fmt(inp.rainAfter, 1) + ' h after spraying' + (inp.labelRain != null ? '; the label asks for ' + fmt(inp.labelRain, 1) + ' h without rain' : '; no rain-free period entered from the label')]);
+    /* Forecast verdicts say "at that time", not "now": the rules are the same, the moment is not. */
+    const FC_VERDICT = { good: { en: 'If the forecast holds, good conditions to spray at that time.', fil: 'Kung matutupad ang forecast, maganda ang kondisyon para mag-spray sa oras na iyon.' }, caution: { en: 'If the forecast holds, spray with caution at that time.', fil: 'Kung matutupad ang forecast, mag-ingat kung mag-i-spray sa oras na iyon.' }, do_not_spray: { en: 'Do not plan to spray at that time.', fil: 'Huwag balaking mag-spray sa oras na iyon.' }, need_wind: T.verdicts.need_wind };
+    if (fcMode) why.push('These are forecast figures for the time you plan to spray, judged by the same rules as a reading taken now. Mist, dew and hanging smoke cannot be forecast, so check for them before you start.');
+    show(out, result({ card: 'spray', level, verdict: fcMode ? FC_VERDICT[r.code] : t(T.verdicts[r.code]), lines, why, assumptions: ['Sunrise and sunset from FAO-56 Eq. 25 and 31 to 33, in this device\'s time zone.', 'Wet bulb from FAO-56 Eq. 15 and 16 (ventilated psychrometer constant) at your elevation.'],
+      limits: ['Thresholds come from Australian grain-industry guidance for boom spraying; they describe the weather, not knapsack equipment.', 'Wind is at 2 m over the field; a 10 m station wind can be twice the field wind (GRDC).'], sources: fcMode ? r.sources.concat(['PAGASA_FWFA']) : r.sources }));
   }
 };
 
@@ -1087,10 +1390,19 @@ CARDS.dry = function (root) {
   const cavkg = numInput('dCavKg', { en: 'kg per cavan', fil: 'kg kada kaban' }, prev.cavkg == null ? A.CAVAN_KG : prev.cavkg, 1, { prefilled: true });
   const mc = numInput('dMC', { en: 'Moisture of the wet palay (%), if known; harvest is usually 20 to 25', fil: 'Halumigmig ng basâng palay (%), kung alam; karaniwang 20 hanggang 25 sa ani' }, prev.mc == null ? 24 : prev.mc, 0.5, { optional: true });
   const storage = selectInput('dSt', { en: 'Plan for the grain', fil: 'Plano sa butil' }, [['weeks_to_months', { en: 'Sell or store a few months (14%)', fil: 'Ibenta o itago ng ilang buwan (14%)' }], ['months_8_12', { en: 'Store 8 to 12 months (13%)', fil: 'Itago ng 8 hanggang 12 buwan (13%)' }], ['seed', { en: 'Keep as seed (12%)', fil: 'Gawing binhi (12%)' }]], prev.storage || 'weeks_to_months');
-  form.append(Tn.row, RH.row, w.row, cav.row, cavkg.row, mc.row, storage.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* The same equilibrium worked on what the farmer reads now, or on PAGASA's forecast for the drying hours.
+     PHilMech RM No. 4: in humid tropical climates sun drying "is only successful during a few hours in the
+     mid-day", so those are the hours the forecast figures should describe. */
+  const mode = selectInput('dMode', { en: 'The temperature and humidity above are', fil: 'Ang temperatura at halumigmig sa itaas ay' }, [
+    ['now', { en: 'What I measure now at the drying area', fil: 'Ang nasusukat ko ngayon sa bilaran' }],
+    ['forecast', { en: 'PAGASA forecast for the middle of the drying day', fil: 'Forecast ng PAGASA para sa tanghali ng araw ng pagpapatuyo' }]
+  ], prev.mode || 'now');
+  const rainF = numInput('dRain', { en: 'Rain in the forecast for the drying day (mm)', fil: 'Ulan sa forecast para sa araw ng pagpapatuyo (mm)' }, prev.rainF, 0.1, { optional: true });
+  form.append(mode.row, Tn.row, RH.row, rainF.row, w.row, cav.row, cavkg.row, mc.row, storage.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), w: num(w.input), cav: num(cav.input), cavkg: num(cavkg.input) || A.CAVAN_KG, mc: num(mc.input), storage: storage.input.value };
+    const inp = { mode: mode.input.value, rainF: num(rainF.input), T: num(Tn.input), RH: num(RH.input), w: num(w.input), cav: num(cav.input), cavkg: num(cavkg.input) || A.CAVAN_KG, mc: num(mc.input), storage: storage.input.value };
+    const fcMode = inp.mode === 'forecast';
     remember('dry', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
@@ -1102,11 +1414,27 @@ CARDS.dry = function (root) {
     const tgt = fmt(r.storageTarget, 0) + '%';
     const lines = [[bi({ en: 'Lowest moisture reachable with this air', fil: 'Pinakamababang halumigmig na maaabot sa hanging ito' }), fmt(r.emcWb, 1) + '% (target ' + r.storageTarget + '%)'], [bi({ en: 'Humidity needed to reach ' + tgt + ' at this temperature', fil: 'Halumigmig na kailangan para umabot sa ' + tgt }), 'below ' + fmt(r.rhForTarget, 0) + '%']];
     if (r.weightAtTarget != null) lines.push([bi({ en: 'Weight after drying to ' + tgt, fil: 'Bigat pagkatapos matuyo sa ' + tgt }), fmt(r.weightAtTarget, 0) + ' kg = ' + fmt(r.cavansAtTarget, 1) + ' cavans of ' + inp.cavkg + ' kg (from ' + fmt(weight, 0) + ' kg at ' + inp.mc + '%)']);
-    lines.push([bi({ en: 'Sun-drying practice (IRRI)', fil: 'Tamang pagbibilad (IRRI)' }), 'Layer 2 to 4 cm; stir every 30 minutes; cover when the grain is hotter than 50 °C (42 °C for seed); cover at rain and at night.']);
+    lines.push([bi({ en: 'Sun-drying practice (IRRI; PHilMech)', fil: 'Tamang pagbibilad (IRRI; PHilMech)' }), 'Layer 2 to 4 cm; stir every 30 minutes; cover when the grain is hotter than 50 °C (42 °C for seed); cover at rain and at night.']);
+    /* Rain in the forecast. PHilMech RM No. 4 says sun drying "is not possible during rainy season and at
+       night", that plastic sheets or canvas "may be useful in protecting the spread paddy from sudden
+       downpours", and that palay should be dried as soon as possible after harvest, ideally within 12 hours.
+       Its Techno Leaflet No. 4 gives the way round the weather: a mechanical dryer runs day or night, and
+       the flatbed dryer "can be operated even during rainy days". None of this needs an amount of rain, so
+       any rain in the forecast raises it. */
+    const rainy = inp.rainF != null && inp.rainF > 0;
+    if (inp.rainF != null && inp.rainF < 0) { show(out, result({ level: 'info', verdict: { en: 'Rain cannot be below zero.', fil: 'Hindi maaaring mas mababa sa sero ang ulan.' } })); return; }
+    if (rainy) lines.push([bi({ en: 'Rain in the forecast', fil: 'Ulan sa forecast' }), bi({ en: fmt(inp.rainF, 1) + ' mm. Sun drying cannot go on in the rain. Keep plastic sheets or canvas at hand to cover the spread palay against a sudden downpour. Palay should be dried as soon as possible after harvest, ideally within 12 hours, so if the rain will last, a mechanical dryer runs day or night, and PHilMech describes the flatbed dryer as usable even on rainy days.', fil: fmt(inp.rainF, 1) + ' mm. Hindi maipagpapatuloy ang pagbibilad habang umuulan. Ihanda ang plastic sheet o trapal para matakpan ang nakabilad na palay kapag biglang bumuhos ang ulan. Dapat patuyuin ang palay sa lalong madaling panahon pagkatapos anihin, mainam kung sa loob ng 12 oras, kaya kung magtatagal ang ulan, maaaring gamitin sa araw o gabi ang mekanikal na dryer, at ayon sa PHilMech, magagamit ang flatbed dryer kahit maulan.' }), 'alert']);
     const why = ['Equilibrium moisture by the Modified Henderson equation with the ASABE D245.6 long-grain rough rice constants, checked against the University of Arkansas EMC table.', 'Weight after drying by mass balance: W2 = W1 (100 − M1)/(100 − M2) (IRRI).', 'Storage targets: 14% for weeks to months, 13% for 8 to 12 months, 12% for seed (IRRI Rice Knowledge Bank; PhilRice PalayCheck 12 to 14%).'];
     const flags = r.flags.map(f => CODES[f]).filter(Boolean);
     const limits = ['The reachable moisture is computed from the air, so the reading must be shaded air temperature and humidity, not a thermometer sitting in the sun. Grain lying in the sun is warmer than that air and can dry lower, which is why "not assured" means the air alone is too humid, not that drying is impossible.', 'IRRI\'s own EMC table runs about one percentage point lower than the ASABE constants used here; the standard itself was not accessible for this version.', 'Cavan mass defaults to 50 kg (PhilRice); change it if your sacks differ.'];
-    show(out, result({ card: 'dry', level: { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution', verdict: t(T.verdicts[r.code], { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: r.sources }));
+    /* Forecast verdicts speak of the forecast air, not "today's air". */
+    const FC_VERDICT = { can_reach_target: { en: 'If the forecast holds, the air can dry palay to about {x}%.', fil: 'Kung matutupad ang forecast, kayang patuyuin ng hangin ang palay hanggang mga {x}%.' }, not_assured_target: { en: 'Not assured. If the forecast holds, the air alone dries palay only to about {x}%.', fil: 'Hindi tiyak. Kung matutupad ang forecast, hanggang mga {x}% lang ang matutuyo ng palay sa hangin.' } };
+    const vtext = fcMode && FC_VERDICT[r.code] ? FC_VERDICT[r.code] : T.verdicts[r.code];
+    let dlevel = { can_reach_target: 'go', already_dry_enough: 'go', moisture_out_of_range: 'info' }[r.code] || 'caution';
+    if (rainy && dlevel === 'go' && r.code !== 'already_dry_enough') dlevel = 'caution';
+    if (fcMode) why.push('The temperature and humidity are a PAGASA forecast for the drying hours, worked through the same equation as a reading. PHilMech (RM No. 4): in humid tropical climates sun drying "is only successful during a few hours in the mid-day", which is why the forecast for the middle of the day is the one to use.');
+    const dsrc = r.sources.concat(['PHILMECH_RM4']).concat(rainy ? ['PHILMECH_TL04'] : []).concat(fcMode || rainy ? ['PAGASA_FWFA'] : []);
+    show(out, result({ card: 'dry', level: dlevel, verdict: t(vtext, { x: fmt(r.emcWb, 1) }), lines, why, flags, limits, sources: dsrc }));
   }
 };
 
@@ -1124,10 +1452,19 @@ CARDS.stress = function (root) {
   const d1x = numInput('x1x', { en: 'Yesterday\'s high, if known', fil: 'Pinakamainit kahapon, kung alam' }, prev.d1x, 0.1, { optional: true }), d1n = numInput('x1n', { en: 'Yesterday\'s low', fil: 'Pinakamalamig kahapon' }, prev.d1n, 0.1, { optional: true });
   const d2x = numInput('x2x', { en: 'Day before, high', fil: 'Noong isang araw, pinakamainit' }, prev.d2x, 0.1, { optional: true }), d2n = numInput('x2n', { en: 'Day before, low', fil: 'Noong isang araw, pinakamalamig' }, prev.d2n, 0.1, { optional: true });
   const g = el('div', { class: 'grid2' }); g.append(d0x.row, d0n.row, d1x.row, d1n.row, d2x.row, d2n.row);
-  form.append(crop.row, phaseRow, g, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* PAGASA's forecast highs and lows for the next three days: the same thresholds, applied ahead. Three
+     days because the QDAF run rule is three days long, so a run that begins today can be seen through. */
+  const fcOn = checkInput('xFc', { en: 'I have a PAGASA forecast for the next days', fil: 'May forecast ako ng PAGASA para sa mga susunod na araw' }, prev.fcOn);
+  const fcRows = [1, 2, 3].map(k => ({ x: numInput('xF' + k + 'x', { en: (k === 1 ? 'Tomorrow' : 'In ' + k + ' days') + ': high (°C)', fil: (k === 1 ? 'Bukas' : 'Sa loob ng ' + k + ' araw') + ': pinakamainit (°C)' }, prev['f' + k + 'x'], 0.1, { signed: true }),
+                                       n: numInput('xF' + k + 'n', { en: (k === 1 ? 'Tomorrow' : 'In ' + k + ' days') + ': low (°C)', fil: (k === 1 ? 'Bukas' : 'Sa loob ng ' + k + ' araw') + ': pinakamalamig (°C)' }, prev['f' + k + 'n'], 0.1, { signed: true }) }));
+  const fcBox = el('div', { class: 'grid2' }); fcRows.forEach(r => fcBox.append(r.x.row, r.n.row));
+  const syncFc = () => { fcBox.hidden = !fcOn.input.checked; };
+  fcOn.input.addEventListener('change', syncFc); syncFc();
+  form.append(crop.row, phaseRow, g, fcOn.row, fcBox, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
     const inp = { crop: crop.input.value, phase: phase.value, d0x: num(d0x.input), d0n: num(d0n.input), d1x: num(d1x.input), d1n: num(d1n.input), d2x: num(d2x.input), d2n: num(d2n.input) };
+    inp.fcOn = fcOn.input.checked; fcRows.forEach((r, k) => { inp['f' + (k + 1) + 'x'] = num(r.x.input); inp['f' + (k + 1) + 'n'] = num(r.n.input); });
     remember('stress', inp); out.innerHTML = '';
     if (inp.d0x == null || inp.d0n == null) return;
     /* A swapped high and low silently produces a nonsense verdict, so refuse it as the water card does. */
@@ -1147,6 +1484,35 @@ CARDS.stress = function (root) {
     const why = { rice: ['Rice thresholds: Yoshida (1981), Fundamentals of Rice Crop Science, Table 2.4, critical low and high temperatures by growth stage; where Yoshida gives a range, the lower value is the cold line. An FAO reproduction of this table differs at two stages (germination low, panicle differentiation high) and is not used. Sterility above 35 °C at anthesis for more than an hour (Yoshida 1981, section 2.3.6; Satake and Yoshida 1978); one hour at 33.7 °C spikelet temperature already causes sterility (Jagadish et al. 2007), hence the watch line at 33 °C.'], maize: ['Maize: pollen viability falls above 35 °C and kernel growth is reduced from 30 to 35 °C (Hatfield et al. 2011; Hatfield and Prueger 2015); Queensland DAF sweet corn thresholds 33 °C at flowering.'], sweetcorn: ['Queensland DAF sweet corn thresholds; Hatfield et al. 2011 for pollen viability.'] }[inp.crop] || ['Queensland Department of Agriculture and Fisheries critical temperature thresholds (literature review, 2023-2024); the series calls its values "a good guide, but by no means definitive due to slight varietal variation".'];
     const limits = ['Yoshida\'s rice thresholds are daily mean temperatures (germination excepted); this card compares them with the afternoon high and the morning low, so it flags stress earlier than a daily-mean test would. The anthesis heat line is the exception: it rests on afternoon temperatures at flowering (Satake and Yoshida 1978; Jagadish et al. 2007).', 'Thresholds are air temperatures; plant tissue can be warmer under water stress or cooler when well watered (Hatfield et al. 2011).', 'Duration matters: many studies used exposure of one hour to several days; a single afternoon reading is an indicator, not a damage estimate.', 'No yield loss is predicted.', 'This card does not say what to do when a threshold is crossed, because no published work ties a management response to a threshold under Philippine conditions. The nearest Philippine evidence is the shade-net crop shelter developed at Benguet State University under DOST-PCAARRD by a project J.F. Malamug led (Domingo 2018) and protected cultivation of lettuce under chilling in Benguet (Basquial et al. 2021); neither is tied to a temperature trigger. Follow DA and your local agriculturist.'];
     show(out, result({ card: 'stress', level, verdict: t(T.verdicts[code]), lines, why, limits, sources: r.sources.concat(r.sources.indexOf('DOMINGO2018') < 0 ? ['DOMINGO2018'] : []) }));
+    /* The forecast days, as a second answer under the first. Days are used in order until the first one
+       missing a high or a low. */
+    if (!inp.fcOn) return;
+    const fdays = [];
+    for (let k = 1; k <= 3; k++) { const x = inp['f' + k + 'x'], n = inp['f' + k + 'n']; if (x == null || n == null) break; if (x < n) { out.appendChild(result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; } fdays.push({ Tmax: x, Tmin: n }); }
+    if (!fdays.length) { out.appendChild(result({ level: 'info', verdict: { en: 'Enter at least tomorrow\'s forecast high and low to use the forecast.', fil: 'Ilagay man lang ang forecast na pinakamainit at pinakamalamig bukas para magamit ang forecast.' } })); return; }
+    const f = A.stressForecast(inp.crop, inp.phase, days, fdays);
+    const dayName = k => k === 1 ? { en: 'tomorrow', fil: 'bukas' } : { en: 'in ' + k + ' days', fil: 'sa loob ng ' + k + ' araw' };
+    const hot = [], cold = [], watch = [];
+    f.perForecastDay.forEach((cs, k) => { if (cs.includes('heat_above_threshold')) hot.push(k + 1); else if (cs.includes('heat_watch')) watch.push(k + 1); if (cs.includes('cold_at_or_below_threshold')) cold.push(k + 1); });
+    const list = (ks, lang) => { const w = ks.map(k => dayName(k)[lang]), and = lang === 'en' ? ' and ' : ' at '; return w.length < 2 ? w.join('') : w.slice(0, -1).join(', ') + and + w[w.length - 1]; };
+    let fv, fl;
+    if (hot.length || cold.length) {
+      fl = 'stop';
+      fv = { en: 'If the forecast holds: ' + [hot.length ? 'heat at or above the threshold ' + list(hot, 'en') : '', cold.length ? 'cold at or below the threshold ' + list(cold, 'en') : ''].filter(Boolean).join('; ') + '.',
+             fil: 'Kung matutupad ang forecast: ' + [hot.length ? 'init na abot o lampas sa hangganan ' + list(hot, 'fil') : '', cold.length ? 'lamig na abot o mas mababa sa hangganan ' + list(cold, 'fil') : ''].filter(Boolean).join('; ') + '.' };
+    } else if (watch.length) {
+      fl = 'caution';
+      fv = { en: 'If the forecast holds: past the watch line ' + list(watch, 'en') + ', below the threshold itself.', fil: 'Kung matutupad ang forecast: lampas sa linya ng pagbabantay ' + list(watch, 'fil') + ', pero mababa pa sa mismong hangganan.' };
+    } else {
+      fl = 'go';
+      fv = { en: 'If the forecast holds: within the published thresholds on all ' + fdays.length + ' forecast day' + (fdays.length === 1 ? '' : 's') + '.', fil: 'Kung matutupad ang forecast: pasok sa nailathalang hangganan sa lahat ng ' + fdays.length + ' araw ng forecast.' };
+    }
+    const flines = fdays.map((fd, k) => [bi({ en: 'Forecast, ' + dayName(k + 1).en, fil: 'Forecast, ' + dayName(k + 1).fil }), fd.Tmax + ' / ' + fd.Tmin + ' °C']);
+    if (f.runBarC != null) flines.push([bi({ en: 'Three days in a row at or above ' + f.runBarC + ' °C (QDAF)', fil: 'Tatlong sunod na araw na abot o lampas sa ' + f.runBarC + ' °C (QDAF)' }), f.runEndsOn ? 'yes, the run ending ' + dayName(f.runEndsOn).en + ', counting the days you entered above' : 'no, counting the days you entered above']);
+    out.appendChild(result({ level: fl, verdict: fv, lines: flines,
+      why: ['The same published thresholds as the answer above, applied to PAGASA\'s forecast highs and lows for each day. Where QDAF\'s rule for several hot days in a row applies to this crop, it is tested on every three-day run that ends in the forecast, including runs that begin in the days you entered above.'],
+      limits: ['A forecast, not a measurement: check again with the thermometer on the day.', 'As above, this says what the forecast would cross, not what to do about it.'],
+      sources: r.sources.concat(['PAGASA_FWFA']) }));
   }
 };
 
@@ -1160,10 +1526,20 @@ CARDS.frost = function (root) {
   const sky = selectInput('fSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear, stars visible', fil: 'Maaliwalas, kita ang bituin' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast or foggy', fil: 'Maulap o maambon' }]], prev.sky || 'clear');
   const wind = selectInput('fWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy or windy', fil: 'Mahangin' }]], prev.wind || 'calm');
   const hollow = checkInput('fHollow', { en: 'Field is in a valley bottom or hollow where cold air collects', fil: 'Nasa lambak o kubkob na lugar ang bukid kung saan naiipon ang malamig na hangin' }, prev.hollow);
-  form.append(Tn.row, RH.row, sky.row, wind.row, hollow.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  const fmin = numInput('fMin', { en: 'PAGASA forecast minimum temperature tonight, if you have it (°C)', fil: 'Forecast ng PAGASA na pinakamababang temperatura ngayong gabi, kung meron (°C)' }, prev.fmin, 0.1, { optional: true, signed: true });
+  form.append(Tn.row, RH.row, sky.row, wind.row, hollow.row, fmin.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, hollow: hollow.input.checked };
+    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, hollow: hollow.input.checked, fmin: num(fmin.input) };
+    /* PAGASA's forecast minimum, when the farmer has it, against the frost record and against the evening
+       air. The record comparison needs no reading time, so it is given even when the reading is too early
+       to judge from; the dew point and frost point comparison uses the evening air and waits for it. */
+    const REC = A.FROST_RECORD_AIR;
+    const recText = v => v <= 0
+      ? { en: fmt(v, 1) + ' °C: at or below freezing, so the air itself would freeze tonight.', fil: fmt(v, 1) + ' °C: abot o mas mababa sa pagyeyelo, kaya mismong hangin ang magyeyelo ngayong gabi.' }
+      : v <= REC.hiC
+      ? { en: fmt(v, 1) + ' °C: at or below ' + REC.hiC + ' °C, the warmest air on any of the ' + REC.days + ' frost days recorded at ' + REC.site + ' in ' + REC.year + ', which came with air of ' + REC.loC + ' to ' + REC.hiC + ' °C (Basquial et al. 2021).', fil: fmt(v, 1) + ' °C: abot o mas mababa sa ' + REC.hiC + ' °C, ang pinakamainit na hangin sa alinman sa ' + REC.days + ' araw na may naitalang andap sa ' + REC.site + ' noong ' + REC.year + ', na may hanging ' + REC.loC + ' hanggang ' + REC.hiC + ' °C (Basquial et al. 2021).' }
+      : { en: fmt(v, 1) + ' °C: above the ' + REC.loC + ' to ' + REC.hiC + ' °C of the ' + REC.days + ' frost days recorded at ' + REC.site + ' in ' + REC.year + ' (Basquial et al. 2021). That record is four days long, too short to rule frost out above it.', fil: fmt(v, 1) + ' °C: mas mataas sa ' + REC.loC + ' hanggang ' + REC.hiC + ' °C ng ' + REC.days + ' araw na may naitalang andap sa ' + REC.site + ' noong ' + REC.year + ' (Basquial et al. 2021). Apat na araw lang ang talaang iyon, kaya hindi nito maaalis ang posibilidad ng andap kahit mas mainit.' };
     remember('frost', inp); out.innerHTML = '';
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
@@ -1220,10 +1596,10 @@ CARDS.frost = function (root) {
       show(out, result({ level: 'info',
         verdict: { en: 'Too early in the day to judge tonight.', fil: 'Masyadong maaga pa upang hatulan kung magkaka-andap.' },
         lines: [[bi({ en: 'Read again after', fil: 'Magbása uli pagkatapos ng' }), hhmm(opens) + ' (sunset ' + hhmm(stToday.sunset) + ')'],
-                [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')']],
+                [bi({ en: 'Coldest hour tonight', fil: 'Pinakamalamig na oras ngayong gabi' }), 'about ' + hhmm(st.sunrise - 1) + ' to ' + hhmm(st.sunrise) + ' (sunrise ' + hhmm(st.sunrise) + ')']].concat(inp.fmin != null ? [[bi({ en: 'PAGASA forecast minimum tonight', fil: 'Forecast ng PAGASA na pinakamababa ngayong gabi' }), bi(recText(inp.fmin)), inp.fmin <= REC.hiC ? 'alert' : '']] : []),
         why: ['Frost forms because the ground loses heat to a clear sky through the night. Until the air has begun to cool, a temperature and humidity reading carries no information about the night ahead: the air will warm further, reach its peak, and only then start falling.', 'The card therefore accepts readings from about two hours before sunset until sunrise, and refuses them at other times rather than returning a verdict it cannot support.'],
         limits: ['The time comes from this device\'s clock, and sun times are computed for this device\'s time zone.'],
-        sources: ['FAO_FROST'] }));
+        sources: inp.fmin != null ? ['FAO_FROST', 'BASQUIAL2021', 'PAGASA_FWFA'] : ['FAO_FROST'] }));
       showDewPoint();
       return;
     }
@@ -1285,7 +1661,20 @@ CARDS.frost = function (root) {
       ? 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) records it in December, January and February, with January the most frequent and November the least; Launio et al. (2020) report December to February, now sometimes into March. Today falls outside those months, so check the readings before acting on this answer.'
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
     if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
-    show(out, result({ card: 'frost', level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, sources: r.sources }));
+    let fsources = r.sources;
+    if (inp.fmin != null) {
+      const ff = A.frostForecastCheck(inp.fmin, inp.T, inp.RH);
+      const airTxt = ff.reachesFrostPoint
+        ? { en: 'It is at or below this evening\'s frost point, ' + fmt(ff.frostPoint, 1) + ' °C: at that temperature the air deposits ice on surfaces even at screen height.', fil: 'Abot o mas mababa ito sa frost point ngayong gabi, ' + fmt(ff.frostPoint, 1) + ' °C: sa temperaturang iyon, nagdedeposito ng yelo ang hangin sa mga ibabaw kahit sa taas ng thermometer.' }
+        : ff.reachesDewPoint
+        ? { en: 'It is at or below this evening\'s dew point, ' + fmt(ff.dewPoint, 1) + ' °C, so the air would reach saturation tonight and moisture would deposit on the crop.', fil: 'Abot o mas mababa ito sa dew point ngayong gabi, ' + fmt(ff.dewPoint, 1) + ' °C, kaya aabot sa saturation ang hangin ngayong gabi at mamumuo ang halumigmig sa pananim.' }
+        : { en: 'It stays above this evening\'s dew point, ' + fmt(ff.dewPoint, 1) + ' °C, at screen height. A leaf under a clear sky can still cool below the air around it.', fil: 'Mas mataas pa rin ito sa dew point ngayong gabi, ' + fmt(ff.dewPoint, 1) + ' °C, sa taas ng thermometer. Maaari pa ring lumamig ang dahon sa ilalim ng maaliwalas na langit nang mas mababa sa hanging nakapaligid dito.' };
+      lines.push([bi({ en: 'PAGASA forecast minimum tonight', fil: 'Forecast ng PAGASA na pinakamababa ngayong gabi' }), bi({ en: recText(inp.fmin).en + ' ' + airTxt.en, fil: recText(inp.fmin).fil + ' ' + airTxt.fil }), inp.fmin <= REC.hiC ? 'alert' : '']);
+      why.push('With a PAGASA forecast minimum the card compares it, it does not replace it. It sets the forecast against the air temperatures recorded on Benguet frost days, 1.5 to 3.9 °C on four days at Atok in 2017 (Basquial et al. 2021), and against this evening\'s dew point and frost point, taking the water vapour in the air as held until it saturates. The verdict above still rests on the sky, the wind and your reading.');
+      limits.push('The forecast minimum is PAGASA\'s. This card still forecasts no temperature itself.');
+      fsources = r.sources.concat(['ROMPS2021', 'PAGASA_FWFA']);
+    }
+    show(out, result({ card: 'frost', level: { possible: 'stop', watch: 'caution', unlikely: 'go' }[r.code], verdict: t(T.verdicts[r.code]), lines, why, assumptions, limits, suppress: inp.fmin != null ? [] : ['FORECAST_VAPOUR_HELD'], sources: fsources }));
     showDewPoint();
   }
 };
@@ -1298,6 +1687,7 @@ CARDS.disease = function (root) {
   const RH = numInput('zRH', { en: 'Humidity this evening (%)', fil: 'Halumigmig ngayong gabi (%)' }, prev.RH, 1);
   const sky = selectInput('zSky', { en: 'Sky', fil: 'Langit' }, [['clear', { en: 'Clear', fil: 'Maaliwalas' }], ['partly', { en: 'Partly cloudy', fil: 'Bahagyang maulap' }], ['overcast', { en: 'Overcast', fil: 'Maulap' }]], prev.sky || 'clear');
   const wind = selectInput('zWind', { en: 'Wind', fil: 'Hangin' }, [['calm', { en: 'Calm', fil: 'Walang hangin' }], ['light', { en: 'Light', fil: 'Mahina' }], ['breezy', { en: 'Breezy', fil: 'Mahangin' }]], prev.wind || 'calm');
+  const zmin = numInput('zMin', { en: 'PAGASA forecast minimum temperature tonight, if you have it (°C)', fil: 'Forecast ng PAGASA na pinakamababang temperatura ngayong gabi, kung meron (°C)' }, prev.zmin, 0.1, { optional: true, signed: true });
   const lwLo = numInput('zLWlo', { en: 'PAGASA leaf wetness, lower figure (hours)', fil: 'Leaf wetness ng PAGASA, mas mababang bilang (oras)' }, prev.lwLo, 0.5, { optional: true });
   const lwHi = numInput('zLWhi', { en: 'PAGASA leaf wetness, upper figure (hours)', fil: 'Leaf wetness ng PAGASA, mas mataas na bilang (oras)' }, prev.lwHi, 0.5, { optional: true });
   const lwNote = el('p', { class: 'hint' }, bi({
@@ -1317,12 +1707,12 @@ CARDS.disease = function (root) {
      with nothing on screen saying so, and the clock warnings never appear either. Elevation is not used
      here; the block is the app's shared location rather than this card's own input. */
   form.appendChild(locationBlock(() => { if (out.childElementCount) run(); }));
-  form.append(Tn.row, RH.row, sky.row, wind.row, lwLo.row, lwHi.row, lwNote, h, hNote, hOn.row, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  form.append(Tn.row, RH.row, sky.row, wind.row, zmin.row, lwLo.row, lwHi.row, lwNote, h, hNote, hOn.row, a1.row, a2.row, b1.row, b2.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   const syncLogger = () => { const on = hOn.input.checked; [a1, a2, b1, b2].forEach(x => { x.row.hidden = !on; }); };
   hOn.input.addEventListener('change', syncLogger); syncLogger();
   const out = el('div'); root.append(form, out);
   function run() {
-    const inp = { T: num(Tn.input), RH: num(RH.input), sky: sky.input.value, wind: wind.input.value, lwLo: num(lwLo.input), lwHi: num(lwHi.input), logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
+    const inp = { T: num(Tn.input), RH: num(RH.input), zmin: num(zmin.input), sky: sky.input.value, wind: wind.input.value, lwLo: num(lwLo.input), lwHi: num(lwHi.input), logger: hOn.input.checked, a1: num(a1.input), a2: num(a2.input), b1: num(b1.input), b2: num(b2.input) };
     remember('disease', inp); out.innerHTML = '';
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L0 = store.loc, now0 = fieldNow();
@@ -1391,13 +1781,22 @@ CARDS.disease = function (root) {
               bi({ en: R.nightLoH.toFixed(1) + ' to ' + R.nightHiH.toFixed(1) + ' h, from when dew formed in the evening until it dried the next morning. The ' + R.afterSunriseLoH + ' to ' + R.afterSunriseHiH + ' hours after sunrise above are the tail end of it, not a separate thing. Measured on ' + R.nights + ' heavy dew nights at that one site, not calculated for your field.',
                 fil: R.nightLoH.toFixed(1) + ' hanggang ' + R.nightHiH.toFixed(1) + ' oras, mula nang magsimula ang hamog kinagabihan hanggang sa matuyo ito kinabukasan. Ang ' + R.afterSunriseLoH + ' hanggang ' + R.afterSunriseHiH + ' oras pagkatapos sumikat ang araw sa itaas ay ang dulo nito, hindi hiwalay na bagay. Sinukat sa ' + R.nights + ' gabing malakas ang hamog sa iisang lugar, hindi kinalkula para sa bukid ninyo.' }), 'minor']);
           }
+          /* PAGASA's forecast minimum against this evening's dew point, by Rao et al.'s onset criterion. */
+          if (inp.zmin != null) {
+            const wf = A.wetForecastCheck(inp.zmin, inp.T, inp.RH);
+            ls.push([bi({ en: 'PAGASA forecast minimum tonight', fil: 'Forecast ng PAGASA na pinakamababa ngayong gabi' }), bi(wf.reachesDewPoint
+              ? { en: fmt(inp.zmin, 1) + ' °C: at or below this evening\'s dew point of ' + fmt(wf.dewPoint, 1) + ' °C, so the air itself would saturate and the leaves wet by the coldest hour.', fil: fmt(inp.zmin, 1) + ' °C: abot o mas mababa sa dew point ngayong gabi na ' + fmt(wf.dewPoint, 1) + ' °C, kaya mismong hangin ang magiging saturated at mababasâ ang dahon pagdating ng pinakamalamig na oras.' }
+              : wf.code === 'wet_by_minimum'
+              ? { en: fmt(inp.zmin, 1) + ' °C: only ' + fmt(wf.depressionAtMin, 1) + ' °C above this evening\'s dew point of ' + fmt(wf.dewPoint, 1) + ' °C, inside the ' + A.RAO_DPD.onsetC + ' °C at which Rao et al. (1998) start leaf wetness. Expect the leaves wet by the coldest hour.', fil: fmt(inp.zmin, 1) + ' °C: ' + fmt(wf.depressionAtMin, 1) + ' °C lang ang taas sa dew point ngayong gabi na ' + fmt(wf.dewPoint, 1) + ' °C, pasok sa ' + A.RAO_DPD.onsetC + ' °C na simula ng pagkabasâ ng dahon ayon kay Rao et al. (1998). Asahang basâ ang dahon pagdating ng pinakamalamig na oras.' }
+              : { en: fmt(inp.zmin, 1) + ' °C: ' + fmt(wf.depressionAtMin, 1) + ' °C above this evening\'s dew point of ' + fmt(wf.dewPoint, 1) + ' °C, more than the ' + A.RAO_DPD.onsetC + ' °C at which Rao et al. (1998) start leaf wetness. By that criterion the air alone would not wet the leaves, though a leaf under a clear sky can still cool below the air.', fil: fmt(inp.zmin, 1) + ' °C: ' + fmt(wf.depressionAtMin, 1) + ' °C ang taas sa dew point ngayong gabi na ' + fmt(wf.dewPoint, 1) + ' °C, higit sa ' + A.RAO_DPD.onsetC + ' °C na simula ng pagkabasâ ng dahon ayon kay Rao et al. (1998). Ayon doon, hindi mababasâ ng hangin lamang ang dahon, bagaman maaari pa ring lumamig ang dahon sa maaliwalas na gabi nang mas mababa sa hangin.' }), wf.code === 'wet_by_minimum' ? 'alert' : '']);
+          }
           return ls;
         })(),
         why: ['Dew forms when a surface cools to the dew point (FAO-56 definition; FAO frost manual). Clear, calm nights cool most.',
           'A reading taken before the air has begun cooling says nothing about the night, which is why the window opens two hours before sunset. Later is better inside that window: every hour you wait is an hour of cooling that has already happened and no longer has to be guessed at. The FAO frost manual takes its own readings two hours after sunset.', 'The question is about the morning, not the evening, because dew that forms early is close to universal on a clear, calm night and tells you little on its own. What decides infection is how long the leaves stay wet, and that period runs from the moment dew forms until the sun dries it, usually well into the morning. A night that leaves the crop wet at dawn is the one that matters.',
           'How long leaves stay wet after dawn has been measured on rice in this country. Luo and Goudriaan (2000) checked dew onset and drying every 15 minutes over 16 rain-free nights at IRRI Los Baños in the 1994 dry season, on IR72. Dew lasted 1.4 to 3.4 hours after sunrise, and the whole dew period on the top leaves ran 9.0 to 12.8 hours on heavy dew nights. Shielding the crop to cut the dew period short moved the drying time by only 0 to 2 hours, because what dries the leaves is the sun coming up, not when the dew began. So on a night that dews, expect the crop to still be wet for the first hours of the morning. Those figures are lowland paddy in the dry season at one site, and have not been repeated elsewhere in the Philippines.',
           'Wet leaves through the night favour fungal and bacterial disease generally. For rice, IRRI names this pattern for blast: it occurs "in areas with low soil moisture, frequent and prolonged periods of rain shower, and cool temperature in the daytime", and in upland rice "large day-night temperature differences that cause dew formation on leaves and overall cooler temperatures favor the development of the disease" (IRRI Rice Knowledge Bank). That is a description of the weather, not a threshold, so this card reports the dew and does not score blast risk.',
-          'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not calculated for your own field. The RH ≥ 90% method needs humidity recorded right through the night, not one evening reading, and its threshold has to be fitted locally: Sentelhas et al. (2008) fitted 83, 85, 90 and 92% at four sites on turfgrass. No Philippine fit is published.', 'The drying time above is your own sunrise plus a range measured on rice at one lowland site in the 1994 dry season (Luo and Goudriaan 2000). Sunrise is calculated for your location; the rest is measurement from elsewhere, not a prediction for your field, crop or season.', 'The start of the wet period is not given, because no published method gets the moment dew forms from a single evening reading.'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008', 'LUO2000'] }));
+          'What IRRI gives for blast is management rather than a number: plant resistant varieties and ask your local agriculture office which ones are current; sow early, after the onset of the rainy season; split the nitrogen, because excessive fertiliser increases blast intensity; and flood the field as often as possible.'], limits: ['Hours of leaf wetness are not calculated for your own field. The RH ≥ 90% method needs humidity recorded right through the night, not one evening reading, and its threshold has to be fitted locally: Sentelhas et al. (2008) fitted 83, 85, 90 and 92% at four sites on turfgrass. No Philippine fit is published.', 'The drying time above is your own sunrise plus a range measured on rice at one lowland site in the 1994 dry season (Luo and Goudriaan 2000). Sunrise is calculated for your location; the rest is measurement from elsewhere, not a prediction for your field, crop or season.', 'The start of the wet period is not given, because no published method gets the moment dew forms from a single evening reading.'].concat(inp.zmin != null ? ['The forecast minimum is PAGASA\'s and covers a forecast area; a hollow or an open field can run colder. The comparison takes this evening\'s water vapour as held through the night.'] : []), suppress: inp.zmin != null ? [] : ['FORECAST_VAPOUR_HELD'], sources: ['FAO56', 'FAO_FROST', 'SENTELHAS2008', 'LUO2000'].concat(inp.zmin != null ? ['RAO1998', 'PAGASA_FWFA'] : []) }));
     }
     if (lwPanel) show(out, lwPanel);
     if (inp.logger && inp.a1 != null && inp.a2 != null && inp.b1 != null && inp.b2 != null) {
