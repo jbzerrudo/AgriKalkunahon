@@ -1866,9 +1866,9 @@ CARDS.about = function (root) {
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with __ASSERTIONS__ numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
   root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version __VERSION__, build __BUILD__. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
-  /* Named with his permission, given on 22 September 2026. The second sentence keeps the NOT ENDORSED
-     line above true: thanking someone for a suggestion must not read as their agency's endorsement. */
-  root.appendChild(el('p', null, 'Acknowledgements: Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) suggested the forecast inputs and the crop water need on the rain card, added in version 0.8.0. Naming someone here thanks them for a suggestion; it does not mean that they or their agency endorse the app.'));
+  /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
+     his agency, so the thanks needs no disclaimer of its own. */
+  root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
   /* Saved readings. One row per number so the file opens straight into a chart in any spreadsheet:
      a variable-width row per reading would need the farmer to unpick it first. */
   root.appendChild(el('h3', null, bi(T.ui.savedTitle)));
