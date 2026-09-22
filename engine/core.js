@@ -1227,6 +1227,93 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
+
+/* ---------- PAGASA climate type at a point  [PAGASA_IAAS_CTYPE, PAGASA_CLIMATEMAP] ----------
+   The rice card's re-flood depth depends on the season, and two of the four Philippine climate types
+   have no dry season at all. The card used to describe the four types and leave the farmer to work out
+   which one they live in. The IAAS shapefile of the types lets it look the type up from the location
+   instead, on the grid in climatetype.js. The lookup suggests a season; it never sets one over the
+   farmer's own choice, and it names what it cannot settle rather than choosing:
+   - within nearKm of another type, that type is named, and where the two call for different seasons
+     no season is suggested. The lines are drawn for the whole country, and the shapefile and the
+     printed map place them a few kilometres apart in places;
+   - where the printed map of August 2014 shows a different type from the shapefile, that type is
+     named too, and again no season is suggested if the two call for different ones.
+   The seasons are the map legend's. Type I is dry from November to April. Types II and IV have no dry
+   season. Type III has a dry season of one to three months "either during the period from December to
+   February or from March to May", so June to November is its wet season and the months from December
+   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID). */
+const CTDATA = root.AGRI_CTYPE || (typeof require === 'function' ? require('./climatetype.js') : null);
+const CLIMATE_TYPE = {
+  nearKm: 5,                                   // this app's choice, declared as CLIMATE_TYPE_GRID
+  typeIDryMonths: [11, 12, 1, 2, 3, 4],        // legend, Type I: "dry from November to April"
+  typeIIIDryWindow: [12, 1, 2, 3, 4, 5],       // legend, Type III: the dry months fall within December to May
+  noDrySeason: [2, 4],                         // legend, Types II and IV: no dry season
+  sources: ['PAGASA_IAAS_CTYPE', 'PAGASA_CLIMATEMAP']
+};
+let ctRuns = null;
+function ctDecode(s) {
+  const starts = [], vals = [], re = /([A-Z])([0-9a-z]+)/g; let pos = 0, m;
+  while ((m = re.exec(s))) { starts.push(pos); vals.push(m[1].charCodeAt(0) - 65); pos += parseInt(m[2], 36); }
+  return { starts: starts, vals: vals, total: pos };
+}
+/* Decoded once, on first use, into its runs rather than into 1.7 million cells. A run that does not add
+   up to the grid means the data file is damaged, and then the card has no type rather than a wrong one. */
+function ctGrid() {
+  if (ctRuns) return ctRuns;
+  if (!CTDATA) return null;
+  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014);
+  if (type.total !== n || map2014.total !== n) return null;
+  ctRuns = { type: type, map2014: map2014 };
+  return ctRuns;
+}
+function ctAt(R, k) {
+  let lo = 0, hi = R.starts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (R.starts[mid] <= k) lo = mid; else hi = mid - 1; }
+  return R.vals[lo];
+}
+/* Coordinates are rounded to the hundredth of a degree the app works in, which is the grid's own
+   spacing. Outside the box the app uses for the Philippines there is no type. */
+function climateType(lat, lon) {
+  if (!insidePH(lat, lon)) return null;
+  const G = ctGrid(); if (!G) return null;
+  const D = CTDATA, i = Math.round(lat * 100) - D.lat0c, j = Math.round(lon * 100) - D.lon0c;
+  if (i < 0 || j < 0 || i >= D.rows || j >= D.cols) return null;
+  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100, type = ctAt(G.type, i * D.cols + j);
+  const di = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat + 0.01, glon));
+  const dj = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat, glon + 0.01));
+  const nearTypes = [];
+  for (let a = -di; a <= di; a++) for (let b = -dj; b <= dj; b++) {
+    const i2 = i + a, j2 = j + b;
+    if (i2 < 0 || j2 < 0 || i2 >= D.rows || j2 >= D.cols) continue;
+    const t2 = ctAt(G.type, i2 * D.cols + j2);
+    if (t2 === type || nearTypes.indexOf(t2) >= 0) continue;
+    if (haversineKm(glat, glon, (D.lat0c + i2) / 100, (D.lon0c + j2) / 100) <= CLIMATE_TYPE.nearKm) nearTypes.push(t2);
+  }
+  nearTypes.sort();
+  const m14 = ctAt(G.map2014, i * D.cols + j);
+  return { type: type, nearTypes: nearTypes, map2014: m14 > 0 ? m14 : null, gridLat: glat, gridLon: glon,
+           nearKm: CLIMATE_TYPE.nearKm, sources: CLIMATE_TYPE.sources.slice() };
+}
+/* The season a type calls for in a given month: 'dry', 'wet', 'nodry', or null where the legend cannot
+   say. A season is suggested only when every type in play agrees on it. */
+function climateTypeSeason(ct, month) {
+  if (!ct || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
+  const C = CLIMATE_TYPE;
+  const implied = t => C.noDrySeason.indexOf(t) >= 0 ? 'nodry'
+    : t === 1 ? (C.typeIDryMonths.indexOf(month) >= 0 ? 'dry' : 'wet')
+    : t === 3 ? (C.typeIIIDryWindow.indexOf(month) >= 0 ? null : 'wet') : null;
+  const own = implied(ct.type);
+  const nearDiffer = ct.nearTypes.filter(t => implied(t) !== own);
+  const mapDiffers = ct.map2014 != null && implied(ct.map2014) !== own;
+  let code;
+  if (own == null) code = 'type_iii_months_not_given';
+  else if (mapDiffers) code = 'versions_differ';
+  else if (nearDiffer.length) code = 'near_other_type';
+  else code = ct.type === 1 ? (own === 'dry' ? 'type_i_dry_months' : 'type_i_wet_months') : ct.type === 3 ? 'type_iii_wet_months' : 'no_dry_season';
+  return { season: own != null && !mapDiffers && !nearDiffer.length ? own : null, code: code, ownSeason: own,
+           nearDiffer: nearDiffer, mapDiffers: mapDiffers, month: month, sources: C.sources.slice() };
+}
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
   if (FROST.seasonCore.indexOf(month) >= 0) return 'core';
@@ -1575,7 +1662,8 @@ const REFS = {
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   PAGASA_FWFA: { cls: 'extension', cite: 'DOST-PAGASA daily Farm Weather Forecast and Advisories, among the agri-weather products: lowland and upland temperature and humidity, winds, leaf wetness in hours, soil moisture and farming advisories.', url: 'https://bagong.pagasa.dost.gov.ph/agri-weather' },
-  PAGASA_CLIMATEMAP: { cls: 'extension', cite: 'DOST-PAGASA, CADS/IAAS CAD (2014). Climate Map of the Philippines (1951-2010), August 2014. Modified Coronas Climate Classification: "The modal of the yearly type of rainfall distribution during the 1951-2010 period in 45 synoptic and 66 climat stations were considered." Type I: two pronounced seasons, dry from November to April and wet during the rest of the year, maximum rain period from June to September. Type II: no dry season with a very pronounced maximum rain period from December to February; there is not a single dry month. Type III: no very pronounced maximum rain period, with a dry season lasting only from one to three months. Type IV: rainfall more or less evenly distributed throughout the year, no dry season.', url: 'https://www.pagasa.dost.gov.ph/information/climate-philippines' },
+  PAGASA_CLIMATEMAP: { cls: 'extension', cite: 'DOST-PAGASA, CADS/IAAS CAD (2014). Climate Map of the Philippines (1951-2010), August 2014. Modified Coronas Climate Classification: "The modal of the yearly type of rainfall distribution during the 1951-2010 period in 45 synoptic and 66 climat stations were considered." Type I: two pronounced seasons, dry from November to April and wet during the rest of the year, maximum rain period from June to September. Type II: no dry season with a very pronounced maximum rain period from December to February; there is not a single dry month. Type III: no very pronounced maximum rain period, with a dry season lasting only from one to three months, "either during the period from December to February or from March to May". Type IV: rainfall more or less evenly distributed throughout the year, no dry season.', url: 'https://www.pagasa.dost.gov.ph/information/climate-philippines' },
+  PAGASA_IAAS_CTYPE: { cls: 'extension', cite: 'DOST-PAGASA, IAAS CAD (2014). Climate Type of the Philippines, GIS shapefile PHL_climatetype: four polygons, Types I to IV of the Modified Coronas classification used on the Climate Map of the Philippines (1951-2010); file metadata dated 7 February 2014. Obtained from IAAS in September 2026. The rice card reads it from a grid of hundredths of a degree made by this app (engine/climatetype.js).' },
   PACIFICPESTS_BLAST: { cls: 'extension', cite: 'Jackson, G. (2017). Rice blast (252). Pacific Pests and Pathogens fact sheet, produced under ACIAR project PC/2010/090 with the University of Queensland and the Secretariat of the Pacific Community: "the leaves need to be wet for 6-8 hours for spore germination. High humidity, close to 100%, is needed for infection", with 24-28 C favourable.', url: 'https://apps.lucidcentral.org/ppp/text/web_full/entities/rice_blast_252.htm' },
   LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -1612,7 +1700,10 @@ const UNVERIFIED = [
   { id: 'PNS_ETO_METHOD', cards: ['rain'], text: 'This card follows the standard PAGASA\'s Climate Impact Assessment follows, but it will not reproduce PAGASA\'s figures. PAGASA computes potential evapotranspiration by Thornthwaite (1948) from satellite land surface temperature; this app computes reference evapotranspiration by FAO-56 Penman-Monteith from the temperatures you enter, with FAO-56\'s documented fallbacks for missing humidity, sunshine and wind. Penman-Monteith is one of the four methods PNS/BAFS/PAES 217:2017 Annex B allows. For corn, PAGASA uses crop coefficients from Gonzales et al. (2019), which this app could not obtain; the card uses the standard\'s own Table 4 corn row instead.' },
   { id: 'FORECAST_VAPOUR_HELD', cards: ['frost', 'disease'], text: 'Where a forecast minimum temperature is compared with this evening\'s dew point or frost point, the air is assumed to keep the water vapour it holds this evening until it saturates. A change of air mass overnight, such as a surge of the northeast monsoon, breaks that assumption, and the comparison then says nothing about the morning.' },
   { id: 'WATER_FORECAST_NO_WAIT', cards: ['water'], text: 'FAO-56 gives no rule for putting off irrigation because rain is forecast. Where the field is already at the irrigation point and the forecast brings rain, this card shows both and does not tell you to wait: a forecast can miss, and the crop is already drawing on water it cannot spare. The crop coefficient is held at today\'s value across the forecast days.' },
-  { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' }
+  { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' },
+  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land. So across a narrow channel the change of type falls midway over the water, and the parts of Sabah and of Indonesian islands inside the box the app uses for the Philippines get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km is this app\'s choice, not a published figure.' },
+  { id: 'CLIMATE_TYPE_VERSIONS', cards: ['rice'], text: 'The IAAS shapefile and the printed Climate Map of the Philippines (August 2014) do not agree everywhere. This app compared them by fitting a scan of the printed map to the shapefile and reading its colours: away from the lines between types and from the map\'s lettering and boundary lines, they agree on 97.5 per cent of the land. Over wider areas they differ in two ways. The printed map shows Type IV where the shapefile shows Type III in parts of Maguindanao, Sultan Kudarat, South Cotabato and Cotabato, of Zamboanga del Norte and Zamboanga Sibugay, and of Bukidnon. It shows Type II where the shapefile shows Type IV along the Agusan side of the boundary with Surigao del Sur and in part of Southern Leyte. The card follows the shapefile, names the printed map\'s type inside those areas, and there suggests no season where the two call for different ones. The outlines of those areas come from this app\'s comparison, not from PAGASA, and which version is current has not yet been confirmed with IAAS.' },
+  { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' }
 ];
 
 const API = {
@@ -1641,7 +1732,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, CLIMATE_TYPE, climateType, climateTypeSeason, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs

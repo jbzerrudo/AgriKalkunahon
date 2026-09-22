@@ -275,6 +275,61 @@ eq('Singapore is outside', A.insidePH(1.35, 103.82), false);
 eq('Taipei is outside', A.insidePH(25.03, 121.57), false);
 eq('and the envelope names its source', A.PH_ENVELOPE.source, 'PH_BOUNDS');
 eq('which is in the reference list', A.REFS.PH_BOUNDS != null, true);
+
+console.log('\n== PAGASA CLIMATE TYPE: IAAS SHAPEFILE (2014) ON A GRID OF HUNDREDTHS ==');
+/* Expected types are the shapefile's own polygons at these coordinates, read with shapely at build
+   time; the grid has to give them back. Across 200,000 random points it gave back the polygon's type
+   for every land point more than about 1.3 km from another type, and for every land point it either
+   gave the true type or named it as within 5 km. */
+{ const R = ['', 'I', 'II', 'III', 'IV'];
+  [['Manila', 14.60, 121.00, 1], ['Munoz, Nueva Ecija', 15.72, 120.90, 1], ['Baguio', 16.41, 120.60, 1], ['Laoag', 18.20, 120.59, 1],
+   ['Iloilo City', 10.72, 122.56, 1], ['San Jose, Occidental Mindoro', 12.35, 121.07, 1],
+   ['Legazpi', 13.14, 123.74, 2], ['Catarman', 12.50, 124.64, 2], ['Borongan', 11.61, 125.43, 2], ['Surigao City', 9.78, 125.49, 2], ['Basco', 20.45, 121.97, 2],
+   ['Tuguegarao', 17.61, 121.73, 3], ['Cebu City', 10.31, 123.89, 3], ['Puerto Princesa', 9.74, 118.74, 3], ['Zamboanga City', 6.91, 122.08, 3], ['Koronadal', 6.50, 124.85, 3],
+   ['Tacloban', 11.24, 125.00, 4], ['Davao City', 7.07, 125.61, 4], ['Cagayan de Oro', 8.48, 124.65, 4], ['Butuan', 8.95, 125.54, 4], ['Jolo', 6.05, 121.00, 4], ['Tagbilaran', 9.65, 123.85, 4]]
+  .forEach(function (x) { const c = A.climateType(x[1], x[2]); eq(x[0] + ' (' + x[1].toFixed(2) + ', ' + x[2].toFixed(2) + ') is Type ' + R[x[3]], c && c.type, x[3]); });
+  eq('Singapore has no type', A.climateType(1.35, 103.82), null);
+  eq('nor Taipei', A.climateType(25.03, 121.57), null);
+  eq('nor a place with no coordinates', A.climateType(null, 121), null);
+  eq('Dumaguete (9.31, 123.31) sits just off the shapefile\'s coast and takes the nearest land\'s type', A.climateType(9.31, 123.31).type, 3);
+  [[4.2138, 116.6863], [4.2138, 126.8063], [21.4009, 116.6863], [21.4009, 126.8063]].forEach(function (p) {
+    eq('the corner ' + p[0] + ', ' + p[1] + ' of the box still has a type', [1, 2, 3, 4].indexOf(A.climateType(p[0], p[1]).type) >= 0, true); });
+  eq('coordinates are rounded to the hundredth the grid is laid on', A.climateType(14.6049, 120.9951).gridLat + ',' + A.climateType(14.6049, 120.9951).gridLon, '14.6,121');
+  eq('Los Banos is Type I and names Type III within 5 km', A.climateType(14.17, 121.24).nearTypes.join(','), '3');
+  eq('Legazpi is Type II and names Type IV within 5 km', A.climateType(13.14, 123.74).nearTypes.join(','), '4');
+  eq('Manila names no other type', A.climateType(14.60, 121.00).nearTypes.length, 0);
+  eq('the nearby distance is 5 km', A.CLIMATE_TYPE.nearKm, 5);
+  const mag = A.climateType(6.87, 124.17), agu = A.climateType(8.65, 125.80);
+  eq('western Maguindanao (6.87, 124.17): the shapefile says III', mag.type, 3);
+  eq('and the printed map of August 2014 says IV', mag.map2014, 4);
+  eq('Agusan (8.65, 125.80): the shapefile says IV', agu.type, 4);
+  eq('and the printed map says II', agu.map2014, 2);
+  eq('where the two agree nothing is named', A.climateType(14.60, 121.00).map2014, null);
+  eq('the type cites the shapefile and the map', A.climateType(14.60, 121.00).sources.join(','), 'PAGASA_IAAS_CTYPE,PAGASA_CLIMATEMAP');
+  /* The seasons are the legend's: Type I dry November to April; II and IV no dry season; III wet from
+     June to November, its one to three dry months falling somewhere in December to May. */
+  const S = function (lat, lon, m) { return A.climateTypeSeason(A.climateType(lat, lon), m); };
+  eq('Type I in January: dry season', S(14.60, 121.00, 1).season, 'dry');
+  eq('Type I in April: dry season', S(14.60, 121.00, 4).season, 'dry');
+  eq('Type I in May: wet season', S(14.60, 121.00, 5).season, 'wet');
+  eq('Type I in October: wet season', S(14.60, 121.00, 10).season, 'wet');
+  eq('Type I in November: dry season', S(14.60, 121.00, 11).season, 'dry');
+  eq('Type II: no dry season, in any month', [1, 7].map(function (m) { return S(12.50, 124.64, m).season; }).join(','), 'nodry,nodry');
+  eq('Type IV: no dry season', S(7.07, 125.61, 3).season, 'nodry');
+  eq('Type III in July: wet season', S(10.31, 123.89, 7).season, 'wet');
+  eq('Type III in March: the legend cannot say', S(10.31, 123.89, 3).season, null);
+  eq('and says why', S(10.31, 123.89, 3).code, 'type_iii_months_not_given');
+  eq('Type II beside Type IV still has no dry season either way', S(13.14, 123.74, 1).season, 'nodry');
+  eq('Type I beside Type III in July: both wet', S(14.17, 121.24, 7).season, 'wet');
+  eq('in November they part, so no season is suggested', S(14.17, 121.24, 11).season, null);
+  eq('and the reason is the nearby type', S(14.17, 121.24, 11).code, 'near_other_type');
+  eq('where the shapefile says III and the printed map IV, July is not settled', S(6.87, 124.17, 7).season, null);
+  eq('because the two versions differ', S(6.87, 124.17, 7).code, 'versions_differ');
+  eq('IV on the shapefile and II on the printed map: no dry season either way', S(8.65, 125.80, 7).season, 'nodry');
+  eq('a month that is not a month gives nothing', A.climateTypeSeason(A.climateType(14.60, 121.00), 13), null);
+  eq('nor does a place with no type', A.climateTypeSeason(null, 1), null);
+  eq('the shapefile is in the reference list', A.REFS.PAGASA_IAAS_CTYPE != null, true);
+  eq('and the legend is quoted for Type III\'s dry months', A.REFS.PAGASA_CLIMATEMAP.cite.indexOf('either during the period from December to February or from March to May') > 0, true); }
 /* R3(a) requires the declaration to travel with the number, so every declared assumption must name at
    least one card, and the interface renders the registry's own text into that card's assumptions block.
    Three of them once existed only on the global sources page, a route change away from the answer they
@@ -587,9 +642,9 @@ ok('daylight Bangkok 15 April (Ex17)', A.daylight(13.73, 105), 12.31, 0.01, 'h')
 console.log('\n== REFERENCES ==');
 { const used = new Set();
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
-  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP']
+  ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP', 'PAGASA_IAAS_CTYPE']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the twenty-two items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION,PNS_HARVEST_BAND,PNS_ADB_ONE_PERIOD,PNS_LAND_PREP,PNS_RMC_RANGE,PNS_ETO_METHOD,FORECAST_VAPOUR_HELD,WATER_FORECAST_NO_WAIT,RICE_FORECAST_RAIN_BELOW_SURFACE'); }
+  eq('UNVERIFIED list names the twenty-five items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION,PNS_HARVEST_BAND,PNS_ADB_ONE_PERIOD,PNS_LAND_PREP,PNS_RMC_RANGE,PNS_ETO_METHOD,FORECAST_VAPOUR_HELD,WATER_FORECAST_NO_WAIT,RICE_FORECAST_RAIN_BELOW_SURFACE,CLIMATE_TYPE_GRID,CLIMATE_TYPE_VERSIONS,CLIMATE_TYPE_SEASON_MONTHS'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');

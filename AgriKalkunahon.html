@@ -149,6 +149,151 @@ a{color:var(--green-dark)}
 <main id="main"></main>
 <script>
 /* =====================================================================
+   AgriKalkunahon: PAGASA climate types on a grid of hundredths of a degree
+   [PAGASA_IAAS_CTYPE, PAGASA_CLIMATEMAP]
+
+   Source: DOST-PAGASA, IAAS CAD (2014). Climate Type of the Philippines, shapefile
+   PHL_climatetype, Types I to IV of the Modified Coronas classification as on the Climate Map of
+   the Philippines (1951-2010), August 2014. Obtained from IAAS in September 2026. The climate
+   types are DOST-PAGASA's; this file only re-encodes them.
+
+   How the grid was made. The four polygons cross themselves in places and were repaired with a
+   zero-width buffer. Every point at a whole hundredth of a degree, from 4.20 to 21.41 N and from
+   116.68 to 126.82 E, took the type of the polygon it falls in. An islet holding no such point gave
+   its type to the grid point nearest a point inside it, unless that grid point already had a type.
+   Every other point, at sea or on land the shapefile leaves out, took the type of the nearest point
+   on land. No coastline is kept: the grid records only where one type gives way to another. Rows
+   run south to north, each row west to east.
+
+   map2014 is 0 wherever the printed map (August 2014) agrees with the shapefile, and elsewhere the
+   type the printed map shows. It comes from this app's comparison of a scan of the printed map,
+   fitted to the shapefile, not from PAGASA, and is declared as CLIMATE_TYPE_VERSIONS.
+
+   Encoding: runs of one value, each a capital letter (A = 0, B = 1 ... E = 4) followed by the length
+   of the run in base 36.
+   ===================================================================== */
+(function (root) {
+'use strict';
+const CTYPE = {
+  lat0c: 420, lon0c: 11668, rows: 1722, cols: 1015,   // first point 4.20 N, 116.68 E; in hundredths of a degree
+  type:
+    'E3vemD1Es6D2Es5D3Es4D3Es4D4Es3D5Es2D6Es1D7Es0D8ErzD9EmaD9E5fDaEm7DfE5bDbEm2DmE58DbElyDsE56DcElvDvE55DdElsDyE54DeElnD13E53DfEljD17E52DgElhD1aE50DhEleD1dE4zDiElbD1gE4yDjEl8D1jE4xDkEl5D1mE4wDkEl1D1rE4vDl' +
+    'EkyD1uE4uDmEkwD1vE4uDnEkuD1xE4tDoEkqD20E4tDpEkmD23E4tDqEkjD25E4tDrEkhD27E4sDsEkgD28E4rDtEkeD29E4rDtEkdD2aE4rDuEkbD2cE4qDvEk9D2dE4qDwEk7D2fE4pDwEk7D2fE4pDxEk5D2gE4pDyEk3D2hE4pDyEk2D2hE4qDzEk0D2iE4qD10E' +
+    'jzD2hE4rD11EjxD2iE4rD11EjwD2jE4rD12EjuD2kE4rD13EjsD2lE4rD13EjqD2mE4sD14EjnD2oE4sD15EjbD2yE4tD15EgyD4E27D30E4tD16EgxD9E1zD33E4tD17EgwD5bE4tD18EgvD5bE4tD18EgvD5bE4tD19EguD5bE4tD1aEgtD5bE4tD1aEgtD5bE4tD1' +
+    'bEgsD5bE4tD1cEgqD5cE4tD1dEgoD5dE4tD1dEgnD5eE4tD1eEgkD5gE4tD1fEgiD5hE4tD1fEghD5iE4tD1gEgfD5jE4tD1hEgcD5lE4tD1iEgaD5mE4tD1iEg9D5nE4tD1jEg7D5oE4tD1kEg4D5qE4tD1kEg3DlE1D55E4tD1lEg1DmE2D54E4tD1mEfzDnE3D53E' +
+    '4tD1nEfxDoE5D52E4sD1oEfuDqE6D51E4sD1pEfsDqE8D51E4rD1pEfrDrE9D50E4rD1qEfpDsEaD4zE4rD1rEfmDuEbD4yE4rD1sEfkDvEcD4xE4rD1tEfiDwEdD4wE4rD1uEfgDwEfD4vE4rD1vEdbD5EaD2E1lDyEgD4vE4qD1vEczDiE7D5E1jDzEhD4vE4pD1wE' +
+    'c1D1EuDmE2DaE1gD10EiD4uE4pD1xEbxD6EqD12E1dD11EjD4uE4oD1yEbuDaEmD15E1aD13EkD4tE4oD1zEbrDeE6D1E2D1iE17D13EmD4tE4nD20EboDhE2D1pE15D14EnD4tE4mD20EbmD2cE12D15EoD4sE4mD21EbjD2hExD17EpD4sE4lD22EbgD2rEoD18EqD' +
+    '4rE4lD23EbeD2xEiD19EsD4qE4kD24EbbD34EcD1aEtD4pE4kD25Eb9D3aE6D1aEvD4oE4kD26Eb7D4rEvD4oE4kD26Eb5D4tEwD4oE4jD27Eb3D4uExD4oE4iD28Eb1D4vEyD4nE4iD29EazD4wEzD4mE4iD2aEawD4yE10D4lE4iD2bEauD4zE11D4kE4iD2bEatD5' +
+    '0E11D4kE4iD2cEarD51E12D4jE4iD2dEaoD53E13D4iE4iD2eEamD54E14D4hE4iD2eEalD55E15D4gE4iD2fEajD56E16D4fE4iD2gEahD57E17D4eE4iD2hEaeD59E17D4eE4iD2hEaeD59E18D4dE4iD2iEacD5aE19D4cE4iD2jEaaD5bE1aD4bE4iD2jEa9D5cE' +
+    '1bD4aE4iD2kEa7D5dE1bD4aE4iD2lEa5D5eE1cD48E4jD2mEa3D5eE1eD47E4jD2mEa3D5eE1eD46E4kD2nEa1D5fE1fD45E4kD2nEa0D5gE1gD44E4kD2oE9yD5hE1gD44E4kD2pE9wD5hE1iD42E4lD2pE9vD5iE1iD42E4lD2qE9tD5jE1iD42E4lD2qE9tD5jE1i' +
+    'D41E4mD2rE9rD5jE1jD40E4nD2rE9qD5kE1kD3zE4nD2sE9oD5kE1lD3zE4nD2tE9mD5lE1lD3zE4nD2tE9lD5lE1mD3zE4nD2uE9jD5mE1mD3zE4nD2uE9jD5lE1nD3yE4oD2vE9hD5mE1nD3yE4oD2wE9fD5mE1pD3xE4oD2wE9eD5nE1pD3xE4oD2xE9cD5nE1qD3' +
+    'xE4oD2xE9bD5oE1qD3xE4oD2yE99D5oE1rD3xE4oD2yE99D5oE1rD3xE4oD2zE97D5oE1sD3xE4oD30E95D5pE1sD3xE4oD30E94D5pE1tD3xE4oD31E92D5nE1wD3xE4oD31E91D5jE22D3wE4oD32E90D5hE24D3wE4oD32E8zD5iE23D3xE4oD33E8xD5jE22D3yE' +
+    '4oD34E8vD5kE21D3zE4oD34E8uD5gE1D4E20D41E4nD35E8sD5fE5D1E20D42E4nD35E8rD5gE25D43E4nD36E8qD5gE25D43E4nD37E8oD5hE24D44E4nD37E8nD5jE22D45E4nD38E8lD5lE20D46E4nD38E8kD5mE20D46E4nD39E8iD5nE20D46E4nD39E8hD5oE' +
+    '1zD47E4nD3aE8gD5pE1yD47E4nD3bE8eD5qE1yD47E4nD3bE8dD5rE1yD47E4nD3cE8bD5sE1xD48E4nD3cE8aD5uE1wD48E4nD3dE88D5vE1wD48E4nD3dE87D5wE1vD49E4nD3eE86D5wE1vD49E4nD3fE84D5yE1uD49E4nD3fE83D5zE1uD49E4nD3gE81D61E1s' +
+    'D4aE4nD3gE80D62E1sD49E4oD3hE7yD64E1rD49E4oD3hE7xD65E1rD48E4pD3iE7wD66E1qD48E4pD3jE7uD67E1pD49E4pD3jE7tD68E1qD48E4pD3kE7rD69E1qD47E4qD3kE7qD6aE1qD47E4qD3lE7oD6bE1rD46E4qD3mE7mD6dE1qD45E4rD3mE7mD6dE1qD4' +
+    '4E4sD3nE7kD6eE1qD44E4sD3nE7jD6fE1qD44E4sD3oE7hD6gE1qD43E4tD3pE7fD6hE1qD43E4tD3qE7dD6iE1qD43E4tD3rE7bD6jE1qD43E4tD3sE7aD6jE1qD42E4uD3tE78D6kE1qD41E4vD3uE76D6lE1qD41E4vD3vE6gD7EhD6mE1qD40E4wD3wE5qD10EcD' +
+    '6nE1qD40E4wD3xE59D1lE6D6oE1pD40E4xD3yE54D1tE2D6oE1pD40E4xD3zE52D8lE1oD40E4xD40E50D8mE1oD40E4xD41E4yD8nE1oD3zE4yD42E4wD8pE1nD3yE4zD43E4uD8qE1nD3yE4zD44E4sD8rE1nD3xE50D46E4pD8sE1nD3xE50D48E4mD8uE1mD3xE5' +
+    '0D4bE4iD8vE1mD3wE51D4dE4fD8wE1nD3tE53D4fE4cD8yE1mD3sE54D4iE48D8zE1mD3qE4xC9D4kE45D91E1lD3pE4mClD4nE41D93E1kD3oE4cCwD4pE3yD94E1kD3nE4aCzD4sE3uD96E1jD3nE43C16D4uE3rD98E1iD3mE41C19D4xE3nD99E1iD3lE40C1bD5' +
+    '1E3iD9bE1hD3kE3zC1dD56E3cD9cE1hD3jE3yC1fD5aE37D9dE1hD3jE3vC1iD5eE32D9fE1gD3hE3vC1kD5iE2xD9gE1gD3gE3vC1lD5nE2rD9hE1hD3eE3vC1mD5rE2mD9iE1hD3dE3vC1nD5vE2iD9iE1hD3dE3uC1oD60E2cD9jE1hD3cE3uC1pD64E27D9kE1hD' +
+    '3bE3uC1qD68E22D9lE1hD3aE3uC1rD6qE1cD9tE1iD39E3sC1tDhvE1iD38E3sC1uDhvE1iD38E3rC1vDhvE1iD37E3rC1wDhvE1iD37E3qC1xDhvE1iD35E3rC1yDhvE1iD33E3sC1zDhvE1hD33E3sC20DhvE1hD33E3rC21DhuE1iD32E3rC22DhuE1iD31E3rC23' +
+    'DhuE1iD30E3qC25DhuE1iD2zE3qC26DhuE1iD2yE3rC26DhuE1hD2xE3sC27DhuE1hD2wE3sC28DhtE1hD2wE3sC29DhtE1hD2vE3tC29DhtE1gD2vE3tC2aDhtE1fD2vE3tC2bDhtE1fD2uE3tC2cDhtE1eD2uE3uC2cDhtE1eD2tE3uC2dDhsE1fD2tE3tC2eDhsE1' +
+    'eD2uE3tC2eDhsE1eD2tE3tC2fDhsE1dD2uE3tC2fDhsE1dD2uE3sC2gDhrE1eD2uE3sC2gDhrE1dD2vE3sC2gDhrE1dD2vE3rC2hDhrE1cD2wE3rC2hDhrE1cD2wE3rC2hDhrE1cD2xE3pC2iDhrE1cD2xE3pC2iDhrE1cD2xE3oC2jDhrE1cD2xE3oC2jDhrE1cD2yE' +
+    '3nC2jDhrE1cD2yE3mC2kD1kB4Dg3E1cD2yE3mC2kD1hBaDfzE1dD2yE3lC2lD1eBgDfwE1dD2zE3kC2lD19BoDftE1dD2zE3kC2lD16BtDfqE1eD2zE3kC2lD13ByDfoE1eD30E3jC2lD10B13DfmE1eD2zE3jC2mDyB16DflE1dD2zE3kC2mDwB19DfjE1fD2yE3kC2' +
+    'mDtB1eDfhE1fD2xE3lC2mDrB1hDfgE1fD2xE3lC2mDpB1kDffE1gD2wE3kC2nDmB1oDfdE1hD2wE3kC2nDkB1sDfbE1iD2uE3lC2nDhB1wDfaE1iD2uE3lC2nDfB1zDf9E1jD2tE3lC2nDdB23Df6E1kD2tE3lC2nDaB27Df5E1kD2sE3lC2oD8B2aDf4E1kD2sE3lC2' +
+    'oD6B2dDf8E1gD2rE3lC2oD3B2iDfcE1aD2qE3mC2oD1B2lDfdE18D2qE3lC2pB2nDfdE18D2oE3mC2pB2pDfcE17D2oE3mC2pB2qDfdE15D2nE3mC2qB2sDfcE14D2nE3mC2qB2tDfdE13D2lE3mC2rB2uDfdE12D2lE3mC2rB2wDfcE11D2kE3mC2sB2xDfeEzD2iE3' +
+    'nC2sB2yDfgEuD2jE3oC2sB30DfiElD2nE3oC2tB31DfkEeD2pE3qC2tB32DfmE8D2qE3rC2uB34DfnE2D2qE3uC2uB35DibE3wC2vB36Di8E3yC2vB37Di4E40C2wB38Di0E43C2wB39DhxE44C2xB3aDhtE46C2yB3bDhpE49C2yB3cDhlE4bC2zB3dDhhE4dC30B3e' +
+    'DhgE4cC31B3fDhfE4cC31B3gDheE4bC32B3hDhdE4aC33B3iDhcE4aC33B3jDhbE49C34B3kDhaE48C35B3kDh9E49C35B3lDh7E49C36B3mDh4E4bC36B3nDh1E4cC37B3oDgzE4dC37B3pDgwE4eC38B3qDguE4fC38B3rDgrE4gC39B3sDgoE4iC39B3tDgmE4iC3' +
+    'aB3uDgjE4kC3aB3vDggE4lC3bB3wDgeE4mC3bB3xDgbE4nC3cB3yDg9E4oC3cB3zDg6E4pC3dB40Dg4E4qC3dB41Dg2E4qC3eB42DfzE4sC3eB43DfxE4sC3fB44DfvE4tC3fB45DftE4tC3gB46DfrE4uC3gB47DfoE4vC3hB48DfmE4wC3hB49DflE4vC3iB4aDfjE' +
+    '4wC3iB4bDfhE4wC15E2C2cB4cDffE4xC3jB4dDf8E3yC3E11C3kB4eDf2E41C8EyC3kB4fDeyE42CdEuC3lB4gDeuE43CjEqC3lB4hDepE46CnElC3nB4iDemE47CrEgC3pB4jDelE46CvEbC3rB4kDekE46CyE6C3tB4lDejE45C4yB4mDeiE45C4yB4nDehE44C4zB' +
+    '4oDehE42C50B4pDegE42C50B4qDefE41C51B4rDeeE3zC53B4sDedE3xC55B4tDedE3uC57B4uDecE3sC59B4vDecE3pC5bB4xDeaE3oC5cB4yDe9E3oC5cB4zDe9E3nC5cB50De9E3lC5dB51De9E3kC5dB51DeaE3jC5dB52De9E3iC5eB53De8E3iC5eB54De8E3h' +
+    'C5eB54De8E3gC5fB55De8E3fC5fB56De7E3fC5fB56De8E3dC5gB57De7E3dC5gB58De6E3dC5gB59De5E3dC5gB59De6E3bC5hB5aDe5E3bC5hB5bDe4E3bC5hB5bDe4E3aC5iB5cDe4E39C5iB5dDe3E39C5iB5eDe2E39C5iB5eDe3E37C5jB5fDe2E37C5jB5gDe' +
+    '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' +
+    'oBcoDvCeoBcoDvCeoBcpDuCeoBcpDuCeoBcpDuCeoBcpDuCeoBcqDtCeoBcqDtCeoBcqDtCeoBcrDsCeoBcrDsCeoBcrDsCeoBcsDrCeoBcsDrCeoBcsDrCeoBcsDrCeoBcsDrCeoBcrDsCeoBcrDsCeoBcrDsCeoBcrDsCeoBcrDsCeoBcrDsCeoBcrDsCeoBcrDsCe' +
+    'oBcrDsCeoBcqDtCeoBcqDsCepBcqDsCepBcqDsCepBcqDsCepBcqDsCepBcqDsCepBcqDsCepBcpDtCepBcpDtCepBcpDtCepBcpDsCeqBcpDsCeqBcpDsCeqBcpDsCeqBcoDtCeqBcoDtCeqBcoDtCeqBcoDtCeqBcoDsCerBcoDsCerBcoDsCerBcnDtCerBcnDtCe' +
+    'rBcnDsCesBcnDsCesBcnDsCesBcnDsCesBcnDsCesBcmDsCetBcmDsCetBcmDsCetBcmDsCetBcmDrCeuBclDsCeuBclDsCeuBclDsCeuBclDrCevBckDsCevBckDsCevBckDsCevBckDsCevBcjDsCewBcjDsCewBcjDsCewBcjDsCewBcjDrCexBciDsCexBciDsCf' +
+    '1BceDsCf4BcbDrCf9Bc6DsCfcBc3DsCfgBbzDrCfkBbwDrCfnBbsDrCfsBboDrCfvBblDqCg0BbhDqCg3BbdDqCg8Bb9DqCgbBb6DpCggBb2DpCgjBazDoCgnBavDpCgrBarDoCgvBaoDoCgzBakDnCh3BagDoCh7BacDnChbBa9DnChfBa5DnChiBa2DmChmB9yDnCh' +
+    'qB9uDnChtB9rDmChyB9nDmCi1B9kDmCi5B9gDmCi8B9dDlCidB98DmCigB95DmCijB92DlCioB8yDlCirB8vDlCivB8rDlCiyB8oDkCj3B8kDkCj6B8hDkCj9B8eDkCjdB8aDkCjgB87DkCjkB83DkCjnB80DkCjrB7wDkCjuB7tDkCjyB7oDlCk1B7lDlCk4B7iDlCk' +
+    '8B7eDlCkbB7bDlCkfB77DlCfcB2C54B75DkCfcB7C53B71DkCfcBbC52B6yDkCfcBgC51B6uDkCfcBlC4zB6rDkCfcBqC4xB6oDkCfcBuC4xB6kDkCfcBzC4vB6hDkCfcB14C4uB6dDkCfcB18C4tB6aDkCfcB1dC4sB66DkCfcB1iC4qB63DkCfcB1nC4pB5zDkCfcB' +
+    '1rC4pB5vDkCfcB1wC4oB5rDkCfcB21C4nB5nDkCfcB26C4mB5jDkCfcB2aC4mB5fDkCfcB2fC4kB5cDkCfcB2kC4jB58DkCfcB2pC4iB54DkCfcB2tC4iB50DkCfcB2yC4hB4wDkCfcB33C4gB4sDkCfcB37C5nB3hDlCfbB3cC5lB3eDlCfbB3hC5lB39DlCfbB3mC5' +
+    'gB39DlCfbB3qC5cB1C2B36DlCfbB3vC5aB36DlCfbB40C53B38DlCfbB45C4wB3aDmCfaB49C4oB3eDmCfaB4eC4eB3jDmCfaB4jC44B3oDnCf9B4oC3vB3sDnCf9B4sC3sB3rDoCf8B4xC3oB3qDoCf8B52C3lB3oDoCf8B56C3iB3nDpCf7B5bC3eB3mDpCf7B5gC3' +
+    'bB3kDpCf7B5lC37B3jDqCf6B5pC34B1C5B3cDqCf6B5uC2zB3C5B39DsCf5B5zC2uB4C5B38DsCf5B64C2pB6C2B39DsCf5B68C2mB3fDuCf4B6dC2hB3fDuCf4B6iC2cB3fDuCf4B6nC27B3eDwCf3B6rC23B3eDwCf3B6wC1yB3eDxCf2B71C1tB3eDxCf2B75C1pB' +
+    '3dDyCf2B7aC1lB3cDzCf1B7eC1iB3bDzCf1B7iC1fB39D10Cf1B7lC1cB39D11Cf0B7oC19B39D11Cf0B7tC13B39D13CezB7xCzB39D13CezB81CuB39D14CezB85CoB3bD15CeyB89CjB3bD17CexB8eCeB3aD18CexB8iC9B3bD19CewB8kC6B3bD1bCevB8lC4B3' +
+    'cD1bCevBc0D1dCeuBbzD1fCetBbzD1fCetBbyD1hCesBbyD1hCesBbxD1jCerBbwD1lCeqBbwD1lCeqBbvD1nCepBbvD1oCeoBbuD1pCeoBbuD1qCenBbuD1rCemBbtD1sCemBbtD1tCelBbtD1uCekBbtD1uCekB9oC1B24D1vCejB9iC8B22D1wCejB9iCaB20D1xC' +
+    'eiB9jCaB1zD1yCehB9kCaB1yD1zCegB9jCcB1xD20CefB9kCcB1vD22CeeB9kCdB1uD23CedB9lCcB1uD24CecB9lCdB1tD25CebB9cC3B7CbB1uD26CeaB9aC7B6CaB1uD27Ce9B97CcB4C9B1vD28Ce8B97CdB4C7B1wD29Ce7B96CgB3C6B1vD2bCe6B95CiB2C5B' +
+    '1wD2cCe5B94ClB1C3B1xD2eCe3B92CrB1xD2fCe2B90CsB1yD2gCe1B92CqB1yD2hCe0B91CqB1zD2iCdzB90CrB1zD2jCdyB90CrB1zD2kCdxB92CpB1zD2lCdwB92CpB1zD2mCdvB92CpB1zD2nCduB92CoB20D2oCdtB92CoB20D2pCdsB91CpB20D2qCdrB92CoB' +
+    '20D2rCdqB90CqB20D2sCdpB8yCrB21D2tCdoB8xCsB21D2vCdmB8xCsB21D2wCdlB8wCsB22D2xCdkB8vCsB23D2yCdjB8uCtB23D2zCdiB8tCtB24D30CdhB8rCvB24D31CdgB8qCvB25D32CdfB8pCwB26D32CdeB8nCyB26D32CdeB8mCyB27D33CddB8lCzB27D3' +
+    '4CdcB8lCyB28D34CdcB8kCzB28D35CdbB8jCzB2aD35CdaB8iCzB2bD35CdaB8hC10B2bD36Cd9B8gC10B2cD37Cd8B8gCzB2dD37Cd8B8fC10B2eD37Cd7B8eC10B2fD38Cd6B8dC11B2fD38Cd6B8cC11B2gD39Cd5B8bC12B2hD39Cd4B8aC12B2iD3aCd3B8aC12' +
+    'B2iD3aCd3B89C12B2jD3bCd2B88C13B2kD3bCd1B87C13B2lD3bCd1B86C14B2lD3cCd0B85C14B2mD3dCczB85C14B2mD3dCczB84C14B2oD3dCcyB83C14B2pD3dCcyB82C15B2pD3eCcxB81C15B2qD3eCcxB80C16B2rD3dCcxB80C15B2sD3eCcwB7zC16B2sD3' +
+    'eCcwB7yC16B2tD3eCcwB7xC16B2vD3dCcwB7wC16B2wD3eCcvB7vC17B2wD3eCcvB7uC17B2yD3dCcvB7uC16B2zD3eCcuB7tC16B30D3eCcuB7sC16B31D3eCcuB7rC16B33D3dCcuB7qC16B34D3eCctB7pC16B35D3eCctB7pC15B37D3dCctB7oC15B38D3dCctB' +
+    '7nC15B39D3dCctB7mC15B3aD3dCctB7lC15B3cD3cCctB7kC15B3dD3cCctB7kC14B3eD3bCcuB7jC14B3gD3aCcuB7iC14B3hD3aCcuB7hC14B3iD3aCcuB7gC14B3jD3aCcuB7fC14B3lD39CcuB7eC14B3mD39CcuB7eC13B3nD39CcuB7dC13B3pD38CcuB7cC13' +
+    'B3qD38CcuB7bC13B3sD37CcuB7aC13B3tD36CcvB79C13B3uD36CcvB79C12B3wD35CcvB78C12B3xD34CcwB77C12B3zD33CcwB76C12B40D33CcwB75C12B41D32CcxB74C12B43D31CcxB74C11B44D31CcxB73C11B46D2zCcyB72C10B48D2zCcyB71C10B49D2' +
+    'zCcyB70CzB4cD2xCczB6zCyB4eD2xCczB6zCxB4gD2wCczB6yCwB4iD2wCczB6xCvB4kD2vCd0B6wCuB4nD2uCd0B6vCsB4qD2uCd0B6uCqB4tD2tCd1B6tCoB4xD2rCd2B6tCmB4zD2rCd2B6sCkB53D2pCd3B6rCiB56D2oCd4B6qCgB59D2oCd4B6pCfB5bD2nCd5' +
+    'B6oCdB5fD2lCd6B6oCaB5iD2lCd6B6nC8B5lD2kCd7B6mC7B5nD2jCd8B6lC5B5qD2jCd8B6kC3B5tD2iCd9B6jC1B5xD2hCd9BchD2hCd9BchD2gCdaBchD2gCdaBchD2gCdaBchD2gCdaBciD2eCdbBciD2eCdbBciD2eCdbBciD2dCdcBciD2dCdcBciD2dCdcBci' +
+    'D2dCdcBciD2cCddBciD2cCddBciD2cCddBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBciD2bCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2' +
+    'cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBchD2cCdeBcgD2dCdeBcgD2dCdeBcgD2dCdeBcfD2eCdeBcfD2eCdeBcfD2fCddBceD2gCddBceD2gCddBceD2gCddBcdD2hCddBcdD2hCddBcdD2iCdcBccD2jCdcBccD2jCdcBccD2jC' +
+    'dcBcbD2kCdcBcbD2kCdcBcbD2lCdbBcaD2mCdbBcaD2mCdbBcaD2mCdbBc9D2nCdbBc9D2nCdbBc9D2oCdaBc8D2pCdaBc8D2pCdaBc8D2qCd9Bc7D2rCd9Bc7D2rCd9Bc7D2sCd8Bc6D2tCd8Bc6D2uCd7Bc6D2uCd7Bc5D2wCd6Bc5D2wCd6Bc5D2xCd5Bc4D2yCd5' +
+    'Bc4D2zCd4Bc4D2zCd4Bc4D30Cd3Bc3D31Cd3Bc3D31Cd3Bc3D32Cd2Bc2D33Cd2Bc2D34Cd1Bc2D34Cd1Bc1D36Cd0Bc1D37CczBc1D38CcyBc0D3aCcxBc0D3bCcwBc0D3cCcvBc0D3dCcuBbzD3eCcuBbzD3fCctBbzD3gCcsBbyD3iCcrBbyDnCeD2iCcqBbyDmCh' +
+    'D2hCcpBbxDlClD2gCcoBbxDkCoD2gCcmBbxDiCsD2eCcmBbxDhCvD2dCclBbwDgCyD2cCclBbwDfCzD2dCckBbwDdC12D2dCcjBbwDcC13D2eCciBbvDcC15D2fCcgBbvDbC16D2gCcfBbvDbC16D2hCceBbuDbC18D2iCccBbuDbC18D2kCcaBbuDaC19D2mCc8BbuD' +
+    'aC1aD2nCc6BbuD9C1bD2pCc4BbuD9C1cDuC6D1qCc2BbvD7C1dDqCbD1qCc1BbuD8C1eDnCeD1rCbzBbuD6C1gDkCiD1sCbxBbuD6C1hDhClD1sCbwBbuD5C1jDeCoD1tCbuBbuD5C1jDdCqD1tCbtBbuD4C1lDaCuD1tCbrBbvD3C1lD9CwD1uCbpBbvD2C2sD1uCbo' +
+    'BbvD2C2tD1vCbmBbvD1C2vD1vCblBbwC2wD1wCbjBbwC2xD1xCbhBbwC2xD1yCbgBbwC2yD1zCbeBbwC2zD1zCbdBbxC2zD20CbbBbxC31D1zCbaBbxC32D20Cb8BbxC34D20Cb6BbxC35D20Cb5BbxC37D20Cb3BbyC39D1yCb2BbyC3bDmCcD10Cb0BbyC3eDaC12D' +
+    'kCazBbyC55D7CaxBbyCg9BbyCg9BbzCg8BbyCg9BbxCgaBbwCgbBbvCgcBbuCgdBbtCgeBbsCgfBbrCggBbqCghBbpCgiBboCgjBbnCgkBblCgmBbkCgnBbjCgoBbiCgpBbgCgrBbfCgsBbeCgtBbdCguBbbCgwBbaCgxBb9CgyBb8CgzBb6Ch1Bb5Ch2Bb4Ch3Bb2Ch' +
+    '5Bb1Ch6Bb0Ch7BazCh8BaxChaBawChbBavChcBauChdBasChfBarChgBaqChhBapChiBanChkBamChlBalChmBajChoBaiChpBahChqBagChrBaeChtBadChuBacChvBabChwBa9ChyBa8ChzBa7Ci0Ba6Ci1Ba4Ci3Ba3Ci4Ba2Ci5Ba0Ci7B9zCi8B9yCi9B9xCiaB' +
+    '9vCicB9uCidB9tCieB9sCifB9rCigB9qCihB9pCiiB9oCijB9nCikB9mCilB9kCinB9jCioB9iCipB9hCiqB9gCirB9fCisB9eCitB9dCiuB9cCivB9bCiwB99CiyB98CizB97Cj0B96Cj1B95Cj2B94Cj3B93Cj4B92Cj5B91Cj6B8zCj8B8yCj9B8xCjaB8wCjbB8v' +
+    'CjcB8uCjdB8tCjeB8sCjfB8rCjgB8qCjhB8oCjjB8nCjkB8mCjlB8lCjmB8kCjnB8jCjoB8iCjpB8hCjqB8gCjrB8eCjtB8dCjuB8cCjvB8bCjwB8aCjxB89CjyB88CjzB87Ck0B86Ck1B85Ck2B83Ck4B82Ck5B81Ck6B80Ck7B7zCk8B7yCk9B7xCkaB7wCkbB7vCk' +
+    'cB7uCkdB7sCkfB7rCkgB7qCkhB7pCkiB7oCkjB7nCkkB7mCklB7lCkmB7kCknB7iCkpB7hCkqB7gCkrB7fCksB7eCktB7dCkuB7cCkvB7bCkwB7aCkxB79CkyB77Cl0B76Cl1B75Cl2B74Cl3B73Cl4B72Cl5B71Cl6B70Cl7B6zCl8B6xClaB6wClbB6vClcB6uCldB' +
+    '6tCleB6sClfB6rClgB6qClhB6pCliB6oCljB6mCllB6lClmB6kClnB6jCloB6iClpB6hClqB6gClrB6fClsB6eCltB6dCluB6bClwB6aClxB69ClyB68ClzB67Cm0B66Cm1B65Cm2B64Cm3B63Cm4B61Cm6B60Cm7B5zCm8B5yCm9B5xCmaB5wCmbB5vCmcB5uCmdB5t' +
+    'CmeB5sCmfB5qCmhB5pCmiB5oCmjB5nCmkB5mCmlB5lCmmB5kCmnB5jCmoB5iCmpB5gCmrB5fCmsB5eCmtB5dCmuB5cCmvB5aCmxB58CmzB56Cn1B54Cn3B52Cn5B50Cn7B4yCn9B4wCnbB4uCndB4tCneB4rCngB4pCniB4nCnkB4lCnmB4jCnoB4hCnqB4fCnsB4dCn' +
+    'uB4bCnwB49CnyB47Co0B45Co2B43Co4B41Co6B3zCo8B3xCoaB3vCocB3tCoeB3rCogB3pCoiB3nCokB3lComB3jCooB3hCoqB3fCosB3dCouB3bCowB39CoyB37Cp0B35Cp2B33Cp4B32Cp5B30Cp7B2yCp9B2wCpb',
+  map2014:
+    'A432wE9ArwEfAroEmArhEsArdEvAraEyAr5E13Ar1E17AqzE1aAqvE1dAqsE1gAqpE1jAqmE1mAqhE1rAqeE1uAqcE1vAqbE1xAq7E10A1EzAq4E13A3E2A2EtAq3E13AaErAq2E13AbEsAq0E10AgEsApyE10AiErApxEzApEmApwEzArEmApuEzAsEmAptExAwEmAp' +
+    'sEwAxEmAprEwAxEnApqEwAyEnAppEvA10EmAppEwA10EmAppEvA11ElAppEvA12ElApoEwA12ElApnExA12ElApmExA12EmApkEyA13ElApjEzA14ElApaE17A14ElApaE18A15EkAp9E19A15EkAp9E18A15ElAp9E18A16EkAp8E18A17EkAp9E16A19EjApaE14A1' +
+    'aEjApbE13A1bEiApbE13A1cEhApaE14A1dEgAp9E14A1eEgApaE13A1fEfApaE13A1gEeApbE12A1gEeApbE11A1hEeApbE11A1iEdApbE11A1jEcApaE12A1jEcApaE11A1kEcAp9E11A1lEcAp9E10A1lEdAp9E10A1lEdAp8E10A1lEeAp8EzA1mEeAp7EzA1mEgA' +
+    'p6EzA1mEgAp7EyA1lEiAp7ExA1mEhAp8EvA1oEgAp8EvA1pEfAp2E1A4EvA1qEfAp1E2A3EvA1sEeAp0E3A2EwA1sEeAp0E11A1sEfAozE11A1sEgAoxE11A1tEgAoyEzA1vEgAowEzA1xEfAowEyA1zEfAowExA21EeAowEvA23EdAowEuA24EeAouEvA25EdAotEwA' +
+    '26EdAosEvA29EbAotEuA29EbAouEsA2aEbAotEsA2bEcAotErA2bEdAosEsA2aEdAosErA2bEdAotEpA2cEdAotEnA2eEdAouElA2eEeAouEkA2fEeAouEjA2gEeAouEiA2gEfAovEhA2fEgAowEgA2eEhAowEgA2dEiAowEfA2eEiAoxEeA2fEhAoyEcA2hEgAoyEcA' +
+    '2hEgAozEaA2jEfAozEaA2jEfAp0E8A2kEeAp2E6A2lEeAp6E1A2nEcArwEbArxEaArxEaAryE8As0E7As1E6As1E5As3E3As5E1Amj9E1As6E3A4E1AryEaArwEcAruEdAruEdArtEeArsEgArrEgArsEfArrEgArrEhArpEiArpEjAroEjAroEkAroEjAroEkAroEjA' +
+    'rnEkArnEkAroEjAroEjArjE1A1E1A1ElArhEqArgErArhEqArhEqAriEpAriEpAriEpArjEoArjEoArjEoArkEnArlEmArmElArmElArnElArnEkAroEjAroEkAroEjArpEiArpEiArpEjArpEiArqEhArrEhArrEgArsEgA55E1AmlEhA53E3AmkEhA52E5AmjEiA50' +
+    'E6AmkEiA4tE1A4E6AmmEhA4mE9A1E7AmnEiA4iEjAmpEhA4eEmAmqEhA4dEmAmrEiA4bEmAmtEhA4aEmA3qC1Aj3EhA49EmA3qC3Aj2EhA48EmA3pC6Aj1EhA48EmA3oC6Aj3EgA48ElA3oC6Aj5EfA48EkA3mC8Aj7EeA48EjA3mC8AjaEcA48EjA3lC7AjdEbA48Ei' +
+    'A3mC6AjeEbA48EiA3lC6AjfEbA48EhA3lC6AjgEbA48EgA3lC6AjhEbA47EgA3kC7AjfEeA47EeA3lC7AjjEbA47EdA3lC7AjkEbA46EeA3kC7AjmE9A46EeA3kC7AjnE9A46EdA3kC7AjnEaA46EcA3kC6AjpEaA46EbA3kC6AjpEbA46EaA3kC7AjpEbA46E8A3lC7' +
+    'AjqEbA46E7A3lC7AjrEaA47E6A3lC7AjsEaA47E5A3lC8AjpE1A1EbA46E5A3lC8AjtEaA47E3A3lC8AjtEbA48E1A3mC7AjvEaA7vC7AjwE9A7uC7AjyE7A7uC7Ak0E6A7tC8Ak0E6A7sC8Ak2E5A7rC9Ak2E5A7qC9Ak4E3A7qCaAk5E1A7qCbArwCaArwCbArvCcA' +
+    'ruCcArvCcAruCcAruCdArtCeArsCeArtCeArsCeArsCfArrCgArqChArqChArpChArpCiArpCiAroCjArnCkArnCjArnCkArmClArlCmArlCmArkCnArkCmArlCmArkCnArjCoArjCnArkCnArkCnArjCnArkCnArjCnArjCoArjCnArkCnArjCoArjCnArkCnArkCmA' +
+    'rlCmArmCkArnCkArmCkArmClArmCkArnCjAroCjAroCiArpChArpChArqChArpChArqCgArrCgArqCgArrCfArrCgAroCiArpCiArpChArqChArqCgArrCgArrCfArsCfArvCbArtC1A1CcArtC1A1CbArtC1A1CcArtC1A1CbAruC1A1CbArtCdAruCdAruC1A1CaAr' +
+    'vC1A1CaArvC1A1C9ArwC1A1C9ArvCbArwC1A1C9ArwC1A1C8ArwCbArwC1A1C8ArwC1A1C9ArvCbArwCbArwCaArxC1A1C8ArxC1A1C7ArxC9ArzC1A1C5As3C2A1z8eC1As4C4As2C2A1C3As2C6As0C7ArzC8ArzC8ArzC8ArzC9AryC9AryC9AryC9AryC9AryC9A' +
+    'ryC9AryC9ArzC9AryC9ArxCaArwCbArwCbArwCbArwCbArwCbArwCbArwCcArvCcArvCcArvCcArvCcArvCcArvCcArvCcArvCeArtCcArvCdAruCcArwCaAryC1A1C2An8kn'
+};
+if (typeof module !== 'undefined' && module.exports) module.exports = CTYPE;
+root.AGRI_CTYPE = CTYPE;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* =====================================================================
    AgriKalkunahon core - agricultural meteorology decision engine
    Every constant is traceable to a cited source. See REFS at bottom.
    Numbers only: this file returns codes, values and source ids;
@@ -1377,6 +1522,93 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
+
+/* ---------- PAGASA climate type at a point  [PAGASA_IAAS_CTYPE, PAGASA_CLIMATEMAP] ----------
+   The rice card's re-flood depth depends on the season, and two of the four Philippine climate types
+   have no dry season at all. The card used to describe the four types and leave the farmer to work out
+   which one they live in. The IAAS shapefile of the types lets it look the type up from the location
+   instead, on the grid in climatetype.js. The lookup suggests a season; it never sets one over the
+   farmer's own choice, and it names what it cannot settle rather than choosing:
+   - within nearKm of another type, that type is named, and where the two call for different seasons
+     no season is suggested. The lines are drawn for the whole country, and the shapefile and the
+     printed map place them a few kilometres apart in places;
+   - where the printed map of August 2014 shows a different type from the shapefile, that type is
+     named too, and again no season is suggested if the two call for different ones.
+   The seasons are the map legend's. Type I is dry from November to April. Types II and IV have no dry
+   season. Type III has a dry season of one to three months "either during the period from December to
+   February or from March to May", so June to November is its wet season and the months from December
+   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID). */
+const CTDATA = root.AGRI_CTYPE || (typeof require === 'function' ? require('./climatetype.js') : null);
+const CLIMATE_TYPE = {
+  nearKm: 5,                                   // this app's choice, declared as CLIMATE_TYPE_GRID
+  typeIDryMonths: [11, 12, 1, 2, 3, 4],        // legend, Type I: "dry from November to April"
+  typeIIIDryWindow: [12, 1, 2, 3, 4, 5],       // legend, Type III: the dry months fall within December to May
+  noDrySeason: [2, 4],                         // legend, Types II and IV: no dry season
+  sources: ['PAGASA_IAAS_CTYPE', 'PAGASA_CLIMATEMAP']
+};
+let ctRuns = null;
+function ctDecode(s) {
+  const starts = [], vals = [], re = /([A-Z])([0-9a-z]+)/g; let pos = 0, m;
+  while ((m = re.exec(s))) { starts.push(pos); vals.push(m[1].charCodeAt(0) - 65); pos += parseInt(m[2], 36); }
+  return { starts: starts, vals: vals, total: pos };
+}
+/* Decoded once, on first use, into its runs rather than into 1.7 million cells. A run that does not add
+   up to the grid means the data file is damaged, and then the card has no type rather than a wrong one. */
+function ctGrid() {
+  if (ctRuns) return ctRuns;
+  if (!CTDATA) return null;
+  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014);
+  if (type.total !== n || map2014.total !== n) return null;
+  ctRuns = { type: type, map2014: map2014 };
+  return ctRuns;
+}
+function ctAt(R, k) {
+  let lo = 0, hi = R.starts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (R.starts[mid] <= k) lo = mid; else hi = mid - 1; }
+  return R.vals[lo];
+}
+/* Coordinates are rounded to the hundredth of a degree the app works in, which is the grid's own
+   spacing. Outside the box the app uses for the Philippines there is no type. */
+function climateType(lat, lon) {
+  if (!insidePH(lat, lon)) return null;
+  const G = ctGrid(); if (!G) return null;
+  const D = CTDATA, i = Math.round(lat * 100) - D.lat0c, j = Math.round(lon * 100) - D.lon0c;
+  if (i < 0 || j < 0 || i >= D.rows || j >= D.cols) return null;
+  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100, type = ctAt(G.type, i * D.cols + j);
+  const di = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat + 0.01, glon));
+  const dj = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat, glon + 0.01));
+  const nearTypes = [];
+  for (let a = -di; a <= di; a++) for (let b = -dj; b <= dj; b++) {
+    const i2 = i + a, j2 = j + b;
+    if (i2 < 0 || j2 < 0 || i2 >= D.rows || j2 >= D.cols) continue;
+    const t2 = ctAt(G.type, i2 * D.cols + j2);
+    if (t2 === type || nearTypes.indexOf(t2) >= 0) continue;
+    if (haversineKm(glat, glon, (D.lat0c + i2) / 100, (D.lon0c + j2) / 100) <= CLIMATE_TYPE.nearKm) nearTypes.push(t2);
+  }
+  nearTypes.sort();
+  const m14 = ctAt(G.map2014, i * D.cols + j);
+  return { type: type, nearTypes: nearTypes, map2014: m14 > 0 ? m14 : null, gridLat: glat, gridLon: glon,
+           nearKm: CLIMATE_TYPE.nearKm, sources: CLIMATE_TYPE.sources.slice() };
+}
+/* The season a type calls for in a given month: 'dry', 'wet', 'nodry', or null where the legend cannot
+   say. A season is suggested only when every type in play agrees on it. */
+function climateTypeSeason(ct, month) {
+  if (!ct || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
+  const C = CLIMATE_TYPE;
+  const implied = t => C.noDrySeason.indexOf(t) >= 0 ? 'nodry'
+    : t === 1 ? (C.typeIDryMonths.indexOf(month) >= 0 ? 'dry' : 'wet')
+    : t === 3 ? (C.typeIIIDryWindow.indexOf(month) >= 0 ? null : 'wet') : null;
+  const own = implied(ct.type);
+  const nearDiffer = ct.nearTypes.filter(t => implied(t) !== own);
+  const mapDiffers = ct.map2014 != null && implied(ct.map2014) !== own;
+  let code;
+  if (own == null) code = 'type_iii_months_not_given';
+  else if (mapDiffers) code = 'versions_differ';
+  else if (nearDiffer.length) code = 'near_other_type';
+  else code = ct.type === 1 ? (own === 'dry' ? 'type_i_dry_months' : 'type_i_wet_months') : ct.type === 3 ? 'type_iii_wet_months' : 'no_dry_season';
+  return { season: own != null && !mapDiffers && !nearDiffer.length ? own : null, code: code, ownSeason: own,
+           nearDiffer: nearDiffer, mapDiffers: mapDiffers, month: month, sources: C.sources.slice() };
+}
 function frostSeason(month) {
   if (month === FROST.seasonPeak) return 'peak';
   if (FROST.seasonCore.indexOf(month) >= 0) return 'core';
@@ -1725,7 +1957,8 @@ const REFS = {
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
   SENTELHAS2008: { cls: 'primary', cite: 'Sentelhas, P.C. et al. (2008). Suitability of relative humidity as an estimator of leaf wetness duration. Agric. For. Meteorol. 148:392-400.', url: 'https://doi.org/10.1016/j.agrformet.2007.09.011' },
   PAGASA_FWFA: { cls: 'extension', cite: 'DOST-PAGASA daily Farm Weather Forecast and Advisories, among the agri-weather products: lowland and upland temperature and humidity, winds, leaf wetness in hours, soil moisture and farming advisories.', url: 'https://bagong.pagasa.dost.gov.ph/agri-weather' },
-  PAGASA_CLIMATEMAP: { cls: 'extension', cite: 'DOST-PAGASA, CADS/IAAS CAD (2014). Climate Map of the Philippines (1951-2010), August 2014. Modified Coronas Climate Classification: "The modal of the yearly type of rainfall distribution during the 1951-2010 period in 45 synoptic and 66 climat stations were considered." Type I: two pronounced seasons, dry from November to April and wet during the rest of the year, maximum rain period from June to September. Type II: no dry season with a very pronounced maximum rain period from December to February; there is not a single dry month. Type III: no very pronounced maximum rain period, with a dry season lasting only from one to three months. Type IV: rainfall more or less evenly distributed throughout the year, no dry season.', url: 'https://www.pagasa.dost.gov.ph/information/climate-philippines' },
+  PAGASA_CLIMATEMAP: { cls: 'extension', cite: 'DOST-PAGASA, CADS/IAAS CAD (2014). Climate Map of the Philippines (1951-2010), August 2014. Modified Coronas Climate Classification: "The modal of the yearly type of rainfall distribution during the 1951-2010 period in 45 synoptic and 66 climat stations were considered." Type I: two pronounced seasons, dry from November to April and wet during the rest of the year, maximum rain period from June to September. Type II: no dry season with a very pronounced maximum rain period from December to February; there is not a single dry month. Type III: no very pronounced maximum rain period, with a dry season lasting only from one to three months, "either during the period from December to February or from March to May". Type IV: rainfall more or less evenly distributed throughout the year, no dry season.', url: 'https://www.pagasa.dost.gov.ph/information/climate-philippines' },
+  PAGASA_IAAS_CTYPE: { cls: 'extension', cite: 'DOST-PAGASA, IAAS CAD (2014). Climate Type of the Philippines, GIS shapefile PHL_climatetype: four polygons, Types I to IV of the Modified Coronas classification used on the Climate Map of the Philippines (1951-2010); file metadata dated 7 February 2014. Obtained from IAAS in September 2026. The rice card reads it from a grid of hundredths of a degree made by this app (engine/climatetype.js).' },
   PACIFICPESTS_BLAST: { cls: 'extension', cite: 'Jackson, G. (2017). Rice blast (252). Pacific Pests and Pathogens fact sheet, produced under ACIAR project PC/2010/090 with the University of Queensland and the Secretariat of the Pacific Community: "the leaves need to be wet for 6-8 hours for spore germination. High humidity, close to 100%, is needed for infection", with 24-28 C favourable.', url: 'https://apps.lucidcentral.org/ppp/text/web_full/entities/rice_blast_252.htm' },
   LUO2000: { cls: 'primary', cite: 'Luo, W. & Goudriaan, J. (2000). Dew formation on rice under varying durations of nocturnal radiative loss. Agric. For. Meteorol. 104(4):303-313.', url: 'https://doi.org/10.1016/S0168-1923(00)00168-4' },
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
@@ -1762,7 +1995,10 @@ const UNVERIFIED = [
   { id: 'PNS_ETO_METHOD', cards: ['rain'], text: 'This card follows the standard PAGASA\'s Climate Impact Assessment follows, but it will not reproduce PAGASA\'s figures. PAGASA computes potential evapotranspiration by Thornthwaite (1948) from satellite land surface temperature; this app computes reference evapotranspiration by FAO-56 Penman-Monteith from the temperatures you enter, with FAO-56\'s documented fallbacks for missing humidity, sunshine and wind. Penman-Monteith is one of the four methods PNS/BAFS/PAES 217:2017 Annex B allows. For corn, PAGASA uses crop coefficients from Gonzales et al. (2019), which this app could not obtain; the card uses the standard\'s own Table 4 corn row instead.' },
   { id: 'FORECAST_VAPOUR_HELD', cards: ['frost', 'disease'], text: 'Where a forecast minimum temperature is compared with this evening\'s dew point or frost point, the air is assumed to keep the water vapour it holds this evening until it saturates. A change of air mass overnight, such as a surge of the northeast monsoon, breaks that assumption, and the comparison then says nothing about the morning.' },
   { id: 'WATER_FORECAST_NO_WAIT', cards: ['water'], text: 'FAO-56 gives no rule for putting off irrigation because rain is forecast. Where the field is already at the irrigation point and the forecast brings rain, this card shows both and does not tell you to wait: a forecast can miss, and the crop is already drawing on water it cannot spare. The crop coefficient is held at today\'s value across the forecast days.' },
-  { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' }
+  { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' },
+  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land. So across a narrow channel the change of type falls midway over the water, and the parts of Sabah and of Indonesian islands inside the box the app uses for the Philippines get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km is this app\'s choice, not a published figure.' },
+  { id: 'CLIMATE_TYPE_VERSIONS', cards: ['rice'], text: 'The IAAS shapefile and the printed Climate Map of the Philippines (August 2014) do not agree everywhere. This app compared them by fitting a scan of the printed map to the shapefile and reading its colours: away from the lines between types and from the map\'s lettering and boundary lines, they agree on 97.5 per cent of the land. Over wider areas they differ in two ways. The printed map shows Type IV where the shapefile shows Type III in parts of Maguindanao, Sultan Kudarat, South Cotabato and Cotabato, of Zamboanga del Norte and Zamboanga Sibugay, and of Bukidnon. It shows Type II where the shapefile shows Type IV along the Agusan side of the boundary with Surigao del Sur and in part of Southern Leyte. The card follows the shapefile, names the printed map\'s type inside those areas, and there suggests no season where the two call for different ones. The outlines of those areas come from this app\'s comparison, not from PAGASA, and which version is current has not yet been confirmed with IAAS.' },
+  { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' }
 ];
 
 const API = {
@@ -1791,7 +2027,7 @@ const API = {
   // drying
   EMC_HENDERSON_LONG_ROUGH, emcDryBasis, emcWetBasis, dbToWb, wbToDb, rhForMoisture, weightAfterDrying, CAVAN_KG, STORAGE_MC, SUN_DRYING, dryingDecision,
   // stress, frost, disease
-  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
+  STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, CLIMATE_TYPE, climateType, climateTypeSeason, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
   // timing
   gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
   // units and refs
@@ -2257,7 +2493,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '0900d05d' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'f74055c0' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2534,7 +2770,39 @@ CARDS.rice = function (root) {
   const fcRain = numInput('rFcRain', { en: 'Rain in the PAGASA forecast before the next re-flood date (mm)', fil: 'Ulan sa forecast ng PAGASA bago ang susunod na pagpapatubig (mm)' }, prev.fcRain, 0.1, { optional: true });
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* The PAGASA climate type at the saved location, looked up on the IAAS shapefile [PAGASA_IAAS_CTYPE].
+     It suggests the season. It sets the season only on a paddy that has never had one chosen, says so
+     when it does, and never overrides a season the farmer picked. */
+  const ctNote = el('div', { class: 'ctnote' });
+  let seasonChosen = prev.season != null, seasonAuto = false;
+  const climateHere = () => {
+    const L = store.loc;
+    if (!L.set) return { status: 'unset' };
+    const ct = A.climateType(L.lat, L.lon);
+    if (!ct) return { status: 'outside' };
+    /* The season is judged by the month of the reading, which is what the card answers for. */
+    const ld = !levelDate.row.hidden && levelDate.input.value ? new Date(levelDate.input.value + 'T00:00:00') : null;
+    const month = (ld && !isNaN(ld) ? ld : fieldNow()).getMonth() + 1;
+    return { status: 'ok', ct: ct, month: month, cs: A.climateTypeSeason(ct, month) };
+  };
+  const syncClimate = () => {
+    ctNote.hidden = season.row.hidden;
+    const c = climateHere();
+    /* Until the farmer picks a season for this paddy, the selector follows the suggestion, and goes back
+       to the dry-season default when there is none, so a suggestion made for coordinates typed halfway
+       is never left behind. */
+    if (!seasonChosen) {
+      const sug = c.status === 'ok' && c.cs ? c.cs.season : null;
+      season.input.value = sug || 'dry';
+      seasonAuto = !!sug;
+    }
+    ctNote.innerHTML = '';
+    ctNote.appendChild(el('p', { class: 'lochint' }, bi(climateNote(c, season.input.value, seasonAuto))));
+  };
+  season.input.addEventListener('change', () => { seasonChosen = true; seasonAuto = false; syncClimate(); });
+  levelDate.input.addEventListener('change', syncClimate);
+  const locBlock = locationBlock(syncClimate);
+  form.append(locBlock, plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, ctNote, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -2600,10 +2868,12 @@ CARDS.rice = function (root) {
     fcRain.row.hidden = !hasTube;
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : LEVEL_LABEL.cont), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
+    syncClimate();
   };
   const loadPlot = () => {
     plotName = plot.value; store.ricePlotLast = plotName; save();
     prev = recall('rice:' + ricePlotKey(plotName));
+    seasonChosen = prev.season != null; seasonAuto = false;
     method.input.value = prev.method || 'awd'; season.input.value = prev.season || 'dry'; soil.input.value = prev.soil || 'clay';
     est.input.value = prev.est || ''; flower.input.value = prev.flower || ''; harvest.input.value = prev.harvest || '';
     level.input.value = prev.level != null ? prev.level : ''; levelPrev.input.value = prev.levelPrev != null ? prev.levelPrev : '';
@@ -2696,6 +2966,10 @@ CARDS.rice = function (root) {
         + '. Carrijo et al. (2017) draw the same line at -20 kPa that the Order draws at ' + (r.triggerCm || 15) + ' cm.']);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
+    /* The climate type, only where the season is in play: a trigger depth was used and a location set. */
+    const cHere = !season.row.hidden && r.triggerCm ? climateHere() : null;
+    const ctShown = !!(cHere && cHere.status === 'ok');
+    if (ctShown) lines.push([bi({ en: 'PAGASA climate type here', fil: 'Uri ng klima rito ayon sa PAGASA' }), bi(climateLine(cHere, inp.season))]);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
        is still the reading itself, and it holds only while no rain falls. */
     (r.projections || []).forEach(p => {
@@ -2827,7 +3101,7 @@ CARDS.rice = function (root) {
       'The date comes from your own two readings. The fall between them, divided by the days between them, is this field\'s loss: crop water use, percolation and seepage together, measured rather than modelled. This app assumes no percolation rate and no seepage rate, because no Philippine value it could cite exists for your field.',
       'Leave several days between the two readings. A reading off a hand-marked tube is good to about a centimetre, so a one-day pair gives a rate with an error of about 1.4 cm/day, and the date it produces can be out by days. The same pair five days apart cuts that error to about 0.3 cm/day. Averaging daily readings does not help: the daily falls telescope to the first and last reading, so span is the only thing that buys precision.',
       'The date assumes no rain and assumes the loss rate holds. It is a planning aid. The decision rule is still the reading itself: if the tube is at the trigger, irrigate, whatever date this card printed.',
-      'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app.',
+      'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months, falling within December to February or March to May. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app. Give the card your location and it looks your type up on the IAAS shapefile of the same map (DOST-PAGASA, 2014) and suggests the season; the choice stays yours.',
       'IRRI safe AWD uses 15 cm in every season, not 20. Re-flooding earlier than the DA depth is always allowed, and on light soils with a deep water table it is the safer error. In the wet season the card therefore gives two dates: the DA one at 20 cm, which is the policy, and the earlier IRRI one at 15 cm.',
       'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).',
       'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).',
@@ -2843,6 +3117,13 @@ CARDS.rice = function (root) {
       ev.cons.forEach(c => why.push(c));
     }
     const flags = (r.flags || []).concat(sp ? sp.flags : []).concat(dateFlags).concat(etoFlags).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);
+    if (ctShown && cHere.cs && cHere.cs.season) {
+      const tr = x => A.AWD.triggerCm[x === 'wet' ? 'wet' : 'dry'], ts = tr(cHere.cs.season), tc = tr(inp.season);
+      if (ts !== tc) flags.push('On the PAGASA climate map your location is Type ' + CT_ROMAN[cHere.ct.type] + ', which calls for "' + CT_SEASON[cHere.cs.season].en + '" in ' + MONTH_NAMES.en[cHere.month - 1] + ', but this paddy is set to "' + CT_SEASON[inp.season].en + '", so the card used ' + tc + ' cm instead of ' + ts + ' cm. Change the season above if the map is right for your field.');
+    }
+    /* The AWD explanation cites the Climate Map, so the map is among its sources; the shapefile joins it
+       when the type was looked up for this answer. */
+    const riceSources = r.sources.concat(inp.fcRain != null ? ['PAGASA_FWFA'] : [], whyByMethod ? [] : ['PAGASA_CLIMATEMAP'], ctShown ? ['PAGASA_IAAS_CTYPE'] : []).filter((x, i, a) => a.indexOf(x) === i);
     const limits = ['Done as this card instructs, safe AWD does not significantly cost yield. Carrijo, Lundy and Linquist (2017), pooling 56 studies and 528 comparisons, found no significant yield reduction under mild AWD, which they define as a field water level no lower than 15 cm or a soil water potential at or above -20 kPa, and a 23.4% cut in water use. The 22.6% yield loss they report belongs to severe AWD, past that line. The threshold is the whole method.',
       'The risk is worse on some soils. Yield losses under AWD are larger on alkaline soils, pH 7 and above, and on soils under 1% carbon (Carrijo et al. 2017), and on loamy and sandy soils with deep water tables IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).',
       'No percolation or seepage rate is assumed. Every loss figure here was measured in your field, not modelled, and none appears until you have given two readings or the field has a history. The published rates of Bouman et al. (1994) are used only to say which band your own measurement falls in.',
@@ -2850,15 +3131,87 @@ CARDS.rice = function (root) {
       'Splitting the loss needs the crop water use figure from the watering card, which is FAO-56 with the paddy rice crop coefficient. Those coefficients are derived for flooded paddy, so under AWD with no standing water the split is less certain than the total loss, which is measured.',
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
-    show(out, result({ card: 'rice', suppress: riceSuppress(inp), level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
+    show(out, result({ card: 'rice', suppress: riceSuppress(inp).concat(ctShown ? [] : ['CLIMATE_TYPE_GRID', 'CLIMATE_TYPE_VERSIONS', 'CLIMATE_TYPE_SEASON_MONTHS']), level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
       assumptions: riceAssumptions(inp).concat([
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
         'A reading is taken as good to about one centimetre. Neither PhilRice nor IRRI publishes a graduated well: both are marked only at the depth that calls for water, and the published rule is whether water can still be seen. The centimetre marking, the precision and the width of the date window that follows from it are additions of this app, not published values.']),
-      limits, sources: inp.fcRain != null ? r.sources.concat(['PAGASA_FWFA']) : r.sources }));
+      limits, sources: riceSources }));
   }
 };
 
+/* Words for the climate type. The descriptions follow the Climate Map legend [PAGASA_CLIMATEMAP]. */
+const CT_ROMAN = ['', 'I', 'II', 'III', 'IV'];
+const CT_DESC = {
+  1: { en: 'two pronounced seasons, dry from November to April and wet the rest of the year', fil: 'dalawang malinaw na panahon: tag-araw mula Nobyembre hanggang Abril, at tag-ulan sa natitirang bahagi ng taon' },
+  2: { en: 'no dry season, with the heaviest rain from December to February', fil: 'walang tag-araw, at pinakamalakas ang ulan mula Disyembre hanggang Pebrero' },
+  3: { en: 'a short dry season of one to three months, somewhere in December to February or March to May', fil: 'maikling tag-araw na isa hanggang tatlong buwan, sa loob ng Disyembre hanggang Pebrero o Marso hanggang Mayo' },
+  4: { en: 'rain spread more or less evenly through the year, no dry season', fil: 'halos pantay ang ulan sa buong taon, walang tag-araw' }
+};
+const CT_SEASON = { dry: { en: 'Dry season', fil: 'Tag-araw' }, wet: { en: 'Wet season', fil: 'Tag-ulan' }, nodry: { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' } };
+const MONTH_NAMES = { en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                      fil: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'] };
+const ctList = (types, and) => types.map(t => 'Type ' + CT_ROMAN[t]).join(and);
+/* What the type says, what else lies nearby and what the printed map shows, as facts shared by the note
+   under the season and the line in the answer; the note adds what to choose. */
+function climateParts(c) {
+  const ct = c.ct, cs = c.cs, R = CT_ROMAN, mE = MONTH_NAMES.en[c.month - 1], mF = MONTH_NAMES.fil[c.month - 1];
+  const known = cs.ownSeason != null;
+  const nearTypes = cs.code === 'near_other_type' ? cs.nearDiffer : ct.nearTypes;
+  const nearCmp = !nearTypes.length ? null : cs.code === 'near_other_type' ? 'diff' : (known && !cs.nearDiffer.length ? 'same' : 'none');
+  const mapCmp = ct.map2014 == null ? null : cs.code === 'versions_differ' ? 'diff' : (known && !cs.mapDiffers ? 'same' : 'none');
+  const tailE = { same: ' and calls for the same season.', diff: ' and calls for a different season in ' + mE + '.', none: '.' };
+  const tailF = { same: ' at pareho ang panahong hinihingi nito.', diff: ' at iba ang panahong hinihingi nito sa ' + mF + '.', none: '.' };
+  const near = nearCmp && { en: ctList(nearTypes, ' and ') + ' lies within about 5 km of here' + tailE[nearCmp], fil: 'may ' + ctList(nearTypes, ' at ') + ' sa loob ng mga 5 km mula rito' + tailF[nearCmp] };
+  const map = mapCmp && { en: 'the printed Climate Map of the Philippines (August 2014) shows Type ' + R[ct.map2014] + ' around here' + (mapCmp === 'none' ? '.' : ',' + tailE[mapCmp].replace(' and calls', ' which calls')),
+                          fil: 'Type ' + R[ct.map2014] + ' ang nakalagay rito sa nakalimbag na Climate Map of the Philippines (Agosto 2014)' + (mapCmp === 'none' ? '.' : ',' + tailF[mapCmp]) };
+  const choose = {
+    no_dry_season: { en: 'So choose "My area has no dry season".', fil: 'Kaya piliin ang "Walang tag-init sa lugar namin".' },
+    type_i_dry_months: { en: mE + ' falls in its dry season, so choose "Dry season".', fil: 'Sa uring ito, tag-araw ang ' + mF + ', kaya piliin ang "Tag-araw".' },
+    type_i_wet_months: { en: mE + ' falls in its wet season, so choose "Wet season".', fil: 'Sa uring ito, tag-ulan ang ' + mF + ', kaya piliin ang "Tag-ulan".' },
+    type_iii_wet_months: { en: 'Its dry months fall between December and May, so ' + mE + ' is in the wet season: choose "Wet season".', fil: 'Nasa pagitan ng Disyembre at Mayo ang mga buwan ng tag-araw nito, kaya tag-ulan ang ' + mF + ': piliin ang "Tag-ulan".' },
+    type_iii_months_not_given: { en: 'The map does not say which one to three months are dry, so choose the season yourself: "Dry season" if ' + mE + ' is dry where you are, "Wet season" if not.', fil: 'Hindi sinasabi ng mapa kung aling isa hanggang tatlong buwan ang tag-araw, kaya kayo ang pumili: "Tag-araw" kung tuyo ang ' + mF + ' sa lugar ninyo, "Tag-ulan" kung hindi.' },
+    near_other_type: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' },
+    versions_differ: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' }
+  }[cs.code];
+  return { near: near, map: map, choose: choose };
+}
+const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
+function climateNote(c, chosen, auto) {
+  if (c.status === 'unset') return { en: 'Set your location at the top of this card and it will show the PAGASA climate type there, which tells whether your area has a dry season.', fil: 'Itakda ang lokasyon sa itaas ng card na ito at ipakikita nito ang uri ng klima roon ayon sa PAGASA, na nagsasabi kung may tag-araw ang lugar ninyo.' };
+  if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so it has no PAGASA climate type.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya wala itong uri ng klima ayon sa PAGASA.' };
+  const ct = c.ct, cs = c.cs, p = climateParts(c);
+  let en = 'PAGASA climate type at your location: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (DOST-PAGASA IAAS, 2014).';
+  let fil = 'Uri ng klima sa lokasyon ninyo ayon sa PAGASA: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (DOST-PAGASA IAAS, 2014).';
+  /* A conflict is the reason to choose, so it comes first and is introduced as one. */
+  const lead = cs.code === 'near_other_type' ? p.near : cs.code === 'versions_differ' ? p.map : null;
+  if (lead) { en += ' But ' + lead.en; fil += ' Ngunit ' + lead.fil; }
+  if (p.choose) { en += ' ' + p.choose.en; fil += ' ' + p.choose.fil; }
+  [p.near, p.map].forEach(x => { if (x && x !== lead) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
+  if (cs.season && auto) {
+    en += ' The card has set the season to "' + CT_SEASON[cs.season].en + '" for you; change it if your field is different.';
+    fil += ' Itinakda na ng card ang panahon sa "' + CT_SEASON[cs.season].fil + '" para sa inyo; palitan kung iba ang sa bukid ninyo.';
+  } else if (cs.season && chosen !== cs.season && CT_SEASON[chosen]) {
+    en += ' This paddy is set to "' + CT_SEASON[chosen].en + '".';
+    fil += ' Nakatakda ang palayang ito sa "' + CT_SEASON[chosen].fil + '".';
+  }
+  return { en: en, fil: fil };
+}
+function climateLine(c, chosen) {
+  const ct = c.ct, cs = c.cs, p = climateParts(c), mE = MONTH_NAMES.en[c.month - 1], mF = MONTH_NAMES.fil[c.month - 1];
+  const ch = CT_SEASON[chosen] || CT_SEASON.dry;
+  let en = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (IAAS shapefile, DOST-PAGASA 2014, read at ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
+  let fil = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (IAAS shapefile, DOST-PAGASA 2014, sa ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
+  [p.near, p.map].forEach(x => { if (x) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
+  if (cs.season) {
+    en += ' In ' + mE + ' it calls for "' + CT_SEASON[cs.season].en + '"' + (chosen === cs.season ? ', which is what the card used.' : '; this paddy is set to "' + ch.en + '", and the card used that.');
+    fil += ' Sa ' + mF + ', "' + CT_SEASON[cs.season].fil + '" ang hinihingi nito' + (chosen === cs.season ? ', at iyon ang ginamit ng card.' : '; nakatakda ang palayang ito sa "' + ch.fil + '", at iyon ang ginamit ng card.');
+  } else {
+    en += ' It does not settle the season in ' + mE + ', so the card used the one you chose, "' + ch.en + '".';
+    fil += ' Hindi nito natitiyak ang panahon sa ' + mF + ', kaya ang pinili ninyo ang ginamit ng card, "' + ch.fil + '".';
+  }
+  return { en: en, fil: fil };
+}
 /* The observation well is set to the season, so its description is too. The no-dry-season case is a
    declared choice rather than a published rule: DA AO 25-09 names a depth for the dry season and one
    for the wet, and two of the four Philippine climate types have neither, so the card says which one
@@ -3669,8 +4022,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 723 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 0900d05d. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 792 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build f74055c0. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -3762,7 +4115,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 0900d05d)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build f74055c0)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -3774,7 +4127,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 0900d05d).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 0900d05d ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build f74055c0).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build f74055c0 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -3821,7 +4174,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 0900d05d.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build f74055c0.'));
 }
 let currentCard = null;
 function renderCard(main, id) {

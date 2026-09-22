@@ -729,7 +729,39 @@ CARDS.rice = function (root) {
   const fcRain = numInput('rFcRain', { en: 'Rain in the PAGASA forecast before the next re-flood date (mm)', fil: 'Ulan sa forecast ng PAGASA bago ang susunod na pagpapatubig (mm)' }, prev.fcRain, 0.1, { optional: true });
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  form.append(plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
+  /* The PAGASA climate type at the saved location, looked up on the IAAS shapefile [PAGASA_IAAS_CTYPE].
+     It suggests the season. It sets the season only on a paddy that has never had one chosen, says so
+     when it does, and never overrides a season the farmer picked. */
+  const ctNote = el('div', { class: 'ctnote' });
+  let seasonChosen = prev.season != null, seasonAuto = false;
+  const climateHere = () => {
+    const L = store.loc;
+    if (!L.set) return { status: 'unset' };
+    const ct = A.climateType(L.lat, L.lon);
+    if (!ct) return { status: 'outside' };
+    /* The season is judged by the month of the reading, which is what the card answers for. */
+    const ld = !levelDate.row.hidden && levelDate.input.value ? new Date(levelDate.input.value + 'T00:00:00') : null;
+    const month = (ld && !isNaN(ld) ? ld : fieldNow()).getMonth() + 1;
+    return { status: 'ok', ct: ct, month: month, cs: A.climateTypeSeason(ct, month) };
+  };
+  const syncClimate = () => {
+    ctNote.hidden = season.row.hidden;
+    const c = climateHere();
+    /* Until the farmer picks a season for this paddy, the selector follows the suggestion, and goes back
+       to the dry-season default when there is none, so a suggestion made for coordinates typed halfway
+       is never left behind. */
+    if (!seasonChosen) {
+      const sug = c.status === 'ok' && c.cs ? c.cs.season : null;
+      season.input.value = sug || 'dry';
+      seasonAuto = !!sug;
+    }
+    ctNote.innerHTML = '';
+    ctNote.appendChild(el('p', { class: 'lochint' }, bi(climateNote(c, season.input.value, seasonAuto))));
+  };
+  season.input.addEventListener('change', () => { seasonChosen = true; seasonAuto = false; syncClimate(); });
+  levelDate.input.addEventListener('change', syncClimate);
+  const locBlock = locationBlock(syncClimate);
+  form.append(locBlock, plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, ctNote, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
   const memo = el('div', { class: 'hint' });
@@ -795,10 +827,12 @@ CARDS.rice = function (root) {
     fcRain.row.hidden = !hasTube;
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : LEVEL_LABEL.cont), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
+    syncClimate();
   };
   const loadPlot = () => {
     plotName = plot.value; store.ricePlotLast = plotName; save();
     prev = recall('rice:' + ricePlotKey(plotName));
+    seasonChosen = prev.season != null; seasonAuto = false;
     method.input.value = prev.method || 'awd'; season.input.value = prev.season || 'dry'; soil.input.value = prev.soil || 'clay';
     est.input.value = prev.est || ''; flower.input.value = prev.flower || ''; harvest.input.value = prev.harvest || '';
     level.input.value = prev.level != null ? prev.level : ''; levelPrev.input.value = prev.levelPrev != null ? prev.levelPrev : '';
@@ -891,6 +925,10 @@ CARDS.rice = function (root) {
         + '. Carrijo et al. (2017) draw the same line at -20 kPa that the Order draws at ' + (r.triggerCm || 15) + ' cm.']);
     }
     if (r.triggerCm) lines.push([bi({ en: 'Re-flood trigger', fil: 'Hudyat ng pagpapatubig' }), r.triggerCm + ' cm below the soil surface, then flood to about ' + (r.refloodCm || A.AWD.refloodCm) + ' cm above it']);
+    /* The climate type, only where the season is in play: a trigger depth was used and a location set. */
+    const cHere = !season.row.hidden && r.triggerCm ? climateHere() : null;
+    const ctShown = !!(cHere && cHere.status === 'ok');
+    if (ctShown) lines.push([bi({ en: 'PAGASA climate type here', fil: 'Uri ng klima rito ayon sa PAGASA' }), bi(climateLine(cHere, inp.season))]);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
        is still the reading itself, and it holds only while no rain falls. */
     (r.projections || []).forEach(p => {
@@ -1022,7 +1060,7 @@ CARDS.rice = function (root) {
       'The date comes from your own two readings. The fall between them, divided by the days between them, is this field\'s loss: crop water use, percolation and seepage together, measured rather than modelled. This app assumes no percolation rate and no seepage rate, because no Philippine value it could cite exists for your field.',
       'Leave several days between the two readings. A reading off a hand-marked tube is good to about a centimetre, so a one-day pair gives a rate with an error of about 1.4 cm/day, and the date it produces can be out by days. The same pair five days apart cuts that error to about 0.3 cm/day. Averaging daily readings does not help: the daily falls telescope to the first and last reading, so span is the only thing that buys precision.',
       'The date assumes no rain and assumes the loss rate holds. It is a planning aid. The decision rule is still the reading itself: if the tube is at the trigger, irrigate, whatever date this card printed.',
-      'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app.',
+      'The Philippines is not one season everywhere. PAGASA divides the country into four climate types (Climate Map of the Philippines 1951-2010, DOST-PAGASA CADS/IAAS CAD, August 2014). Type I has two pronounced seasons, dry from November to April. Type II has no dry season, with the heaviest rain from December to February. Type III has a dry season of only one to three months, falling within December to February or March to May. Type IV has rainfall spread more or less evenly through the year and no dry season. Two of the four have no dry season at all. If yours is one of them, choose "My area has no dry season" and the card uses the dry-season depth, 15 cm, which re-floods earlier and is the smaller mistake. The Order does not say which depth applies where there is no dry season, so that choice is an assumption of this app. Give the card your location and it looks your type up on the IAAS shapefile of the same map (DOST-PAGASA, 2014) and suggests the season; the choice stays yours.',
       'IRRI safe AWD uses 15 cm in every season, not 20. Re-flooding earlier than the DA depth is always allowed, and on light soils with a deep water table it is the safer error. In the wet season the card therefore gives two dates: the DA one at 20 cm, which is the policy, and the earlier IRRI one at 15 cm.',
       'Keep 5 cm of water from one week before to one week after flowering (IRRI, Bouman et al. 2007, PhilRice).',
       'Start AWD 21 to 30 days after transplanting or sowing, once weeds are managed (PhilRice; DA AO 25-09: 20 to 30 days).',
@@ -1038,6 +1076,13 @@ CARDS.rice = function (root) {
       ev.cons.forEach(c => why.push(c));
     }
     const flags = (r.flags || []).concat(sp ? sp.flags : []).concat(dateFlags).concat(etoFlags).filter(f => f !== 'no_tube_no_published_threshold').map(f => CODES[f]).filter(Boolean);
+    if (ctShown && cHere.cs && cHere.cs.season) {
+      const tr = x => A.AWD.triggerCm[x === 'wet' ? 'wet' : 'dry'], ts = tr(cHere.cs.season), tc = tr(inp.season);
+      if (ts !== tc) flags.push('On the PAGASA climate map your location is Type ' + CT_ROMAN[cHere.ct.type] + ', which calls for "' + CT_SEASON[cHere.cs.season].en + '" in ' + MONTH_NAMES.en[cHere.month - 1] + ', but this paddy is set to "' + CT_SEASON[inp.season].en + '", so the card used ' + tc + ' cm instead of ' + ts + ' cm. Change the season above if the map is right for your field.');
+    }
+    /* The AWD explanation cites the Climate Map, so the map is among its sources; the shapefile joins it
+       when the type was looked up for this answer. */
+    const riceSources = r.sources.concat(inp.fcRain != null ? ['PAGASA_FWFA'] : [], whyByMethod ? [] : ['PAGASA_CLIMATEMAP'], ctShown ? ['PAGASA_IAAS_CTYPE'] : []).filter((x, i, a) => a.indexOf(x) === i);
     const limits = ['Done as this card instructs, safe AWD does not significantly cost yield. Carrijo, Lundy and Linquist (2017), pooling 56 studies and 528 comparisons, found no significant yield reduction under mild AWD, which they define as a field water level no lower than 15 cm or a soil water potential at or above -20 kPa, and a 23.4% cut in water use. The 22.6% yield loss they report belongs to severe AWD, past that line. The threshold is the whole method.',
       'The risk is worse on some soils. Yield losses under AWD are larger on alkaline soils, pH 7 and above, and on soils under 1% carbon (Carrijo et al. 2017), and on loamy and sandy soils with deep water tables IRRI reports water savings above 50% but yield losses above 20% (Bouman et al. 2007).',
       'No percolation or seepage rate is assumed. Every loss figure here was measured in your field, not modelled, and none appears until you have given two readings or the field has a history. The published rates of Bouman et al. (1994) are used only to say which band your own measurement falls in.',
@@ -1045,15 +1090,87 @@ CARDS.rice = function (root) {
       'Splitting the loss needs the crop water use figure from the watering card, which is FAO-56 with the paddy rice crop coefficient. Those coefficients are derived for flooded paddy, so under AWD with no standing water the split is less certain than the total loss, which is measured.',
       'The field history is kept on this phone only. It is not sent anywhere, it is not backed up, and it goes if browsing data is cleared.',
       'Reading windows that overlap share the same measurements, so a field average built from many overlapping pairs is a little firmer-looking than it really is. The date on any one day is taken from that day\'s own pair wherever there is one, not from the average.'];
-    show(out, result({ card: 'rice', suppress: riceSuppress(inp), level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
+    show(out, result({ card: 'rice', suppress: riceSuppress(inp).concat(ctShown ? [] : ['CLIMATE_TYPE_GRID', 'CLIMATE_TYPE_VERSIONS', 'CLIMATE_TYPE_SEASON_MONTHS']), level: level2, verdict: t(T.verdicts[r.decidedBy === 'tensiometer' && r.code === 'not_yet' ? 'not_yet_tens' : r.code], { trig: r.triggerCm, cb: r.triggerCb, depth: depthText, lo: r.targetCm && r.targetCm[0], hi: r.targetCm && r.targetCm[1] }), lines, why, flags,
       assumptions: riceAssumptions(inp).concat([
         'Read at the same hour on both days, in the morning before you add any water. Water use runs with the sun, so a reading at seven and one at five in the afternoon are not one day apart in the way this calculation needs.',
         'Any date assumes the loss rate you measured keeps up. Bouman et al. (1994) found that a constant rate is sound where the plow sole is intact or the subsoil is what limits percolation, and that it is not where a permeable plow sole sits over a permeable subsoil: there percolation follows the depth of water standing on the field, and their own fixed-rate book-keeping drifted 2 to 3 cm. Crop water use also rises with the canopy and falls after flowering. Where the rate slows, this card names a date earlier than the water arrives, which is the safer error.',
         'A reading is taken as good to about one centimetre. Neither PhilRice nor IRRI publishes a graduated well: both are marked only at the depth that calls for water, and the published rule is whether water can still be seen. The centimetre marking, the precision and the width of the date window that follows from it are additions of this app, not published values.']),
-      limits, sources: inp.fcRain != null ? r.sources.concat(['PAGASA_FWFA']) : r.sources }));
+      limits, sources: riceSources }));
   }
 };
 
+/* Words for the climate type. The descriptions follow the Climate Map legend [PAGASA_CLIMATEMAP]. */
+const CT_ROMAN = ['', 'I', 'II', 'III', 'IV'];
+const CT_DESC = {
+  1: { en: 'two pronounced seasons, dry from November to April and wet the rest of the year', fil: 'dalawang malinaw na panahon: tag-araw mula Nobyembre hanggang Abril, at tag-ulan sa natitirang bahagi ng taon' },
+  2: { en: 'no dry season, with the heaviest rain from December to February', fil: 'walang tag-araw, at pinakamalakas ang ulan mula Disyembre hanggang Pebrero' },
+  3: { en: 'a short dry season of one to three months, somewhere in December to February or March to May', fil: 'maikling tag-araw na isa hanggang tatlong buwan, sa loob ng Disyembre hanggang Pebrero o Marso hanggang Mayo' },
+  4: { en: 'rain spread more or less evenly through the year, no dry season', fil: 'halos pantay ang ulan sa buong taon, walang tag-araw' }
+};
+const CT_SEASON = { dry: { en: 'Dry season', fil: 'Tag-araw' }, wet: { en: 'Wet season', fil: 'Tag-ulan' }, nodry: { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' } };
+const MONTH_NAMES = { en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                      fil: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'] };
+const ctList = (types, and) => types.map(t => 'Type ' + CT_ROMAN[t]).join(and);
+/* What the type says, what else lies nearby and what the printed map shows, as facts shared by the note
+   under the season and the line in the answer; the note adds what to choose. */
+function climateParts(c) {
+  const ct = c.ct, cs = c.cs, R = CT_ROMAN, mE = MONTH_NAMES.en[c.month - 1], mF = MONTH_NAMES.fil[c.month - 1];
+  const known = cs.ownSeason != null;
+  const nearTypes = cs.code === 'near_other_type' ? cs.nearDiffer : ct.nearTypes;
+  const nearCmp = !nearTypes.length ? null : cs.code === 'near_other_type' ? 'diff' : (known && !cs.nearDiffer.length ? 'same' : 'none');
+  const mapCmp = ct.map2014 == null ? null : cs.code === 'versions_differ' ? 'diff' : (known && !cs.mapDiffers ? 'same' : 'none');
+  const tailE = { same: ' and calls for the same season.', diff: ' and calls for a different season in ' + mE + '.', none: '.' };
+  const tailF = { same: ' at pareho ang panahong hinihingi nito.', diff: ' at iba ang panahong hinihingi nito sa ' + mF + '.', none: '.' };
+  const near = nearCmp && { en: ctList(nearTypes, ' and ') + ' lies within about 5 km of here' + tailE[nearCmp], fil: 'may ' + ctList(nearTypes, ' at ') + ' sa loob ng mga 5 km mula rito' + tailF[nearCmp] };
+  const map = mapCmp && { en: 'the printed Climate Map of the Philippines (August 2014) shows Type ' + R[ct.map2014] + ' around here' + (mapCmp === 'none' ? '.' : ',' + tailE[mapCmp].replace(' and calls', ' which calls')),
+                          fil: 'Type ' + R[ct.map2014] + ' ang nakalagay rito sa nakalimbag na Climate Map of the Philippines (Agosto 2014)' + (mapCmp === 'none' ? '.' : ',' + tailF[mapCmp]) };
+  const choose = {
+    no_dry_season: { en: 'So choose "My area has no dry season".', fil: 'Kaya piliin ang "Walang tag-init sa lugar namin".' },
+    type_i_dry_months: { en: mE + ' falls in its dry season, so choose "Dry season".', fil: 'Sa uring ito, tag-araw ang ' + mF + ', kaya piliin ang "Tag-araw".' },
+    type_i_wet_months: { en: mE + ' falls in its wet season, so choose "Wet season".', fil: 'Sa uring ito, tag-ulan ang ' + mF + ', kaya piliin ang "Tag-ulan".' },
+    type_iii_wet_months: { en: 'Its dry months fall between December and May, so ' + mE + ' is in the wet season: choose "Wet season".', fil: 'Nasa pagitan ng Disyembre at Mayo ang mga buwan ng tag-araw nito, kaya tag-ulan ang ' + mF + ': piliin ang "Tag-ulan".' },
+    type_iii_months_not_given: { en: 'The map does not say which one to three months are dry, so choose the season yourself: "Dry season" if ' + mE + ' is dry where you are, "Wet season" if not.', fil: 'Hindi sinasabi ng mapa kung aling isa hanggang tatlong buwan ang tag-araw, kaya kayo ang pumili: "Tag-araw" kung tuyo ang ' + mF + ' sa lugar ninyo, "Tag-ulan" kung hindi.' },
+    near_other_type: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' },
+    versions_differ: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' }
+  }[cs.code];
+  return { near: near, map: map, choose: choose };
+}
+const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
+function climateNote(c, chosen, auto) {
+  if (c.status === 'unset') return { en: 'Set your location at the top of this card and it will show the PAGASA climate type there, which tells whether your area has a dry season.', fil: 'Itakda ang lokasyon sa itaas ng card na ito at ipakikita nito ang uri ng klima roon ayon sa PAGASA, na nagsasabi kung may tag-araw ang lugar ninyo.' };
+  if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so it has no PAGASA climate type.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya wala itong uri ng klima ayon sa PAGASA.' };
+  const ct = c.ct, cs = c.cs, p = climateParts(c);
+  let en = 'PAGASA climate type at your location: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (DOST-PAGASA IAAS, 2014).';
+  let fil = 'Uri ng klima sa lokasyon ninyo ayon sa PAGASA: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (DOST-PAGASA IAAS, 2014).';
+  /* A conflict is the reason to choose, so it comes first and is introduced as one. */
+  const lead = cs.code === 'near_other_type' ? p.near : cs.code === 'versions_differ' ? p.map : null;
+  if (lead) { en += ' But ' + lead.en; fil += ' Ngunit ' + lead.fil; }
+  if (p.choose) { en += ' ' + p.choose.en; fil += ' ' + p.choose.fil; }
+  [p.near, p.map].forEach(x => { if (x && x !== lead) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
+  if (cs.season && auto) {
+    en += ' The card has set the season to "' + CT_SEASON[cs.season].en + '" for you; change it if your field is different.';
+    fil += ' Itinakda na ng card ang panahon sa "' + CT_SEASON[cs.season].fil + '" para sa inyo; palitan kung iba ang sa bukid ninyo.';
+  } else if (cs.season && chosen !== cs.season && CT_SEASON[chosen]) {
+    en += ' This paddy is set to "' + CT_SEASON[chosen].en + '".';
+    fil += ' Nakatakda ang palayang ito sa "' + CT_SEASON[chosen].fil + '".';
+  }
+  return { en: en, fil: fil };
+}
+function climateLine(c, chosen) {
+  const ct = c.ct, cs = c.cs, p = climateParts(c), mE = MONTH_NAMES.en[c.month - 1], mF = MONTH_NAMES.fil[c.month - 1];
+  const ch = CT_SEASON[chosen] || CT_SEASON.dry;
+  let en = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (IAAS shapefile, DOST-PAGASA 2014, read at ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
+  let fil = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (IAAS shapefile, DOST-PAGASA 2014, sa ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
+  [p.near, p.map].forEach(x => { if (x) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
+  if (cs.season) {
+    en += ' In ' + mE + ' it calls for "' + CT_SEASON[cs.season].en + '"' + (chosen === cs.season ? ', which is what the card used.' : '; this paddy is set to "' + ch.en + '", and the card used that.');
+    fil += ' Sa ' + mF + ', "' + CT_SEASON[cs.season].fil + '" ang hinihingi nito' + (chosen === cs.season ? ', at iyon ang ginamit ng card.' : '; nakatakda ang palayang ito sa "' + ch.fil + '", at iyon ang ginamit ng card.');
+  } else {
+    en += ' It does not settle the season in ' + mE + ', so the card used the one you chose, "' + ch.en + '".';
+    fil += ' Hindi nito natitiyak ang panahon sa ' + mF + ', kaya ang pinili ninyo ang ginamit ng card, "' + ch.fil + '".';
+  }
+  return { en: en, fil: fil };
+}
 /* The observation well is set to the season, so its description is too. The no-dry-season case is a
    declared choice rather than a published rule: DA AO 25-09 names a depth for the dry season and one
    for the wet, and two of the four Philippine climate types have neither, so the card says which one

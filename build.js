@@ -1,11 +1,13 @@
 /* AgriKalkunahon build.
-   Inlines engine/core.js and src/app.js into src/index.template.html and writes
+   Inlines engine/climatetype.js, engine/core.js and src/app.js into src/index.template.html and writes
    index.html (the served app) and AgriKalkunahon.html (the download copy) in this folder.
    Also rewrites the VERSION line in sw.js from a hash of the sources. manifest.webmanifest and the icons are not touched.
    Usage: node build.js */
 const fs = require('fs'), path = require('path');
 const here = __dirname, read = p => fs.readFileSync(path.join(here, p), 'utf8');
-const tpl = read('src/index.template.html'), engine = read('engine/core.js'), app = read('src/app.js');
+/* The climate type grid is data, kept in its own file so the engine stays readable; it goes in ahead of
+   the engine, which picks it up from AGRI_CTYPE. */
+const tpl = read('src/index.template.html'), engine = read('engine/climatetype.js') + '\n' + read('engine/core.js'), app = read('src/app.js');
 /* The release version comes from CITATION.cff, so bumping a release cannot leave the About card behind.
    Two releases shipped with a stale version line before this was automated. */
 const cff = read('CITATION.cff'), vm = cff.match(/^version:\s*(.+)$/m);
