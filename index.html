@@ -65,7 +65,7 @@ h2{margin:6px 0 12px;font-size:20px;color:var(--green-ink)}
 h3{font-size:16px;color:var(--green-ink);margin:18px 0 6px}
 h4{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--earth)}
 .card-form{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px 16px}
-fieldset.loc{border:1px dashed var(--ochre);border-radius:8px;padding:8px 10px 10px;margin:0 0 8px;background:var(--earth-soft)}
+fieldset.loc{border:1px dashed var(--ochre);border-radius:8px;padding:8px 10px 10px;margin:0 0 8px;background:var(--earth-soft);min-width:0}
 fieldset.loc legend{font-size:13px;color:var(--earth);padding:0 6px}
 label.row{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:14px}
 label.row input,label.row select{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:42px}
@@ -122,6 +122,7 @@ code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px
 .opt .fil{font-style:italic}
 .locwarn{font-size:13px;margin:8px 0 0}
 .locacc{font-size:12px;margin:8px 0 0;color:var(--muted)}
+.ctline p{font-size:13px;margin:8px 0 10px;padding:8px 10px;background:var(--card);border-left:4px solid var(--green);border-radius:6px;color:var(--ink)}
 dl.nums dt.alert{color:#8a4b00;font-weight:700}
 dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px solid #d98324;background:#fdf3e6;border-radius:6px}
 .haiku{margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--line,#ddd);text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
@@ -2292,7 +2293,10 @@ const CODES = {
 };
 
 /* ---------- shared location block ---------- */
-function locationBlock(onchange) {
+/* onchange(reason) is told why the location changed: 'gps' for the locate button, 'latlon' for a typed
+   coordinate, 'other' for elevation or site. climateExtra, if given, adds a card's own words to the
+   climate type line (the rice card adds what to set Season to). */
+function locationBlock(onchange, climateExtra) {
   const L = store.loc;
   const wrap = el('fieldset', { class: 'loc' }, el('legend', null, bi(T.ui.location)));
   const lat = numInput('lat', T.ui.lat, L.lat, 0.01, { prefilled: true }), lon = numInput('lon', T.ui.lon, L.lon, 0.01, { prefilled: true }), elev = numInput('elev', T.ui.elev, L.elev, 1, { prefilled: true });
@@ -2309,23 +2313,32 @@ function locationBlock(onchange) {
              lat.input.value = p.coords.latitude.toFixed(2); lon.input.value = p.coords.longitude.toFixed(2);
              if (n(p.coords.altitude) != null) elev.input.value = Math.round(p.coords.altitude);
              /* The device states its own uncertainty; record it so the card can say how much it matters. */
-             L.acc = n(p.coords.accuracy); L.altAcc = n(p.coords.altitudeAccuracy); L.altFromGps = n(p.coords.altitude) != null; sync(); },
+             L.acc = n(p.coords.accuracy); L.altAcc = n(p.coords.altitudeAccuracy); L.altFromGps = n(p.coords.altitude) != null; sync('gps'); },
       err => gpsFailed(err && err.code === 1
         ? { en: 'Your device refused to share its location, so the app is still using the location shown below. Type your own in.', fil: 'Tumanggi ang device ninyo na ibigay ang lokasyon, kaya ang nasa ibaba pa rin ang ginagamit ng app. I-type ang sarili ninyo.' }
         : { en: 'Could not read your location. Type the numbers in below.', fil: 'Hindi nakuha ang lokasyon ninyo. I-type ang mga numero sa ibaba.' }),
       { enableHighAccuracy: true, timeout: 8000 });
   } }, bi(T.ui.gps));
-  function sync() { L.lat = +lat.input.value; L.lon = +lon.input.value; L.elev = +elev.input.value; L.site = site.input.value; L.set = true; save(); redraw(); if (onchange) onchange(); }
+  function sync(reason) { L.lat = +lat.input.value; L.lon = +lon.input.value; L.elev = +elev.input.value; L.site = site.input.value; L.set = true; save(); redraw(); if (onchange) onchange(reason); }
   [lat, lon, elev].forEach(x => x.input.addEventListener('input', () => { L.acc = null; L.altAcc = null; L.altFromGps = false; }));
+  /* The PAGASA climate type, right under what the locate button fills in, once the location is the
+     farmer's own. Outside the Philippines the warning below already says so, and nothing is added. */
+  const ctLine = el('div', { class: 'ctline' });
   function redraw() {
+    const ct = L.set ? A.climateType(L.lat, L.lon) : null;
+    ctLine.innerHTML = ''; ctLine.hidden = !ct;
+    if (ct) { const b = climateTypeText(ct), x = climateExtra ? climateExtra() : null;
+              ctLine.appendChild(el('p', null, bi(x ? { en: b.en + ' ' + x.en, fil: b.fil + ' ' + x.fil } : b))); }
     warn.innerHTML = '';
     const u = gpsUncertainty(); if (u) warn.appendChild(el('p', { class: 'locacc' }, bi(u)));
     locationWarnings().forEach(x => warn.appendChild(el('p', { class: 'warn locwarn' }, bi(x))));
   }
   const warn = el('div');
-  [lat, lon, elev, site].forEach(x => x.input.addEventListener('change', sync));
-  wrap.append(gps, note, hint, lat.row, lon.row, elev.row, site.row, warn);
+  [lat, lon].forEach(x => x.input.addEventListener('change', () => sync('latlon')));
+  [elev, site].forEach(x => x.input.addEventListener('change', () => sync('other')));
+  wrap.append(gps, note, hint, lat.row, lon.row, elev.row, ctLine, site.row, warn);
   redraw();
+  wrap.redraw = redraw;
   return wrap;
 }
 /* What the app can check about the saved location without guessing: whether anyone ever set it,
@@ -2493,7 +2506,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'f74055c0' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '72adc4af' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2770,38 +2783,41 @@ CARDS.rice = function (root) {
   const fcRain = numInput('rFcRain', { en: 'Rain in the PAGASA forecast before the next re-flood date (mm)', fil: 'Ulan sa forecast ng PAGASA bago ang susunod na pagpapatubig (mm)' }, prev.fcRain, 0.1, { optional: true });
   const weeds = checkInput('weeds', { en: 'Weeds are under control', fil: 'Kontrolado na ang damo' }, prev.weeds !== false);
   const season = selectInput('season', { en: 'Season', fil: 'Panahon' }, [['dry', { en: 'Dry season (tag-araw)', fil: 'Tag-araw' }], ['wet', { en: 'Wet season (tag-ulan)', fil: 'Tag-ulan' }], ['nodry', { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' }]], prev.season || 'dry');
-  /* The PAGASA climate type at the saved location, looked up on the IAAS shapefile [PAGASA_IAAS_CTYPE].
-     It suggests the season. It sets the season only on a paddy that has never had one chosen, says so
-     when it does, and never overrides a season the farmer picked. */
+  /* The PAGASA climate type at the saved location, looked up on the IAAS shapefile [PAGASA_IAAS_CTYPE],
+     sets the season. A new location, from the locate button or typed in, sets it at once wherever the map
+     can say; the farmer can still change it, and that choice holds until the location changes again.
+     Where the map cannot say, the season goes back to the farmer's own choice, or the dry-season default. */
   const ctNote = el('div', { class: 'ctnote' });
-  let seasonChosen = prev.season != null, seasonAuto = false;
+  const farmerSeasonOf = p => (p.season != null && (p.seasonFrom === 'farmer' || p.seasonFrom == null)) ? p.season : null;
+  let farmerSeason = farmerSeasonOf(prev), seasonAuto = false, locBlock = null;
   const climateHere = () => {
     const L = store.loc;
     if (!L.set) return { status: 'unset' };
     const ct = A.climateType(L.lat, L.lon);
     if (!ct) return { status: 'outside' };
-    /* The season is judged by the month of the reading, which is what the card answers for. */
+    /* The season is judged by the month of the reading, which is today unless the farmer dates it. */
     const ld = !levelDate.row.hidden && levelDate.input.value ? new Date(levelDate.input.value + 'T00:00:00') : null;
     const month = (ld && !isNaN(ld) ? ld : fieldNow()).getMonth() + 1;
     return { status: 'ok', ct: ct, month: month, cs: A.climateTypeSeason(ct, month) };
   };
-  const syncClimate = () => {
+  const syncClimate = fromLocation => {
     ctNote.hidden = season.row.hidden;
-    const c = climateHere();
-    /* Until the farmer picks a season for this paddy, the selector follows the suggestion, and goes back
-       to the dry-season default when there is none, so a suggestion made for coordinates typed halfway
-       is never left behind. */
-    if (!seasonChosen) {
-      const sug = c.status === 'ok' && c.cs ? c.cs.season : null;
-      season.input.value = sug || 'dry';
-      seasonAuto = !!sug;
+    const c = climateHere(), sug = c.status === 'ok' && c.cs ? c.cs.season : null;
+    if (fromLocation || seasonAuto || farmerSeason == null) {
+      if (sug) { season.input.value = sug; seasonAuto = true; }
+      else { season.input.value = farmerSeason || 'dry'; seasonAuto = false; }
     }
     ctNote.innerHTML = '';
-    ctNote.appendChild(el('p', { class: 'lochint' }, bi(climateNote(c, season.input.value, seasonAuto))));
+    ctNote.appendChild(el('p', { class: 'lochint' }, bi(seasonNote(c, season.input.value, seasonAuto))));
+    if (locBlock) locBlock.redraw();
   };
-  season.input.addEventListener('change', () => { seasonChosen = true; seasonAuto = false; syncClimate(); });
-  levelDate.input.addEventListener('change', syncClimate);
-  const locBlock = locationBlock(syncClimate);
+  season.input.addEventListener('change', () => { farmerSeason = season.input.value; seasonAuto = false; syncClimate(false); });
+  levelDate.input.addEventListener('change', () => syncClimate(false));
+  locBlock = locationBlock(reason => syncClimate(reason === 'gps' || reason === 'latlon'), () => {
+    if (season.row.hidden) return null;
+    const c = climateHere();
+    return c.status === 'ok' ? riceSeasonAdvice(c, season.input.value, seasonAuto) : null;
+  });
   form.append(locBlock, plotRow, est.row, flower.row, harvest.row, soil.row, method.row, season.row, ctNote, instrument.row, bothMode.row, surface.row, tens.row, level.row, levelDate.row, levelPrev.row, levelPrevDate.row, tmax.row, tmin.row, etc.row, fcRain.row, weeds.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   /* What the card keeps, stated plainly. Forgetting was the only control here and it sat under the
      Answer button looking like the thing to press; remembering is what the card actually does. */
@@ -2868,12 +2884,12 @@ CARDS.rice = function (root) {
     fcRain.row.hidden = !hasTube;
     level.row.replaceChild(bi(awd ? LEVEL_LABEL.awd : LEVEL_LABEL.cont), level.row.firstChild);
     est.row.replaceChild(bi(cont ? EST_LABEL.cont : EST_LABEL.awd), est.row.firstChild);
-    syncClimate();
+    syncClimate(false);
   };
   const loadPlot = () => {
     plotName = plot.value; store.ricePlotLast = plotName; save();
     prev = recall('rice:' + ricePlotKey(plotName));
-    seasonChosen = prev.season != null; seasonAuto = false;
+    farmerSeason = farmerSeasonOf(prev); seasonAuto = false;
     method.input.value = prev.method || 'awd'; season.input.value = prev.season || 'dry'; soil.input.value = prev.soil || 'clay';
     est.input.value = prev.est || ''; flower.input.value = prev.flower || ''; harvest.input.value = prev.harvest || '';
     level.input.value = prev.level != null ? prev.level : ''; levelPrev.input.value = prev.levelPrev != null ? prev.levelPrev : '';
@@ -2898,7 +2914,7 @@ CARDS.rice = function (root) {
     const valOf = (x, blank) => x.row.hidden ? blank : x.input.value;
     const inp = { plot: plot.value, method: method.input.value, instrument: instrument.input.value,
                   tens: numOf(tens), surface: valOf(surface, 'unknown'), bothMode: valOf(bothMode, 'tensiometer'),
-                  season: valOf(season, 'dry'), est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
+                  season: valOf(season, 'dry'), seasonFrom: season.row.hidden ? 'default' : (seasonAuto ? 'auto' : (farmerSeason != null ? 'farmer' : 'default')), est: est.input.value, flower: flower.input.value, harvest: harvest.input.value,
                   soil: soil.input.value, level: numOf(level), levelPrev: numOf(levelPrev),
                   levelDate: valOf(levelDate, ''), levelPrevDate: valOf(levelPrevDate, ''),
                   tmax: numOf(tmax), tmin: numOf(tmin), etc: numOf(etc), fcRain: numOf(fcRain), weeds: weeds.input.checked };
@@ -2969,7 +2985,7 @@ CARDS.rice = function (root) {
     /* The climate type, only where the season is in play: a trigger depth was used and a location set. */
     const cHere = !season.row.hidden && r.triggerCm ? climateHere() : null;
     const ctShown = !!(cHere && cHere.status === 'ok');
-    if (ctShown) lines.push([bi({ en: 'PAGASA climate type here', fil: 'Uri ng klima rito ayon sa PAGASA' }), bi(climateLine(cHere, inp.season))]);
+    if (ctShown) lines.push([bi({ en: 'PAGASA climate type here', fil: 'Uri ng klima rito ayon sa PAGASA' }), bi(climateLine(cHere, inp.season, inp.seasonFrom))]);
     /* The date, and the window the reading error puts around it. It is a planning aid: the decision
        is still the reading itself, and it holds only while no rain falls. */
     (r.projections || []).forEach(p => {
@@ -3143,10 +3159,10 @@ CARDS.rice = function (root) {
 /* Words for the climate type. The descriptions follow the Climate Map legend [PAGASA_CLIMATEMAP]. */
 const CT_ROMAN = ['', 'I', 'II', 'III', 'IV'];
 const CT_DESC = {
-  1: { en: 'two pronounced seasons, dry from November to April and wet the rest of the year', fil: 'dalawang malinaw na panahon: tag-araw mula Nobyembre hanggang Abril, at tag-ulan sa natitirang bahagi ng taon' },
-  2: { en: 'no dry season, with the heaviest rain from December to February', fil: 'walang tag-araw, at pinakamalakas ang ulan mula Disyembre hanggang Pebrero' },
-  3: { en: 'a short dry season of one to three months, somewhere in December to February or March to May', fil: 'maikling tag-araw na isa hanggang tatlong buwan, sa loob ng Disyembre hanggang Pebrero o Marso hanggang Mayo' },
-  4: { en: 'rain spread more or less evenly through the year, no dry season', fil: 'halos pantay ang ulan sa buong taon, walang tag-araw' }
+  1: { en: 'Two pronounced seasons: dry from November to April and wet the rest of the year, with the heaviest rain from June to September.', fil: 'Dalawang malinaw na panahon: tag-araw mula Nobyembre hanggang Abril at tag-ulan sa natitirang bahagi ng taon, at pinakamalakas ang ulan mula Hunyo hanggang Setyembre.' },
+  2: { en: 'No dry season, with the heaviest rain from December to February; not a single month is dry.', fil: 'Walang tag-araw, at pinakamalakas ang ulan mula Disyembre hanggang Pebrero; walang kahit isang tuyong buwan.' },
+  3: { en: 'No very pronounced period of heaviest rain, and a short dry season of one to three months, somewhere in December to February or March to May.', fil: 'Walang tiyak na panahon ng pinakamalakas na ulan, at maikli ang tag-araw, isa hanggang tatlong buwan, sa loob ng Disyembre hanggang Pebrero o Marso hanggang Mayo.' },
+  4: { en: 'Rain more or less evenly spread through the year, and no dry season.', fil: 'Halos pantay ang ulan sa buong taon, at walang tag-araw.' }
 };
 const CT_SEASON = { dry: { en: 'Dry season', fil: 'Tag-araw' }, wet: { en: 'Wet season', fil: 'Tag-ulan' }, nodry: { en: 'My area has no dry season', fil: 'Walang tag-init sa lugar namin' } };
 const MONTH_NAMES = { en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
@@ -3165,50 +3181,71 @@ function climateParts(c) {
   const near = nearCmp && { en: ctList(nearTypes, ' and ') + ' lies within about 5 km of here' + tailE[nearCmp], fil: 'may ' + ctList(nearTypes, ' at ') + ' sa loob ng mga 5 km mula rito' + tailF[nearCmp] };
   const map = mapCmp && { en: 'the printed Climate Map of the Philippines (August 2014) shows Type ' + R[ct.map2014] + ' around here' + (mapCmp === 'none' ? '.' : ',' + tailE[mapCmp].replace(' and calls', ' which calls')),
                           fil: 'Type ' + R[ct.map2014] + ' ang nakalagay rito sa nakalimbag na Climate Map of the Philippines (Agosto 2014)' + (mapCmp === 'none' ? '.' : ',' + tailF[mapCmp]) };
-  const choose = {
-    no_dry_season: { en: 'So choose "My area has no dry season".', fil: 'Kaya piliin ang "Walang tag-init sa lugar namin".' },
-    type_i_dry_months: { en: mE + ' falls in its dry season, so choose "Dry season".', fil: 'Sa uring ito, tag-araw ang ' + mF + ', kaya piliin ang "Tag-araw".' },
-    type_i_wet_months: { en: mE + ' falls in its wet season, so choose "Wet season".', fil: 'Sa uring ito, tag-ulan ang ' + mF + ', kaya piliin ang "Tag-ulan".' },
-    type_iii_wet_months: { en: 'Its dry months fall between December and May, so ' + mE + ' is in the wet season: choose "Wet season".', fil: 'Nasa pagitan ng Disyembre at Mayo ang mga buwan ng tag-araw nito, kaya tag-ulan ang ' + mF + ': piliin ang "Tag-ulan".' },
-    type_iii_months_not_given: { en: 'The map does not say which one to three months are dry, so choose the season yourself: "Dry season" if ' + mE + ' is dry where you are, "Wet season" if not.', fil: 'Hindi sinasabi ng mapa kung aling isa hanggang tatlong buwan ang tag-araw, kaya kayo ang pumili: "Tag-araw" kung tuyo ang ' + mF + ' sa lugar ninyo, "Tag-ulan" kung hindi.' },
-    near_other_type: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' },
-    versions_differ: { en: 'Choose the season yourself.', fil: 'Kayo ang pumili ng panahon.' }
-  }[cs.code];
-  return { near: near, map: map, choose: choose };
+  return { near: near, map: map };
 }
 const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
-function climateNote(c, chosen, auto) {
-  if (c.status === 'unset') return { en: 'Set your location at the top of this card and it will show the PAGASA climate type there, which tells whether your area has a dry season.', fil: 'Itakda ang lokasyon sa itaas ng card na ito at ipakikita nito ang uri ng klima roon ayon sa PAGASA, na nagsasabi kung may tag-araw ang lugar ninyo.' };
-  if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so it has no PAGASA climate type.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya wala itong uri ng klima ayon sa PAGASA.' };
-  const ct = c.ct, cs = c.cs, p = climateParts(c);
-  let en = 'PAGASA climate type at your location: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (DOST-PAGASA IAAS, 2014).';
-  let fil = 'Uri ng klima sa lokasyon ninyo ayon sa PAGASA: Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (DOST-PAGASA IAAS, 2014).';
-  /* A conflict is the reason to choose, so it comes first and is introduced as one. */
-  const lead = cs.code === 'near_other_type' ? p.near : cs.code === 'versions_differ' ? p.map : null;
-  if (lead) { en += ' But ' + lead.en; fil += ' Ngunit ' + lead.fil; }
-  if (p.choose) { en += ' ' + p.choose.en; fil += ' ' + p.choose.fil; }
-  [p.near, p.map].forEach(x => { if (x && x !== lead) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
-  if (cs.season && auto) {
-    en += ' The card has set the season to "' + CT_SEASON[cs.season].en + '" for you; change it if your field is different.';
-    fil += ' Itinakda na ng card ang panahon sa "' + CT_SEASON[cs.season].fil + '" para sa inyo; palitan kung iba ang sa bukid ninyo.';
-  } else if (cs.season && chosen !== cs.season && CT_SEASON[chosen]) {
-    en += ' This paddy is set to "' + CT_SEASON[chosen].en + '".';
-    fil += ' Nakatakda ang palayang ito sa "' + CT_SEASON[chosen].fil + '".';
+/* The line under Elevation on every card: the type, what the legend says it is, and anything nearby or
+   on the printed map that could change it. */
+function climateTypeText(ct) {
+  const R = CT_ROMAN, d = CT_DESC[ct.type];
+  let en = 'PAGASA climate type here: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.en;
+  let fil = 'Uri ng klima rito ayon sa PAGASA: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.fil;
+  if (ct.nearTypes.length) {
+    en += ' ' + ctList(ct.nearTypes, ' and ') + (ct.nearTypes.length > 1 ? ' lie' : ' lies') + ' within about 5 km of here.';
+    fil += ' May ' + ctList(ct.nearTypes, ' at ') + ' din sa loob ng mga 5 km mula rito.';
+  }
+  if (ct.map2014 != null) {
+    en += ' The printed Climate Map of the Philippines (August 2014) shows Type ' + R[ct.map2014] + ' around here.';
+    fil += ' Type ' + R[ct.map2014] + ' naman ang nakalagay rito sa nakalimbag na Climate Map of the Philippines (Agosto 2014).';
   }
   return { en: en, fil: fil };
 }
-function climateLine(c, chosen) {
+/* What the rice card adds to that line: what Season has been set to, or why the farmer must set it. */
+function riceSeasonAdvice(c, chosen, auto) {
+  const cs = c.cs; if (!cs) return null;
+  const now = fieldNow().getMonth() + 1, S = CT_SEASON, sug = cs.season, ch = S[chosen] || S.dry;
+  const mE = MONTH_NAMES.en[c.month - 1] + (c.month !== now ? ' (the month of your reading)' : '');
+  const mF = MONTH_NAMES.fil[c.month - 1] + (c.month !== now ? ' (ang buwan ng pagbása ninyo)' : '');
+  if (sug) {
+    const why = {
+      no_dry_season: { en: 'With no dry season,', fil: 'Dahil walang tag-araw,' },
+      type_i_dry_months: { en: mE + ' is in its dry season, so', fil: 'Tag-araw ang ' + mF + ' sa uring ito, kaya' },
+      type_i_wet_months: { en: mE + ' is in its wet season, so', fil: 'Tag-ulan ang ' + mF + ' sa uring ito, kaya' },
+      type_iii_wet_months: { en: mE + ' is in its wet season, since its dry months fall between December and May, so', fil: 'Tag-ulan ang ' + mF + ', dahil nasa pagitan ng Disyembre at Mayo ang mga buwan ng tag-araw nito, kaya' }
+    }[cs.code];
+    const tail = chosen !== sug
+      ? { en: ' it calls for "' + S[sug].en + '", but Season below is set to "' + ch.en + '", as you chose.', fil: ' "' + S[sug].fil + '" ang hinihingi nito, ngunit "' + ch.fil + '" ang nakatakdang Panahon sa ibaba, ayon sa pinili ninyo.' }
+      : auto ? { en: ' the card has set Season below to "' + S[sug].en + '" for you.', fil: ' itinakda na ng card ang Panahon sa ibaba sa "' + S[sug].fil + '" para sa inyo.' }
+      : { en: ' Season below is set to "' + S[sug].en + '".', fil: ' nakatakda ang Panahon sa ibaba sa "' + S[sug].fil + '".' };
+    return { en: why.en + tail.en, fil: why.fil + tail.fil };
+  }
+  if (cs.code === 'type_iii_months_not_given') return { en: 'The map does not say which months from December to May are dry here, so set Season below yourself: "Dry season" if ' + mE + ' is dry where you are, "Wet season" if not.', fil: 'Hindi sinasabi ng mapa kung aling mga buwan mula Disyembre hanggang Mayo ang tuyo rito, kaya kayo ang magtakda ng Panahon sa ibaba: "Tag-araw" kung tuyo ang ' + mF + ' sa lugar ninyo, "Tag-ulan" kung hindi.' };
+  if (cs.code === 'near_other_type') { const n = cs.nearDiffer; return { en: 'Because ' + ctList(n, ' and ') + ' nearby ' + (n.length > 1 ? 'call' : 'calls') + ' for a different season in ' + mE + ', set Season below yourself.', fil: 'Dahil iba ang panahong hinihingi ng kalapit na ' + ctList(n, ' at ') + ' sa ' + mF + ', kayo ang magtakda ng Panahon sa ibaba.' }; }
+  if (cs.code === 'versions_differ') return { en: 'Because the printed map\'s Type ' + CT_ROMAN[c.ct.map2014] + ' calls for a different season in ' + mE + ', set Season below yourself.', fil: 'Dahil iba ang panahong hinihingi ng Type ' + CT_ROMAN[c.ct.map2014] + ' sa nakalimbag na mapa sa ' + mF + ', kayo ang magtakda ng Panahon sa ibaba.' };
+  return null;
+}
+/* The short note under Season itself; the reasons are in the Location box above it. */
+function seasonNote(c, chosen, auto) {
+  if (c.status === 'unset') return { en: 'Push "Use phone GPS" at the top of this card, or type your location there, and the card will set the season for you from the PAGASA climate type.', fil: 'Pindutin ang "Gamitin ang GPS ng smartphone" sa itaas ng card na ito, o i-type doon ang lokasyon ninyo, at itatakda ng card ang panahon para sa inyo batay sa uri ng klima ayon sa PAGASA.' };
+  if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so there is no PAGASA climate type to set the season from. Choose it yourself.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya walang uri ng klima ayon sa PAGASA na mapagbabatayan ng panahon. Kayo ang pumili.' };
+  const R = CT_ROMAN[c.ct.type], sug = c.cs.season, S = CT_SEASON, ch = S[chosen] || S.dry;
+  if (!sug) return { en: 'The PAGASA climate type at your location, Type ' + R + ', cannot settle the season for ' + MONTH_NAMES.en[c.month - 1] + ' (see Location above), so choose it yourself.', fil: 'Hindi matitiyak ng uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ', ang panahon sa ' + MONTH_NAMES.fil[c.month - 1] + ' (tingnan ang Lokasyon sa itaas), kaya kayo ang pumili.' };
+  if (chosen !== sug) return { en: 'The PAGASA climate type at your location, Type ' + R + ', calls for "' + S[sug].en + '" (see Location above); you have chosen "' + ch.en + '".', fil: '"' + S[sug].fil + '" ang hinihingi ng uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ' (tingnan ang Lokasyon sa itaas); "' + ch.fil + '" ang pinili ninyo.' };
+  return auto ? { en: 'Set for you from the PAGASA climate type at your location, Type ' + R + ' (see Location above). Change it if your field is different.', fil: 'Itinakda para sa inyo batay sa uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ' (tingnan ang Lokasyon sa itaas). Palitan kung iba ang sa bukid ninyo.' }
+              : { en: 'This matches the PAGASA climate type at your location, Type ' + R + ' (see Location above).', fil: 'Tugma ito sa uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ' (tingnan ang Lokasyon sa itaas).' };
+}
+function climateLine(c, chosen, from) {
   const ct = c.ct, cs = c.cs, p = climateParts(c), mE = MONTH_NAMES.en[c.month - 1], mF = MONTH_NAMES.fil[c.month - 1];
   const ch = CT_SEASON[chosen] || CT_SEASON.dry;
-  let en = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].en + ' (IAAS shapefile, DOST-PAGASA 2014, read at ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
-  let fil = 'Type ' + CT_ROMAN[ct.type] + ', ' + CT_DESC[ct.type].fil + ' (IAAS shapefile, DOST-PAGASA 2014, sa ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E).';
+  let en = 'Type ' + CT_ROMAN[ct.type] + ' (IAAS shapefile, DOST-PAGASA 2014, read at ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E). ' + CT_DESC[ct.type].en;
+  let fil = 'Type ' + CT_ROMAN[ct.type] + ' (IAAS shapefile, DOST-PAGASA 2014, sa ' + fmt(ct.gridLat, 2) + ' N, ' + fmt(ct.gridLon, 2) + ' E). ' + CT_DESC[ct.type].fil;
   [p.near, p.map].forEach(x => { if (x) { en += ' ' + cap(x.en); fil += ' ' + cap(x.fil); } });
   if (cs.season) {
     en += ' In ' + mE + ' it calls for "' + CT_SEASON[cs.season].en + '"' + (chosen === cs.season ? ', which is what the card used.' : '; this paddy is set to "' + ch.en + '", and the card used that.');
     fil += ' Sa ' + mF + ', "' + CT_SEASON[cs.season].fil + '" ang hinihingi nito' + (chosen === cs.season ? ', at iyon ang ginamit ng card.' : '; nakatakda ang palayang ito sa "' + ch.fil + '", at iyon ang ginamit ng card.');
   } else {
-    en += ' It does not settle the season in ' + mE + ', so the card used the one you chose, "' + ch.en + '".';
-    fil += ' Hindi nito natitiyak ang panahon sa ' + mF + ', kaya ang pinili ninyo ang ginamit ng card, "' + ch.fil + '".';
+    en += ' It does not settle the season in ' + mE + (from === 'farmer' ? ', so the card used the one you chose, "' + ch.en + '".' : ', so the card used its starting setting, "' + ch.en + '"; set Season yourself if that is wrong for your field.');
+    fil += ' Hindi nito natitiyak ang panahon sa ' + mF + (from === 'farmer' ? ', kaya ang pinili ninyo ang ginamit ng card, "' + ch.fil + '".' : ', kaya ang panimulang setting ng card ang ginamit, "' + ch.fil + '"; kayo ang magtakda ng Panahon kung mali ito para sa bukid ninyo.');
   }
   return { en: en, fil: fil };
 }
@@ -4023,7 +4060,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 792 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build f74055c0. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 72adc4af. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4115,7 +4152,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build f74055c0)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 72adc4af)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4127,7 +4164,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build f74055c0).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build f74055c0 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 72adc4af).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 72adc4af ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4174,7 +4211,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build f74055c0.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 72adc4af.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
