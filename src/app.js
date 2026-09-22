@@ -284,7 +284,7 @@ function locationBlock(onchange, climateExtra) {
   const ctLine = el('div', { class: 'ctline' });
   function redraw() {
     const ct = L.set ? A.climateType(L.lat, L.lon) : null;
-    ctLine.innerHTML = ''; ctLine.hidden = !ct;
+    ctLine.innerHTML = ''; ctLine.hidden = !ct; ctLine.classList.toggle('off', !!(ct && ct.offMap));
     if (ct) { const b = climateTypeText(ct), x = climateExtra ? climateExtra() : null;
               ctLine.appendChild(el('p', null, bi(x ? { en: b.en + ' ' + x.en, fil: b.fil + ' ' + x.fil } : b))); }
     warn.innerHTML = '';
@@ -753,6 +753,7 @@ CARDS.rice = function (root) {
     if (!L.set) return { status: 'unset' };
     const ct = A.climateType(L.lat, L.lon);
     if (!ct) return { status: 'outside' };
+    if (ct.offMap) return { status: 'offmap', ct: ct };
     /* The season is judged by the month of the reading, which is today unless the farmer dates it. */
     const ld = !levelDate.row.hidden && levelDate.input.value ? new Date(levelDate.input.value + 'T00:00:00') : null;
     const month = (ld && !isNaN(ld) ? ld : fieldNow()).getMonth() + 1;
@@ -1145,6 +1146,8 @@ const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
 /* The line under Elevation on every card: the type, what the legend says it is, and anything nearby or
    on the printed map that could change it. */
 function climateTypeText(ct) {
+  if (ct.offMap) return { en: 'You are at sea, or outside the Philippines: these coordinates are more than ' + ct.offMapKm + ' km from any land on the PAGASA climate map (DOST-PAGASA IAAS, 2014). Check the latitude and longitude.',
+                          fil: 'Nasa dagat kayo, o nasa labas ng Pilipinas: mahigit ' + ct.offMapKm + ' km ang layo ng mga koordinadang ito sa anumang lupa sa climate map ng PAGASA (DOST-PAGASA IAAS, 2014). Suriin ang latitud at longhitud.' };
   const R = CT_ROMAN, d = CT_DESC[ct.type];
   let en = 'PAGASA climate type here: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.en;
   let fil = 'Uri ng klima rito ayon sa PAGASA: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.fil;
@@ -1185,6 +1188,7 @@ function riceSeasonAdvice(c, chosen, auto) {
 /* The short note under Season itself; the reasons are in the Location box above it. */
 function seasonNote(c, chosen, auto) {
   if (c.status === 'unset') return { en: 'Push "Use phone GPS" at the top of this card, or type your location there, and the card will set the season for you from the PAGASA climate type.', fil: 'Pindutin ang "Gamitin ang GPS ng smartphone" sa itaas ng card na ito, o i-type doon ang lokasyon ninyo, at itatakda ng card ang panahon para sa inyo batay sa uri ng klima ayon sa PAGASA.' };
+  if (c.status === 'offmap') return { en: 'Your coordinates are at sea or outside the Philippines (see Location above), so the card cannot set the season from the PAGASA climate type. Check them, or choose the season yourself.', fil: 'Nasa dagat o nasa labas ng Pilipinas ang mga koordinada ninyo (tingnan ang Lokasyon sa itaas), kaya hindi maitatakda ng card ang panahon batay sa uri ng klima ayon sa PAGASA. Suriin ang mga ito, o kayo ang pumili ng panahon.' };
   if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so there is no PAGASA climate type to set the season from. Choose it yourself.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya walang uri ng klima ayon sa PAGASA na mapagbabatayan ng panahon. Kayo ang pumili.' };
   const R = CT_ROMAN[c.ct.type], sug = c.cs.season, S = CT_SEASON, ch = S[chosen] || S.dry;
   if (!sug) return { en: 'The PAGASA climate type at your location, Type ' + R + ', cannot settle the season for ' + MONTH_NAMES.en[c.month - 1] + ' (see Location above), so choose it yourself.', fil: 'Hindi matitiyak ng uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ', ang panahon sa ' + MONTH_NAMES.fil[c.month - 1] + ' (tingnan ang Lokasyon sa itaas), kaya kayo ang pumili.' };

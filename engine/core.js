@@ -1242,13 +1242,16 @@ function haversineKm(lat1, lon1, lat2, lon2) {
    The seasons are the map legend's. Type I is dry from November to April. Types II and IV have no dry
    season. Type III has a dry season of one to three months "either during the period from December to
    February or from March to May", so June to November is its wet season and the months from December
-   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID). */
+   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID).
+   A point more than landKm (75 km) from any land on the shapefile gets no type at all: it is at sea or
+   outside the Philippines, most often a mistyped coordinate, and a confident type there would be wrong. */
 const CTDATA = root.AGRI_CTYPE || (typeof require === 'function' ? require('./climatetype.js') : null);
 const CLIMATE_TYPE = {
   nearKm: 5,                                   // this app's choice, declared as CLIMATE_TYPE_GRID
   typeIDryMonths: [11, 12, 1, 2, 3, 4],        // legend, Type I: "dry from November to April"
   typeIIIDryWindow: [12, 1, 2, 3, 4, 5],       // legend, Type III: the dry months fall within December to May
   noDrySeason: [2, 4],                         // legend, Types II and IV: no dry season
+  offMapKm: CTDATA ? CTDATA.landKm : null,     // this app's choice, declared as CLIMATE_TYPE_GRID
   sources: ['PAGASA_IAAS_CTYPE', 'PAGASA_CLIMATEMAP']
 };
 let ctRuns = null;
@@ -1262,9 +1265,10 @@ function ctDecode(s) {
 function ctGrid() {
   if (ctRuns) return ctRuns;
   if (!CTDATA) return null;
-  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014);
-  if (type.total !== n || map2014.total !== n) return null;
-  ctRuns = { type: type, map2014: map2014 };
+  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014), land = ctDecode(CTDATA.land);
+  const nb = Math.ceil(CTDATA.rows / CTDATA.landBlock) * Math.ceil(CTDATA.cols / CTDATA.landBlock);
+  if (type.total !== n || map2014.total !== n || land.total !== nb) return null;
+  ctRuns = { type: type, map2014: map2014, land: land };
   return ctRuns;
 }
 function ctAt(R, k) {
@@ -1279,7 +1283,11 @@ function climateType(lat, lon) {
   const G = ctGrid(); if (!G) return null;
   const D = CTDATA, i = Math.round(lat * 100) - D.lat0c, j = Math.round(lon * 100) - D.lon0c;
   if (i < 0 || j < 0 || i >= D.rows || j >= D.cols) return null;
-  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100, type = ctAt(G.type, i * D.cols + j);
+  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100;
+  const B = D.landBlock;
+  if (!ctAt(G.land, Math.floor(i / B) * Math.ceil(D.cols / B) + Math.floor(j / B)))
+    return { type: null, offMap: true, offMapKm: D.landKm, nearTypes: [], map2014: null, gridLat: glat, gridLon: glon, sources: CLIMATE_TYPE.sources.slice() };
+  const type = ctAt(G.type, i * D.cols + j);
   const di = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat + 0.01, glon));
   const dj = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat, glon + 0.01));
   const nearTypes = [];
@@ -1298,7 +1306,7 @@ function climateType(lat, lon) {
 /* The season a type calls for in a given month: 'dry', 'wet', 'nodry', or null where the legend cannot
    say. A season is suggested only when every type in play agrees on it. */
 function climateTypeSeason(ct, month) {
-  if (!ct || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
+  if (!ct || ct.type == null || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
   const C = CLIMATE_TYPE;
   const implied = t => C.noDrySeason.indexOf(t) >= 0 ? 'nodry'
     : t === 1 ? (C.typeIDryMonths.indexOf(month) >= 0 ? 'dry' : 'wet')
@@ -1701,7 +1709,7 @@ const UNVERIFIED = [
   { id: 'FORECAST_VAPOUR_HELD', cards: ['frost', 'disease'], text: 'Where a forecast minimum temperature is compared with this evening\'s dew point or frost point, the air is assumed to keep the water vapour it holds this evening until it saturates. A change of air mass overnight, such as a surge of the northeast monsoon, breaks that assumption, and the comparison then says nothing about the morning.' },
   { id: 'WATER_FORECAST_NO_WAIT', cards: ['water'], text: 'FAO-56 gives no rule for putting off irrigation because rain is forecast. Where the field is already at the irrigation point and the forecast brings rain, this card shows both and does not tell you to wait: a forecast can miss, and the crop is already drawing on water it cannot spare. The crop coefficient is held at today\'s value across the forecast days.' },
   { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' },
-  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land. So across a narrow channel the change of type falls midway over the water, and the parts of Sabah and of Indonesian islands inside the box the app uses for the Philippines get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km is this app\'s choice, not a published figure.' },
+  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land, so across a narrow channel the change of type falls midway over the water. That holds up to 75 km out, and farther than that the card gives no type and says the point is at sea or outside the Philippines, which usually means a mistyped coordinate. The 75 km is wide on purpose: the shapefile leaves out some inhabited islands, such as the Turtle Islands of Tawi-Tawi, 40 to 60 km from the nearest land it has, and they take that land\'s type, Type IV, which the map does not itself give them. Places outside the Philippines within 75 km of it, such as parts of northern Sabah, likewise get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km and the 75 km are this app\'s choices, not published figures.' },
   { id: 'CLIMATE_TYPE_VERSIONS', cards: ['rice'], text: 'The IAAS shapefile and the printed Climate Map of the Philippines (August 2014) do not agree everywhere. This app compared them by fitting a scan of the printed map to the shapefile and reading its colours: away from the lines between types and from the map\'s lettering and boundary lines, they agree on 97.5 per cent of the land. Over wider areas they differ in two ways. The printed map shows Type IV where the shapefile shows Type III in parts of Maguindanao, Sultan Kudarat, South Cotabato and Cotabato, of Zamboanga del Norte and Zamboanga Sibugay, and of Bukidnon. It shows Type II where the shapefile shows Type IV along the Agusan side of the boundary with Surigao del Sur and in part of Southern Leyte. The card follows the shapefile, names the printed map\'s type inside those areas, and there suggests no season where the two call for different ones. The outlines of those areas come from this app\'s comparison, not from PAGASA, and which version is current has not yet been confirmed with IAAS.' },
   { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' }
 ];

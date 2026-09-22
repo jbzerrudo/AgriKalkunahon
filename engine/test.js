@@ -292,8 +292,18 @@ console.log('\n== PAGASA CLIMATE TYPE: IAAS SHAPEFILE (2014) ON A GRID OF HUNDRE
   eq('nor Taipei', A.climateType(25.03, 121.57), null);
   eq('nor a place with no coordinates', A.climateType(null, 121), null);
   eq('Dumaguete (9.31, 123.31) sits just off the shapefile\'s coast and takes the nearest land\'s type', A.climateType(9.31, 123.31).type, 3);
+  /* More than 75 km from any land on the shapefile there is no type: the point is at sea or outside the
+     Philippines. The four corners of the box are all that far out. */
   [[4.2138, 116.6863], [4.2138, 126.8063], [21.4009, 116.6863], [21.4009, 126.8063]].forEach(function (p) {
-    eq('the corner ' + p[0] + ', ' + p[1] + ' of the box still has a type', [1, 2, 3, 4].indexOf(A.climateType(p[0], p[1]).type) >= 0, true); });
+    const c = A.climateType(p[0], p[1]);
+    eq('the corner ' + p[0] + ', ' + p[1] + ' of the box is off the map, with no type', c.offMap === true && c.type === null, true); });
+  eq('the off-map distance is 75 km', A.CLIMATE_TYPE.offMapKm, 75);
+  eq('4.64, 121.04, Quezon City with its latitude mistyped, is off the map in the Celebes Sea', A.climateType(4.64, 121.04).offMap, true);
+  eq('and gets no type', A.climateType(4.64, 121.04).type, null);
+  eq('so no season either', A.climateTypeSeason(A.climateType(4.64, 121.04), 7), null);
+  eq('Sandakan, Sabah (5.84, 118.12), 87 km from the nearest land on the map, is off the map', A.climateType(5.84, 118.12).offMap, true);
+  eq('the Turtle Islands (6.08, 118.30), left out of the shapefile, still take the nearest land\'s type', A.climateType(6.08, 118.30).type, 4);
+  eq('and are not off the map', A.climateType(6.08, 118.30).offMap === undefined, true);
   eq('coordinates are rounded to the hundredth the grid is laid on', A.climateType(14.6049, 120.9951).gridLat + ',' + A.climateType(14.6049, 120.9951).gridLon, '14.6,121');
   eq('Los Banos is Type I and names Type III within 5 km', A.climateType(14.17, 121.24).nearTypes.join(','), '3');
   eq('Legazpi is Type II and names Type IV within 5 km', A.climateType(13.14, 123.74).nearTypes.join(','), '4');

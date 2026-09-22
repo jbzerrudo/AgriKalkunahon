@@ -19,6 +19,13 @@
    type the printed map shows. It comes from this app's comparison of a scan of the printed map,
    fitted to the shapefile, not from PAGASA, and is declared as CLIMATE_TYPE_VERSIONS.
 
+   land marks, in blocks of 5 by 5 grid points (0.05 degree), where some land on the shapefile lies
+   within landKm. Outside those blocks a point is at sea or outside the Philippines, and the card
+   gives no type there. Every point it flags is more than landKm from the nearest land point; a point
+   up to about 81 km out can still fall in a marked block. The distance is set wide on purpose: the
+   shapefile leaves out some inhabited islands, such as the Turtle Islands of Tawi-Tawi, about 40 to
+   60 km from the nearest land it has.
+
    Encoding: runs of one value, each a capital letter (A = 0, B = 1 ... E = 4) followed by the length
    of the run in base 36.
    ===================================================================== */
@@ -26,6 +33,7 @@
 'use strict';
 const CTYPE = {
   lat0c: 420, lon0c: 11668, rows: 1722, cols: 1015,   // first point 4.20 N, 116.68 E; in hundredths of a degree
+  landKm: 75, landBlock: 5,
   type:
     'E3vemD1Es6D2Es5D3Es4D3Es4D4Es3D5Es2D6Es1D7Es0D8ErzD9EmaD9E5fDaEm7DfE5bDbEm2DmE58DbElyDsE56DcElvDvE55DdElsDyE54DeElnD13E53DfEljD17E52DgElhD1aE50DhEleD1dE4zDiElbD1gE4yDjEl8D1jE4xDkEl5D1mE4wDkEl1D1rE4vDl' +
     'EkyD1uE4uDmEkwD1vE4uDnEkuD1xE4tDoEkqD20E4tDpEkmD23E4tDqEkjD25E4tDrEkhD27E4sDsEkgD28E4rDtEkeD29E4rDtEkdD2aE4rDuEkbD2cE4qDvEk9D2dE4qDwEk7D2fE4pDwEk7D2fE4pDxEk5D2gE4pDyEk3D2hE4pDyEk2D2hE4qDzEk0D2iE4qD10E' +
@@ -137,7 +145,21 @@ const CTYPE = {
     'ruCcArvCcAruCcAruCdArtCeArsCeArtCeArsCeArsCfArrCgArqChArqChArpChArpCiArpCiAroCjArnCkArnCjArnCkArmClArlCmArlCmArkCnArkCmArlCmArkCnArjCoArjCnArkCnArkCnArjCnArkCnArjCnArjCoArjCnArkCnArjCoArjCnArkCnArkCmA' +
     'rlCmArmCkArnCkArmCkArmClArmCkArnCjAroCjAroCiArpChArpChArqChArpChArqCgArrCgArqCgArrCfArrCgAroCiArpCiArpChArqChArqCgArrCgArrCfArsCfArvCbArtC1A1CcArtC1A1CbArtC1A1CcArtC1A1CbAruC1A1CbArtCdAruCdAruC1A1CaAr' +
     'vC1A1CaArvC1A1C9ArwC1A1C9ArvCbArwC1A1C9ArwC1A1C8ArwCbArwC1A1C8ArwC1A1C9ArvCbArwCbArwCaArxC1A1C8ArxC1A1C7ArxC9ArzC1A1C5As3C2A1z8eC1As4C4As2C2A1C3As2C6As0C7ArzC8ArzC8ArzC8ArzC9AryC9AryC9AryC9AryC9AryC9A' +
-    'ryC9AryC9ArzC9AryC9ArxCaArwCbArwCbArwCbArwCbArwCbArwCbArwCcArvCcArvCcArvCcArvCcArvCcArvCcArvCcArvCeArtCcArvCdAruCcArwCaAryC1A1C2An8kn'
+    'ryC9AryC9ArzC9AryC9ArxCaArwCbArwCbArwCbArwCbArwCbArwCbArwCcArvCcArvCcArvCcArvCcArvCcArvCcArvCcArvCeArtCcArvCdAruCcArwCaAryC1A1C2An8kn',
+  land:
+    'A16BuA4tBvA4rBxA4qByA4oB10A4nB11A4mB12A4lB14A4jB15A4iB16A4hB17A2dBcA1rB17A2bBhA1oB18A29BjA1nB18A27BnA1lB19A25BpA1kB19A25BpA1kB1hA1wBrA1jB1jA1tBtA1jB1kA1rBtA1jB1lA1pBvA1jB1lA1oBvA1jB1oA1iByA1kB1sA1bB10' +
+    'A1lB1uA16B13A1lB1vA12B15A1mB1wAyB17A1nB1wAuB1bA1lB1yAsB1cA1lB1zApB1hA1hB21AnB1kA1fB21AmB1nA1dB22AkB1pA1cB22AjB1rAyB9A4B22AjB1sAuBfA1B24AgB1uAsB2mAeB1vArB2nAdB1wAqB2pAcB1wApB2rAaB1xAoB2sAaB1xAoB2tA9B1x' +
+    'AnB2uA8B1yAnB2vA7B1yAnB2wA6B1yAmB2xA6B1yAmBtA2B23A5B1yAmBtA5B20A4B1zAmBtA9B1wA4B1zAlBuAcB1uA3B1zAlBuAdB1vA1B1zAlBtAfB3uAkBvAfB3tAkBvAgB3sAkBvAhB3rAkBvAiB3qAkBvAjB3pAkBvAlB3nAkBvAoB3kA5B4AcBuAsB3gA1BfA' +
+    '5BuAwB3uA3BuAxB3vA1BtAzB4oA10B4nA12B4kA14B4iA16B4gA19B4eA1aB4cA1cB4aA1dB3qA1BiA1eB3qA2BfA1gB3qA5BaA1iB3rA1wB3rA1wB3sA1wB3rA1wB3sA1wB3tA1uB3uA1uB3uA1tB3wA1sB3wA1sB3wA1rB3xA1rB3xA1rB3xA1rB3xA1sB3xA10BaA' +
+    'hB3xAxBeAgB3xAuBiAgB3xArBkAhB3wApBmAhB3wAnBoAfB3yAmBpAdB3zAlBsAaB41AkBuA7B2oA1B1dAjBxA4B2pA2B1dAiByA2B2qA2B1eAhB3qA3B1eAgB3qA4B1eAfB3qA5B1dAfB3qA6B1dAeB3qA7B1eAcB3qA8B1eAbB3qA9B1fA9B3qAaB1fA9B3pAbB1fA' +
+    '8B3pAcB1fA8B3oAdB1eA9B3nAfB1fA7B3mAgB1jA2B3mAiB55AjB54AkB53AlB52AmB51AnB50AoB4yAqB4xArB4wAsB4uAuB4tAuB4sAwB4qAyB4pAzB4oAzB4pAzB4oA10B4nA11B4mA12B4lA13B4kA13B4kA14B4iA15B4iA15B4iA15B4hA16B4hA16B4gA17B4' +
+    'fA18B4eA1aB4dA1aB4cA1bB4bA1dB4aA1dB4aA1eB48A1gB47A1hB45A1jB44A1kB43A1lB43A1lB42A1mB41A1nB40A1nB40A1nB40A1nB40A1nB40A1oB3zA1oB3yA1pB3yA1qB3xA1qB3wA1rB3vA1tB3uA1tB3tA1uB3sA1wB3qA1yB3oA1zB3oA20B3mA22B3kA' +
+    '25B3hA27B3fA29B3dA2bB3bA2bB3bA2cB3aA2dB38A2eB38A2eB35A2hB34A2iB35A2iB36A2gB37A2gB37A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB37A2hB36A2hB35A2jB34A2kB32A2lB31A2mB31A2mB30A2mB31A2lB31A2m' +
+    'B30A2mB30A2nB2gA3BfA2pB2eA8BaA2rB2eA39B2dA3aB2cA3bB2bA3cB2aA3cB2aA3dB28A3eB26A3hB24A3jB23A3jB23A3kB21A3mB1zA3oB1xA3pB1xA3qB1wA3qB1yA3pB1zA3oB20A3nB21A3mB22A3kB24A3jB24A3jB25A3iB25A3iB26A3hB26A3hB26A3h' +
+    'B26A3iB26A3hB26A3hB27A3gB27A3gB28A3fB28A3gB28A3fB28A3gB27A3gB28A3gB27A3hB26A3iB26A3iB25A3jB24A3lB22A3nB20A3oB1zA3oB1zA3oB1zA3oB1zA3oB1zA3oB1yA3oB1zA3oB1yA3pB1yA3pB1xA3qB1xA3qB1wA3rB1wA3sB1uA3tB1tA3uB1' +
+    'tA3uB1uA3uB1tA3uB1tA3uB1uA3uB1tA3uB1tA3uB1tA3uB1tA3vB1sA3vB1sA3vB1sA3wB1rA3wB1rA3wB1rA3wB1qA3xB1qA3xB1pA3zB1oA3zB1nA41B1mA42B1lA42B1mA42B1lA43B1kA45B1iA47B1gA49B1eA4bB1bA4cB1bA4cB1bA4cB1aA4eB18A4fB18A' +
+    '4gB17A4hB16A4iB16A4hB16A4iB15A4jB15A4jB14A4kB13A4lB12A4nB10A4oBzA4oBzA4nBzA4oBzA4oBzA4oByA4pBxA4qBxA4qBxA4rBwA4qBxA4qBxA4qBxA4qBxA4qBwA4rBwA4rBvA4tBuA4tBvA4sBvA4tBuA4tBuA4uBtA4uBtA4uBtA4vBrA4wBrA4xBqA' +
+    '2c'
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = CTYPE;
 root.AGRI_CTYPE = CTYPE;

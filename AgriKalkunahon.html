@@ -123,6 +123,7 @@ code{background:var(--earth-soft);padding:0 4px;border-radius:3px;font-size:12px
 .locwarn{font-size:13px;margin:8px 0 0}
 .locacc{font-size:12px;margin:8px 0 0;color:var(--muted)}
 .ctline p{font-size:13px;margin:8px 0 10px;padding:8px 10px;background:var(--card);border-left:4px solid var(--green);border-radius:6px;color:var(--ink)}
+.ctline.off p{border-left-color:var(--caution)}
 dl.nums dt.alert{color:#8a4b00;font-weight:700}
 dl.nums dd.alert{font-size:14px;font-weight:400;padding:8px 10px;border-left:4px solid #d98324;background:#fdf3e6;border-radius:6px}
 .haiku{margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--line,#ddd);text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
@@ -170,6 +171,13 @@ a{color:var(--green-dark)}
    type the printed map shows. It comes from this app's comparison of a scan of the printed map,
    fitted to the shapefile, not from PAGASA, and is declared as CLIMATE_TYPE_VERSIONS.
 
+   land marks, in blocks of 5 by 5 grid points (0.05 degree), where some land on the shapefile lies
+   within landKm. Outside those blocks a point is at sea or outside the Philippines, and the card
+   gives no type there. Every point it flags is more than landKm from the nearest land point; a point
+   up to about 81 km out can still fall in a marked block. The distance is set wide on purpose: the
+   shapefile leaves out some inhabited islands, such as the Turtle Islands of Tawi-Tawi, about 40 to
+   60 km from the nearest land it has.
+
    Encoding: runs of one value, each a capital letter (A = 0, B = 1 ... E = 4) followed by the length
    of the run in base 36.
    ===================================================================== */
@@ -177,6 +185,7 @@ a{color:var(--green-dark)}
 'use strict';
 const CTYPE = {
   lat0c: 420, lon0c: 11668, rows: 1722, cols: 1015,   // first point 4.20 N, 116.68 E; in hundredths of a degree
+  landKm: 75, landBlock: 5,
   type:
     'E3vemD1Es6D2Es5D3Es4D3Es4D4Es3D5Es2D6Es1D7Es0D8ErzD9EmaD9E5fDaEm7DfE5bDbEm2DmE58DbElyDsE56DcElvDvE55DdElsDyE54DeElnD13E53DfEljD17E52DgElhD1aE50DhEleD1dE4zDiElbD1gE4yDjEl8D1jE4xDkEl5D1mE4wDkEl1D1rE4vDl' +
     'EkyD1uE4uDmEkwD1vE4uDnEkuD1xE4tDoEkqD20E4tDpEkmD23E4tDqEkjD25E4tDrEkhD27E4sDsEkgD28E4rDtEkeD29E4rDtEkdD2aE4rDuEkbD2cE4qDvEk9D2dE4qDwEk7D2fE4pDwEk7D2fE4pDxEk5D2gE4pDyEk3D2hE4pDyEk2D2hE4qDzEk0D2iE4qD10E' +
@@ -288,7 +297,21 @@ const CTYPE = {
     'ruCcArvCcAruCcAruCdArtCeArsCeArtCeArsCeArsCfArrCgArqChArqChArpChArpCiArpCiAroCjArnCkArnCjArnCkArmClArlCmArlCmArkCnArkCmArlCmArkCnArjCoArjCnArkCnArkCnArjCnArkCnArjCnArjCoArjCnArkCnArjCoArjCnArkCnArkCmA' +
     'rlCmArmCkArnCkArmCkArmClArmCkArnCjAroCjAroCiArpChArpChArqChArpChArqCgArrCgArqCgArrCfArrCgAroCiArpCiArpChArqChArqCgArrCgArrCfArsCfArvCbArtC1A1CcArtC1A1CbArtC1A1CcArtC1A1CbAruC1A1CbArtCdAruCdAruC1A1CaAr' +
     'vC1A1CaArvC1A1C9ArwC1A1C9ArvCbArwC1A1C9ArwC1A1C8ArwCbArwC1A1C8ArwC1A1C9ArvCbArwCbArwCaArxC1A1C8ArxC1A1C7ArxC9ArzC1A1C5As3C2A1z8eC1As4C4As2C2A1C3As2C6As0C7ArzC8ArzC8ArzC8ArzC9AryC9AryC9AryC9AryC9AryC9A' +
-    'ryC9AryC9ArzC9AryC9ArxCaArwCbArwCbArwCbArwCbArwCbArwCbArwCcArvCcArvCcArvCcArvCcArvCcArvCcArvCcArvCeArtCcArvCdAruCcArwCaAryC1A1C2An8kn'
+    'ryC9AryC9ArzC9AryC9ArxCaArwCbArwCbArwCbArwCbArwCbArwCbArwCcArvCcArvCcArvCcArvCcArvCcArvCcArvCcArvCeArtCcArvCdAruCcArwCaAryC1A1C2An8kn',
+  land:
+    'A16BuA4tBvA4rBxA4qByA4oB10A4nB11A4mB12A4lB14A4jB15A4iB16A4hB17A2dBcA1rB17A2bBhA1oB18A29BjA1nB18A27BnA1lB19A25BpA1kB19A25BpA1kB1hA1wBrA1jB1jA1tBtA1jB1kA1rBtA1jB1lA1pBvA1jB1lA1oBvA1jB1oA1iByA1kB1sA1bB10' +
+    'A1lB1uA16B13A1lB1vA12B15A1mB1wAyB17A1nB1wAuB1bA1lB1yAsB1cA1lB1zApB1hA1hB21AnB1kA1fB21AmB1nA1dB22AkB1pA1cB22AjB1rAyB9A4B22AjB1sAuBfA1B24AgB1uAsB2mAeB1vArB2nAdB1wAqB2pAcB1wApB2rAaB1xAoB2sAaB1xAoB2tA9B1x' +
+    'AnB2uA8B1yAnB2vA7B1yAnB2wA6B1yAmB2xA6B1yAmBtA2B23A5B1yAmBtA5B20A4B1zAmBtA9B1wA4B1zAlBuAcB1uA3B1zAlBuAdB1vA1B1zAlBtAfB3uAkBvAfB3tAkBvAgB3sAkBvAhB3rAkBvAiB3qAkBvAjB3pAkBvAlB3nAkBvAoB3kA5B4AcBuAsB3gA1BfA' +
+    '5BuAwB3uA3BuAxB3vA1BtAzB4oA10B4nA12B4kA14B4iA16B4gA19B4eA1aB4cA1cB4aA1dB3qA1BiA1eB3qA2BfA1gB3qA5BaA1iB3rA1wB3rA1wB3sA1wB3rA1wB3sA1wB3tA1uB3uA1uB3uA1tB3wA1sB3wA1sB3wA1rB3xA1rB3xA1rB3xA1rB3xA1sB3xA10BaA' +
+    'hB3xAxBeAgB3xAuBiAgB3xArBkAhB3wApBmAhB3wAnBoAfB3yAmBpAdB3zAlBsAaB41AkBuA7B2oA1B1dAjBxA4B2pA2B1dAiByA2B2qA2B1eAhB3qA3B1eAgB3qA4B1eAfB3qA5B1dAfB3qA6B1dAeB3qA7B1eAcB3qA8B1eAbB3qA9B1fA9B3qAaB1fA9B3pAbB1fA' +
+    '8B3pAcB1fA8B3oAdB1eA9B3nAfB1fA7B3mAgB1jA2B3mAiB55AjB54AkB53AlB52AmB51AnB50AoB4yAqB4xArB4wAsB4uAuB4tAuB4sAwB4qAyB4pAzB4oAzB4pAzB4oA10B4nA11B4mA12B4lA13B4kA13B4kA14B4iA15B4iA15B4iA15B4hA16B4hA16B4gA17B4' +
+    'fA18B4eA1aB4dA1aB4cA1bB4bA1dB4aA1dB4aA1eB48A1gB47A1hB45A1jB44A1kB43A1lB43A1lB42A1mB41A1nB40A1nB40A1nB40A1nB40A1nB40A1oB3zA1oB3yA1pB3yA1qB3xA1qB3wA1rB3vA1tB3uA1tB3tA1uB3sA1wB3qA1yB3oA1zB3oA20B3mA22B3kA' +
+    '25B3hA27B3fA29B3dA2bB3bA2bB3bA2cB3aA2dB38A2eB38A2eB35A2hB34A2iB35A2iB36A2gB37A2gB37A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB38A2fB37A2hB36A2hB35A2jB34A2kB32A2lB31A2mB31A2mB30A2mB31A2lB31A2m' +
+    'B30A2mB30A2nB2gA3BfA2pB2eA8BaA2rB2eA39B2dA3aB2cA3bB2bA3cB2aA3cB2aA3dB28A3eB26A3hB24A3jB23A3jB23A3kB21A3mB1zA3oB1xA3pB1xA3qB1wA3qB1yA3pB1zA3oB20A3nB21A3mB22A3kB24A3jB24A3jB25A3iB25A3iB26A3hB26A3hB26A3h' +
+    'B26A3iB26A3hB26A3hB27A3gB27A3gB28A3fB28A3gB28A3fB28A3gB27A3gB28A3gB27A3hB26A3iB26A3iB25A3jB24A3lB22A3nB20A3oB1zA3oB1zA3oB1zA3oB1zA3oB1zA3oB1yA3oB1zA3oB1yA3pB1yA3pB1xA3qB1xA3qB1wA3rB1wA3sB1uA3tB1tA3uB1' +
+    'tA3uB1uA3uB1tA3uB1tA3uB1uA3uB1tA3uB1tA3uB1tA3uB1tA3vB1sA3vB1sA3vB1sA3wB1rA3wB1rA3wB1rA3wB1qA3xB1qA3xB1pA3zB1oA3zB1nA41B1mA42B1lA42B1mA42B1lA43B1kA45B1iA47B1gA49B1eA4bB1bA4cB1bA4cB1bA4cB1aA4eB18A4fB18A' +
+    '4gB17A4hB16A4iB16A4hB16A4iB15A4jB15A4jB14A4kB13A4lB12A4nB10A4oBzA4oBzA4nBzA4oBzA4oBzA4oByA4pBxA4qBxA4qBxA4rBwA4qBxA4qBxA4qBxA4qBxA4qBwA4rBwA4rBvA4tBuA4tBvA4sBvA4tBuA4tBuA4uBtA4uBtA4uBtA4vBrA4wBrA4xBqA' +
+    '2c'
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = CTYPE;
 root.AGRI_CTYPE = CTYPE;
@@ -1538,13 +1561,16 @@ function haversineKm(lat1, lon1, lat2, lon2) {
    The seasons are the map legend's. Type I is dry from November to April. Types II and IV have no dry
    season. Type III has a dry season of one to three months "either during the period from December to
    February or from March to May", so June to November is its wet season and the months from December
-   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID). */
+   to May cannot be told apart from the legend. The 5 km is this app's choice (CLIMATE_TYPE_GRID).
+   A point more than landKm (75 km) from any land on the shapefile gets no type at all: it is at sea or
+   outside the Philippines, most often a mistyped coordinate, and a confident type there would be wrong. */
 const CTDATA = root.AGRI_CTYPE || (typeof require === 'function' ? require('./climatetype.js') : null);
 const CLIMATE_TYPE = {
   nearKm: 5,                                   // this app's choice, declared as CLIMATE_TYPE_GRID
   typeIDryMonths: [11, 12, 1, 2, 3, 4],        // legend, Type I: "dry from November to April"
   typeIIIDryWindow: [12, 1, 2, 3, 4, 5],       // legend, Type III: the dry months fall within December to May
   noDrySeason: [2, 4],                         // legend, Types II and IV: no dry season
+  offMapKm: CTDATA ? CTDATA.landKm : null,     // this app's choice, declared as CLIMATE_TYPE_GRID
   sources: ['PAGASA_IAAS_CTYPE', 'PAGASA_CLIMATEMAP']
 };
 let ctRuns = null;
@@ -1558,9 +1584,10 @@ function ctDecode(s) {
 function ctGrid() {
   if (ctRuns) return ctRuns;
   if (!CTDATA) return null;
-  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014);
-  if (type.total !== n || map2014.total !== n) return null;
-  ctRuns = { type: type, map2014: map2014 };
+  const n = CTDATA.rows * CTDATA.cols, type = ctDecode(CTDATA.type), map2014 = ctDecode(CTDATA.map2014), land = ctDecode(CTDATA.land);
+  const nb = Math.ceil(CTDATA.rows / CTDATA.landBlock) * Math.ceil(CTDATA.cols / CTDATA.landBlock);
+  if (type.total !== n || map2014.total !== n || land.total !== nb) return null;
+  ctRuns = { type: type, map2014: map2014, land: land };
   return ctRuns;
 }
 function ctAt(R, k) {
@@ -1575,7 +1602,11 @@ function climateType(lat, lon) {
   const G = ctGrid(); if (!G) return null;
   const D = CTDATA, i = Math.round(lat * 100) - D.lat0c, j = Math.round(lon * 100) - D.lon0c;
   if (i < 0 || j < 0 || i >= D.rows || j >= D.cols) return null;
-  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100, type = ctAt(G.type, i * D.cols + j);
+  const glat = (D.lat0c + i) / 100, glon = (D.lon0c + j) / 100;
+  const B = D.landBlock;
+  if (!ctAt(G.land, Math.floor(i / B) * Math.ceil(D.cols / B) + Math.floor(j / B)))
+    return { type: null, offMap: true, offMapKm: D.landKm, nearTypes: [], map2014: null, gridLat: glat, gridLon: glon, sources: CLIMATE_TYPE.sources.slice() };
+  const type = ctAt(G.type, i * D.cols + j);
   const di = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat + 0.01, glon));
   const dj = Math.ceil(CLIMATE_TYPE.nearKm / haversineKm(glat, glon, glat, glon + 0.01));
   const nearTypes = [];
@@ -1594,7 +1625,7 @@ function climateType(lat, lon) {
 /* The season a type calls for in a given month: 'dry', 'wet', 'nodry', or null where the legend cannot
    say. A season is suggested only when every type in play agrees on it. */
 function climateTypeSeason(ct, month) {
-  if (!ct || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
+  if (!ct || ct.type == null || !isNum(month) || month < 1 || month > 12 || Math.round(month) !== month) return null;
   const C = CLIMATE_TYPE;
   const implied = t => C.noDrySeason.indexOf(t) >= 0 ? 'nodry'
     : t === 1 ? (C.typeIDryMonths.indexOf(month) >= 0 ? 'dry' : 'wet')
@@ -1997,7 +2028,7 @@ const UNVERIFIED = [
   { id: 'FORECAST_VAPOUR_HELD', cards: ['frost', 'disease'], text: 'Where a forecast minimum temperature is compared with this evening\'s dew point or frost point, the air is assumed to keep the water vapour it holds this evening until it saturates. A change of air mass overnight, such as a surge of the northeast monsoon, breaks that assumption, and the comparison then says nothing about the morning.' },
   { id: 'WATER_FORECAST_NO_WAIT', cards: ['water'], text: 'FAO-56 gives no rule for putting off irrigation because rain is forecast. Where the field is already at the irrigation point and the forecast brings rain, this card shows both and does not tell you to wait: a forecast can miss, and the crop is already drawing on water it cannot spare. The crop coefficient is held at today\'s value across the forecast days.' },
   { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' },
-  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land. So across a narrow channel the change of type falls midway over the water, and the parts of Sabah and of Indonesian islands inside the box the app uses for the Philippines get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km is this app\'s choice, not a published figure.' },
+  { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land, so across a narrow channel the change of type falls midway over the water. That holds up to 75 km out, and farther than that the card gives no type and says the point is at sea or outside the Philippines, which usually means a mistyped coordinate. The 75 km is wide on purpose: the shapefile leaves out some inhabited islands, such as the Turtle Islands of Tawi-Tawi, 40 to 60 km from the nearest land it has, and they take that land\'s type, Type IV, which the map does not itself give them. Places outside the Philippines within 75 km of it, such as parts of northern Sabah, likewise get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km and the 75 km are this app\'s choices, not published figures.' },
   { id: 'CLIMATE_TYPE_VERSIONS', cards: ['rice'], text: 'The IAAS shapefile and the printed Climate Map of the Philippines (August 2014) do not agree everywhere. This app compared them by fitting a scan of the printed map to the shapefile and reading its colours: away from the lines between types and from the map\'s lettering and boundary lines, they agree on 97.5 per cent of the land. Over wider areas they differ in two ways. The printed map shows Type IV where the shapefile shows Type III in parts of Maguindanao, Sultan Kudarat, South Cotabato and Cotabato, of Zamboanga del Norte and Zamboanga Sibugay, and of Bukidnon. It shows Type II where the shapefile shows Type IV along the Agusan side of the boundary with Surigao del Sur and in part of Southern Leyte. The card follows the shapefile, names the printed map\'s type inside those areas, and there suggests no season where the two call for different ones. The outlines of those areas come from this app\'s comparison, not from PAGASA, and which version is current has not yet been confirmed with IAAS.' },
   { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' }
 ];
@@ -2326,7 +2357,7 @@ function locationBlock(onchange, climateExtra) {
   const ctLine = el('div', { class: 'ctline' });
   function redraw() {
     const ct = L.set ? A.climateType(L.lat, L.lon) : null;
-    ctLine.innerHTML = ''; ctLine.hidden = !ct;
+    ctLine.innerHTML = ''; ctLine.hidden = !ct; ctLine.classList.toggle('off', !!(ct && ct.offMap));
     if (ct) { const b = climateTypeText(ct), x = climateExtra ? climateExtra() : null;
               ctLine.appendChild(el('p', null, bi(x ? { en: b.en + ' ' + x.en, fil: b.fil + ' ' + x.fil } : b))); }
     warn.innerHTML = '';
@@ -2506,7 +2537,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '72adc4af' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '8e283f47' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -2795,6 +2826,7 @@ CARDS.rice = function (root) {
     if (!L.set) return { status: 'unset' };
     const ct = A.climateType(L.lat, L.lon);
     if (!ct) return { status: 'outside' };
+    if (ct.offMap) return { status: 'offmap', ct: ct };
     /* The season is judged by the month of the reading, which is today unless the farmer dates it. */
     const ld = !levelDate.row.hidden && levelDate.input.value ? new Date(levelDate.input.value + 'T00:00:00') : null;
     const month = (ld && !isNaN(ld) ? ld : fieldNow()).getMonth() + 1;
@@ -3187,6 +3219,8 @@ const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
 /* The line under Elevation on every card: the type, what the legend says it is, and anything nearby or
    on the printed map that could change it. */
 function climateTypeText(ct) {
+  if (ct.offMap) return { en: 'You are at sea, or outside the Philippines: these coordinates are more than ' + ct.offMapKm + ' km from any land on the PAGASA climate map (DOST-PAGASA IAAS, 2014). Check the latitude and longitude.',
+                          fil: 'Nasa dagat kayo, o nasa labas ng Pilipinas: mahigit ' + ct.offMapKm + ' km ang layo ng mga koordinadang ito sa anumang lupa sa climate map ng PAGASA (DOST-PAGASA IAAS, 2014). Suriin ang latitud at longhitud.' };
   const R = CT_ROMAN, d = CT_DESC[ct.type];
   let en = 'PAGASA climate type here: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.en;
   let fil = 'Uri ng klima rito ayon sa PAGASA: Type ' + R[ct.type] + ' (DOST-PAGASA IAAS, 2014). ' + d.fil;
@@ -3227,6 +3261,7 @@ function riceSeasonAdvice(c, chosen, auto) {
 /* The short note under Season itself; the reasons are in the Location box above it. */
 function seasonNote(c, chosen, auto) {
   if (c.status === 'unset') return { en: 'Push "Use phone GPS" at the top of this card, or type your location there, and the card will set the season for you from the PAGASA climate type.', fil: 'Pindutin ang "Gamitin ang GPS ng smartphone" sa itaas ng card na ito, o i-type doon ang lokasyon ninyo, at itatakda ng card ang panahon para sa inyo batay sa uri ng klima ayon sa PAGASA.' };
+  if (c.status === 'offmap') return { en: 'Your coordinates are at sea or outside the Philippines (see Location above), so the card cannot set the season from the PAGASA climate type. Check them, or choose the season yourself.', fil: 'Nasa dagat o nasa labas ng Pilipinas ang mga koordinada ninyo (tingnan ang Lokasyon sa itaas), kaya hindi maitatakda ng card ang panahon batay sa uri ng klima ayon sa PAGASA. Suriin ang mga ito, o kayo ang pumili ng panahon.' };
   if (c.status === 'outside' || !c.cs) return { en: 'Your location is outside the Philippines, so there is no PAGASA climate type to set the season from. Choose it yourself.', fil: 'Nasa labas ng Pilipinas ang lokasyon ninyo, kaya walang uri ng klima ayon sa PAGASA na mapagbabatayan ng panahon. Kayo ang pumili.' };
   const R = CT_ROMAN[c.ct.type], sug = c.cs.season, S = CT_SEASON, ch = S[chosen] || S.dry;
   if (!sug) return { en: 'The PAGASA climate type at your location, Type ' + R + ', cannot settle the season for ' + MONTH_NAMES.en[c.month - 1] + ' (see Location above), so choose it yourself.', fil: 'Hindi matitiyak ng uri ng klima sa lokasyon ninyo ayon sa PAGASA, Type ' + R + ', ang panahon sa ' + MONTH_NAMES.fil[c.month - 1] + ' (tingnan ang Lokasyon sa itaas), kaya kayo ang pumili.' };
@@ -4059,8 +4094,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 792 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 72adc4af. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 799 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 8e283f47. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4152,7 +4187,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 72adc4af)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 8e283f47)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4164,7 +4199,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 72adc4af).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 72adc4af ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 8e283f47).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 8e283f47 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4211,7 +4246,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 72adc4af.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 8e283f47.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
