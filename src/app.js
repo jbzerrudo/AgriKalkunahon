@@ -1087,7 +1087,7 @@ CARDS.rain = function (root) {
      always done, and by the standard's ten-day ADB cut where the card works the need out. Either can be
      switched. A row is shown only where the chosen method reads it. */
   const route = selectInput('rRoute', { en: 'The crop\'s water need', fil: 'Pangangailangan ng pananim sa tubig' }, [
-    ['entered', { en: 'I have the figure, or I will leave it out', fil: 'Alam ko ang bilang, o hindi ko ito ilalagay' }],
+    ['entered', { en: 'Type in the figure from your technician or PAGASA, or leave it blank to see only the rain that counts', fil: 'Ita-type ang bilang mula sa technician o PAGASA, o iwanang blangko para makita lang ang ulang napakinabangan' }],
     ['compute', { en: 'Work it out here (Philippine National Standard PNS 217, which PAGASA follows)', fil: 'Kalkulahin dito (Philippine National Standard PNS 217, na sinusunod ng PAGASA)' }]
   ], prev.route || 'entered');
   const ERM_DEFAULT = { entered: 'tm3', compute: 'adb' };
