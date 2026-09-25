@@ -339,6 +339,10 @@ console.log('\n== PAGASA CLIMATE TYPE: IAAS SHAPEFILE (2014) ON A GRID OF HUNDRE
   eq('a month that is not a month gives nothing', A.climateTypeSeason(A.climateType(14.60, 121.00), 13), null);
   eq('nor does a place with no type', A.climateTypeSeason(null, 1), null);
   eq('the shapefile is in the reference list', A.REFS.PAGASA_IAAS_CTYPE != null, true);
+  eq('the 2025 frost susceptibility abstract is in the reference list', A.REFS.MARASIGAN2025 != null, true);
+  eq('cited to the proceedings page it appears on', A.REFS.MARASIGAN2025.cite.indexOf('Proceedings of the Philippine Meteorological Society 8:42, ISSN 2599-5537') > 0, true);
+  eq('and marked as a conference abstract rather than a peer-reviewed paper', A.REFS.MARASIGAN2025.cite.indexOf('not a peer-reviewed paper') > 0, true);
+  eq('the thesis carries its terrain finding', A.REFS.MARASIGAN2017.cite.indexOf('physiographic variables that influence the frost risk') > 0, true);
   eq('and the legend is quoted for Type III\'s dry months', A.REFS.PAGASA_CLIMATEMAP.cite.indexOf('either during the period from December to February or from March to May') > 0, true); }
 /* R3(a) requires the declaration to travel with the number, so every declared assumption must name at
    least one card, and the interface renders the registry's own text into that card's assumptions block.

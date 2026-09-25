@@ -429,12 +429,68 @@ function optTag(opts) {
   if (opts.prefilled) return el('span', { class: 'opt pre' }, bi({ en: '(filled in for you, change if wrong)', fil: '(nalagay na para sa inyo, palitan kung mali)' }));
   return null;
 }
+/* A native drop-down cannot wrap the text of a choice. No browser applies CSS to an option, and this
+   app writes every choice in two languages, so a long one is cut off on a phone exactly where the
+   farmer has to read it. Any drop-down whose longest choice runs past RADIO_OVER characters, the two
+   languages counted together, is therefore drawn as a group of radio buttons, where bi() puts English
+   and Filipino on their own lines and the text wraps to the width of the card. The select itself stays
+   in the form, out of sight: it keeps the id, the value, the change event and its place in the saved
+   inputs, so the cards, the saved readings and the tests work unchanged.
+   Lists of many short names keep their drop-down, because one radio for each would fill the card and
+   those lists are read by recognising a name rather than by reading a sentence. They are given the
+   full width of the card instead, so that nothing runs off it. */
+const RADIO_OVER = 40;
+const NATIVE_SELECTS = ['rMon', 'crop', 'rFC', 'rPC', 'xCrop', 'stage', 'rFS', 'xPhase', 'soil', 'rSoil', 'rsoil', 'tVar'];
 function selectInput(id, label, options, value) {
   const input = el('select', { id: id });
-  options.forEach(([v, lab]) => { const s = t(lab); input.appendChild(el('option', { value: v }, s.en + ' / ' + s.fil)); });
+  let longest = 0;
+  options.forEach(([v, lab]) => {
+    const s = t(lab), txt = s.en + ' / ' + s.fil;
+    longest = Math.max(longest, txt.length);
+    const o = el('option', { value: v }, txt);
+    o.dataset.en = s.en; o.dataset.fil = s.fil;
+    input.appendChild(o);
+  });
   if (value != null) input.value = value;
-  const row = el('label', { class: 'row' }, bi(label), input);
-  return { row, input };
+  if (longest <= RADIO_OVER || NATIVE_SELECTS.indexOf(id) >= 0) return { row: el('label', { class: 'row' }, bi(label), input), input };
+  return radioRow(id, label, input);
+}
+/* The radio group and the select it stands for. Only the radios are seen and only they can be tapped;
+   the select carries the value. A value set in code raises no event, so the setter itself tells the
+   radios; an option renamed in code (the rice card renames two of its own when the method changes) is
+   followed through a mutation observer. */
+function radioRow(id, label, input) {
+  const row = el('fieldset', { class: 'choice' }, el('legend', null, bi(label)));
+  const name = 'choice_' + id, boxes = [];
+  Array.prototype.forEach.call(input.options, (o, i) => {
+    const radio = el('input', { type: 'radio', name: name, id: name + '_' + i, value: o.value });
+    const opt = el('label', { class: 'choice-opt' }, radio, bi({ en: o.dataset.en, fil: o.dataset.fil }));
+    radio.addEventListener('change', () => {
+      if (!radio.checked || input.value === o.value) return;
+      input.value = o.value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    boxes.push({ radio: radio, opt: opt, o: o });
+    row.appendChild(opt);
+  });
+  const sync = () => boxes.forEach(b => { b.radio.checked = b.o.value === input.value; });
+  const V = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(input, 'value', { configurable: true, get: () => V.get.call(input), set: v => { V.set.call(input, v); sync(); } });
+  input.addEventListener('change', sync);
+  /* The rename is written into the option in this app's own "English / Filipino" form, so the two
+     languages are recovered by splitting at the first separator. */
+  new MutationObserver(() => boxes.forEach(b => {
+    const txt = b.o.textContent;
+    if (txt === b.o.dataset.en + ' / ' + b.o.dataset.fil) return;
+    const k = txt.indexOf(' / ');
+    b.o.dataset.en = k < 0 ? txt : txt.slice(0, k);
+    b.o.dataset.fil = k < 0 ? txt : txt.slice(k + 3);
+    b.opt.replaceChild(bi({ en: b.o.dataset.en, fil: b.o.dataset.fil }), b.opt.lastChild);
+  })).observe(input, { childList: true, subtree: true, characterData: true });
+  input.className = 'srsel'; input.setAttribute('aria-hidden', 'true'); input.setAttribute('tabindex', '-1');
+  row.appendChild(input);
+  sync();
+  return { row: row, input: input };
 }
 function dateInput(id, label, value, opts) {
   /* opts is { optional } for a box that may stay blank, or { prefilled } for one this app fills with
@@ -1817,8 +1873,8 @@ CARDS.frost = function (root) {
     why.push(season === 'outside'
       ? 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) records it in December, January and February, with January the most frequent and November the least; Launio et al. (2020) report December to February, now sometimes into March. Today falls outside those months, so check the readings before acting on this answer.'
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
-    if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
-    let fsources = r.sources;
+    if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation". Terrain decides much of where frost forms in Benguet. Marasigan (2017) reports that "the elevation and morning potential insolation (MPI) are among the physiographic variables that influence the frost risk", and Marasigan et al. (2025), mapping frost susceptibility from twenty years of MODIS nighttime land surface temperature against the terrain, give as preliminary results that areas of low morning potential insolation in highly elevated terrain "were found to have the most influence on frost occurrences", and that "terrains with subtle slopes and concave landscapes highly contribute to frost occurrences due to cold air pooling". This card reads your thermometer and models no terrain: the hollow you have ticked is the only ground it knows about.');
+    let fsources = inp.hollow ? r.sources.concat(['MARASIGAN2025']) : r.sources;
     if (inp.fmin != null) {
       const ff = A.frostForecastCheck(inp.fmin, inp.T, inp.RH);
       const airTxt = ff.reachesFrostPoint

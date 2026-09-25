@@ -69,6 +69,14 @@ fieldset.loc{border:1px dashed var(--ochre);border-radius:8px;padding:8px 10px 1
 fieldset.loc legend{font-size:13px;color:var(--earth);padding:0 6px}
 label.row{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:14px}
 label.row input,label.row select{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-height:42px}
+label.row select{width:100%}
+fieldset.choice{border:1px solid var(--line);border-radius:8px;padding:0 10px 6px;margin:0 0 10px;background:#fff;min-width:0}
+fieldset.choice legend{float:left;width:100%;margin:0;padding:8px 0 4px;color:var(--ink)}
+label.choice-opt{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer}
+label.choice-opt:first-of-type{border-top:0}
+label.choice-opt input{flex:0 0 auto;width:20px;height:20px;margin:3px 0 0}
+label.choice-opt:focus-within{outline:2px solid var(--green);border-radius:6px}
+.srsel{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;clip-path:inset(50%);overflow:hidden}
 label.row input:focus,label.row select:focus{outline:2px solid var(--green);border-color:var(--green)}
 label.row.check{flex-direction:row;align-items:center;gap:10px}
 label.row.check input{width:22px;height:22px;min-height:0}
@@ -1487,7 +1495,8 @@ const FROST = { dewPointLineC: 2.0 /* design assumption, stated on the card */,
   /* Benguet frost season. Marasigan (2017): January has the highest frequency of occurrences at every
      threshold, followed by February; November has the least. Her recorded events fall in December,
      January and February. Launio et al. (2020): "Frost is known to occur from December to February",
-     and farmers now expect episodes "until March". Marasigan et al. (2025) analyse November to March.
+     and farmers now expect episodes "until March". Marasigan et al. (2025) [MARASIGAN2025] analyse
+     November to March.
      Months are 1 to 12. This is Benguet; the app carries no frost climatology for anywhere else. */
   seasonCore: [12, 1, 2], seasonEdge: [11, 3], seasonPeak: 1,
   /* A reading only speaks to the coming night once the air has started cooling. Through the morning and
@@ -1983,7 +1992,8 @@ const REFS = {
   BJORKMAN1998: { cls: 'primary', cite: 'Bjorkman, T., Pearson, K.J. (1998). High temperature arrest of inflorescence development in broccoli. J. Exp. Bot. 49:101-106.', url: 'https://academic.oup.com/jxb/article-abstract/49/318/101/555642' },
   QDAF_CTT: { cls: 'extension', cite: 'Queensland Department of Agriculture and Fisheries, Drought and Climate Adaptation Program (Carey, Deuter, 2023-2024). Critical temperature thresholds for vegetables and sweet corn.', url: 'https://www.longpaddock.qld.gov.au/dcap/horticulture-industry/vegetable-threshold/' },
   BASQUIAL2021: { cls: 'primary', cite: 'Basquial, D.A., De Guzman, C.C., Aspuria, E.T., Sta Cruz, P.C., Cuevas, V.C. (2021). Protected Cultivation Improves Growth of Lollo Rossa Lettuce Under Chilling Conditions in Benguet, Philippines. J. ISSAAS 27(2):154-165.', url: 'http://issaasphil.org/wp-content/uploads/2021/12/12.-Basquial-et-al-2021-Lettuce-protected-cultivation-FINAL.pdf' },
-  MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
+  MARASIGAN2017: { cls: 'primary', cite: 'Marasigan, R.A.A. (2017). Characterization of Frost Events in Benguet, Philippines. M.S. Meteorology thesis, Institute of Environmental Science and Meteorology, University of the Philippines Diliman. 70% of MODIS-detected frost occurrences at land-surface temperature at or below 10 °C. On terrain: "the elevation and morning potential insolation (MPI) are among the physiographic variables that influence the frost risk". DOI 10.13140/RG.2.2.24517.10727.', url: 'https://doi.org/10.13140/RG.2.2.24517.10727' },
+  MARASIGAN2025: { cls: 'extension', cite: 'Marasigan, R.A.A., Padua, R.B., Quitos, C.J.S., Arca, M.K.R.J., Masallo, J.A., Esperanza, H.G., Eugenio, N.R., Basconcillo, J.Q. (2025). Frost Susceptibility Mapping in Benguet, Philippines. Proceedings of the Philippine Meteorological Society 8:42, ISSN 2599-5537; abstract of a paper presented at the 2025 PMS Annual Convention, 17 to 18 March 2025. Frost occurrences from MODIS nighttime land surface temperature (Aqua and Terra, November to March, 2005 to 2024) set against slope, elevation, potential insolation, distance to water bodies and the compound topographic index from the SRTM digital elevation model. Preliminary results: areas of lower daily potential insolation, from reduced morning potential insolation in highly elevated terrain, "were found to have the most influence on frost occurrences", and "terrains with subtle slopes and concave landscapes highly contribute to frost occurrences due to cold air pooling". A conference abstract of work in progress, not a peer-reviewed paper.' },
   FROSTPH: { cls: 'extension', cite: 'DOST-PAGASA and DOST-NRCP. Frost Risk Observation and Support Tool (FROST-PH), introduced to Benguet LGUs on 22 April 2026: near real-time monitoring of frost events, reporting, assessment of occurrences, and access to frost risk data. Part of the FrostRiskPH project (September 2024 to August 2026), project leader Dr. Joseph Q. Basconcillo. PAGASA is the authority on frost in Benguet; where FROST-PH and this app differ, follow FROST-PH.', url: 'https://egallery.nrcp.dost.gov.ph/cluster/frost-ph-frost-risk-observation-and-support-tool-in-the-philippines/', urllabel: 'project abstract', url2: 'https://nrcp.dost.gov.ph/benguet-lgus-farmers-join-dost-in-designing-a-frost-risk-tool-for-highland-crops/', url2label: 'NRCP news' },
   CAUBA2025: { cls: 'primary', cite: 'Cauba, A.G. Jr., Darvishzadeh, R., Schlund, M., Nelson, A., Laborte, A. (2025). Estimation of transplanting and harvest dates of rice crops in the Philippines using Sentinel-1 data. Remote Sensing Applications: Society and Environment 37:101435. Harvest-date root mean squared differences against farmer-reported dates across 99 fields in Agusan del Sur, Cagayan and Leyte: 16 to 17.5 days in the dry season, 8 to 22 days in the wet.', url: 'https://doi.org/10.1016/j.rsase.2024.101435' },
   LAUNIO2020: { cls: 'primary', cite: 'Launio, C.C., Batani, R.S., Galagal, C., Follosco, R., Labon, K.O. (2020). Local knowledge on climate hazards, weather forecasts and adaptation strategies: case of cool highlands in Benguet, Philippines. Philippine Agricultural Scientist 103 (Special Issue): 67-79.', url: 'https://pas.uplb.edu.ph/journal-issues/local-knowledge-on-climate-hazards-weather-forecasts-and-adaptation-strategies-case-of-cool-highlands-in-benguet-philippines/' },
@@ -2502,12 +2512,68 @@ function optTag(opts) {
   if (opts.prefilled) return el('span', { class: 'opt pre' }, bi({ en: '(filled in for you, change if wrong)', fil: '(nalagay na para sa inyo, palitan kung mali)' }));
   return null;
 }
+/* A native drop-down cannot wrap the text of a choice. No browser applies CSS to an option, and this
+   app writes every choice in two languages, so a long one is cut off on a phone exactly where the
+   farmer has to read it. Any drop-down whose longest choice runs past RADIO_OVER characters, the two
+   languages counted together, is therefore drawn as a group of radio buttons, where bi() puts English
+   and Filipino on their own lines and the text wraps to the width of the card. The select itself stays
+   in the form, out of sight: it keeps the id, the value, the change event and its place in the saved
+   inputs, so the cards, the saved readings and the tests work unchanged.
+   Lists of many short names keep their drop-down, because one radio for each would fill the card and
+   those lists are read by recognising a name rather than by reading a sentence. They are given the
+   full width of the card instead, so that nothing runs off it. */
+const RADIO_OVER = 40;
+const NATIVE_SELECTS = ['rMon', 'crop', 'rFC', 'rPC', 'xCrop', 'stage', 'rFS', 'xPhase', 'soil', 'rSoil', 'rsoil', 'tVar'];
 function selectInput(id, label, options, value) {
   const input = el('select', { id: id });
-  options.forEach(([v, lab]) => { const s = t(lab); input.appendChild(el('option', { value: v }, s.en + ' / ' + s.fil)); });
+  let longest = 0;
+  options.forEach(([v, lab]) => {
+    const s = t(lab), txt = s.en + ' / ' + s.fil;
+    longest = Math.max(longest, txt.length);
+    const o = el('option', { value: v }, txt);
+    o.dataset.en = s.en; o.dataset.fil = s.fil;
+    input.appendChild(o);
+  });
   if (value != null) input.value = value;
-  const row = el('label', { class: 'row' }, bi(label), input);
-  return { row, input };
+  if (longest <= RADIO_OVER || NATIVE_SELECTS.indexOf(id) >= 0) return { row: el('label', { class: 'row' }, bi(label), input), input };
+  return radioRow(id, label, input);
+}
+/* The radio group and the select it stands for. Only the radios are seen and only they can be tapped;
+   the select carries the value. A value set in code raises no event, so the setter itself tells the
+   radios; an option renamed in code (the rice card renames two of its own when the method changes) is
+   followed through a mutation observer. */
+function radioRow(id, label, input) {
+  const row = el('fieldset', { class: 'choice' }, el('legend', null, bi(label)));
+  const name = 'choice_' + id, boxes = [];
+  Array.prototype.forEach.call(input.options, (o, i) => {
+    const radio = el('input', { type: 'radio', name: name, id: name + '_' + i, value: o.value });
+    const opt = el('label', { class: 'choice-opt' }, radio, bi({ en: o.dataset.en, fil: o.dataset.fil }));
+    radio.addEventListener('change', () => {
+      if (!radio.checked || input.value === o.value) return;
+      input.value = o.value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    boxes.push({ radio: radio, opt: opt, o: o });
+    row.appendChild(opt);
+  });
+  const sync = () => boxes.forEach(b => { b.radio.checked = b.o.value === input.value; });
+  const V = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(input, 'value', { configurable: true, get: () => V.get.call(input), set: v => { V.set.call(input, v); sync(); } });
+  input.addEventListener('change', sync);
+  /* The rename is written into the option in this app's own "English / Filipino" form, so the two
+     languages are recovered by splitting at the first separator. */
+  new MutationObserver(() => boxes.forEach(b => {
+    const txt = b.o.textContent;
+    if (txt === b.o.dataset.en + ' / ' + b.o.dataset.fil) return;
+    const k = txt.indexOf(' / ');
+    b.o.dataset.en = k < 0 ? txt : txt.slice(0, k);
+    b.o.dataset.fil = k < 0 ? txt : txt.slice(k + 3);
+    b.opt.replaceChild(bi({ en: b.o.dataset.en, fil: b.o.dataset.fil }), b.opt.lastChild);
+  })).observe(input, { childList: true, subtree: true, characterData: true });
+  input.className = 'srsel'; input.setAttribute('aria-hidden', 'true'); input.setAttribute('tabindex', '-1');
+  row.appendChild(input);
+  sync();
+  return { row: row, input: input };
 }
 function dateInput(id, label, value, opts) {
   /* opts is { optional } for a box that may stay blank, or { prefilled } for one this app fills with
@@ -2537,7 +2603,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '8e283f47' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'ed80a839' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -3890,8 +3956,8 @@ CARDS.frost = function (root) {
     why.push(season === 'outside'
       ? 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) records it in December, January and February, with January the most frequent and November the least; Launio et al. (2020) report December to February, now sometimes into March. Today falls outside those months, so check the readings before acting on this answer.'
       : 'Frost in Benguet is a northeast monsoon event. Marasigan (2017) found January the most frequent month at every temperature threshold, then February, with November the least; Launio et al. (2020) report December to February, now sometimes into March.');
-    if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation".');
-    let fsources = r.sources;
+    if (inp.hollow) why.push('Cold air pools in hollows and valley bottoms; local agriculturists note frost "in mountainous areas with low air circulation". Terrain decides much of where frost forms in Benguet. Marasigan (2017) reports that "the elevation and morning potential insolation (MPI) are among the physiographic variables that influence the frost risk", and Marasigan et al. (2025), mapping frost susceptibility from twenty years of MODIS nighttime land surface temperature against the terrain, give as preliminary results that areas of low morning potential insolation in highly elevated terrain "were found to have the most influence on frost occurrences", and that "terrains with subtle slopes and concave landscapes highly contribute to frost occurrences due to cold air pooling". This card reads your thermometer and models no terrain: the hollow you have ticked is the only ground it knows about.');
+    let fsources = inp.hollow ? r.sources.concat(['MARASIGAN2025']) : r.sources;
     if (inp.fmin != null) {
       const ff = A.frostForecastCheck(inp.fmin, inp.T, inp.RH);
       const airTxt = ff.reachesFrostPoint
@@ -4094,8 +4160,8 @@ CARDS.sources = function (root) {
 CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
-  root.appendChild(el('p', null, 'Engine tested with 799 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 8e283f47. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Engine tested with 803 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build ed80a839. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4187,7 +4253,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 8e283f47)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build ed80a839)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4199,7 +4265,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 8e283f47).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 8e283f47 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build ed80a839).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build ed80a839 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4246,7 +4312,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 8e283f47.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build ed80a839.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
