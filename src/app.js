@@ -109,7 +109,7 @@ const T = {
     stress: { en: 'Too hot or too cold for my crop?', fil: 'Masyado bang mainit o malamig para sa pananim?' },
     frost: { en: 'Frost (andap) tonight?', fil: 'Mag-aandap (frost) ba ngayong gabi?' },
     disease: { en: 'Will the leaves be wet in the morning?', fil: 'Mababasâ ba ang dahon sa umaga?' },
-    blight: { en: 'Potato late blight: were the last two days risky?', fil: 'Late blight ng patatas: delikado ba ang nakaraang dalawang araw?' },
+    blight: { en: 'Potato late blight: were the last two days risky?', fil: 'Late blight sa patatas: delikado ba ang nakaraang dalawang araw?' },
     harvest: { en: 'When is rice harvest? Day length', fil: 'Kailan ang ani ng palay? Haba ng araw' },
     corn: { en: 'Corn heat units, day length', fil: 'Init na naipon ng mais, haba ng araw' },
     sources: { en: 'Sources and limits', fil: 'Sanggunian at hangganan' },
