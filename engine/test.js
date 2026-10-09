@@ -348,7 +348,7 @@ console.log('\n== PAGASA CLIMATE TYPE: IAAS SHAPEFILE (2014) ON A GRID OF HUNDRE
    least one card, and the interface renders the registry's own text into that card's assumptions block.
    Three of them once existed only on the global sources page, a route change away from the answer they
    qualified. This is the structural guard against that happening again. */
-{ const known = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'timing'];
+{ const known = ['water', 'rice', 'rain', 'spray', 'dry', 'stress', 'frost', 'disease', 'harvest', 'corn'];
   A.UNVERIFIED.forEach(function (u) {
     eq('declared assumption ' + u.id + ' names the cards it belongs to',
        Array.isArray(u.cards) && u.cards.length > 0, true);
