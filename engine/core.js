@@ -1569,7 +1569,7 @@ function huttonCriteria(days) {
 }
 
 /* =====================================================================
-   13. CROP TIMING  [MCMASTER1997, ORYZA2000, PHILRICE_VARIETIES]
+   13. CROP TIMING  [MCMASTER1997, ORYZA2000, PHILRICE_VARIETIES, NEILD1987, LEE2011]
    ===================================================================== */
 /* McMaster and Wilhelm 1997: method 1 clamps the mean, method 2 clamps Tmax and Tmin; upper cap optional */
 function gdd(Tmax, Tmin, base, cap, method) {
@@ -1597,6 +1597,44 @@ function harvestWindow(variety, method, sowDateUTC) {
   if (!sown || !isFinite(sown.getTime())) return { error: 'need_sowing_date' };
   const d = new Date(sown.getTime() + days * 86400000);
   return { days: days, date: d, plusMinusDays: 7 /* design assumption */, flag: basisFlag, sources: ['PHILRICE_VARIETIES'] };
+}
+
+/* Neild and Newman (1987), National Corn Handbook NCH-40, Table 3, "Growing Degree Day Requirements for
+   Different Phenology Stages of a 2700 GDD Hybrid". The table starts at 0 GDD at "Planted", so its counts
+   run from planting, as this app's corn card does. It works in degrees F with a base of 50 and a ceiling
+   of 86, which is this app's method with 10 and 30 degrees C, so the conversion is exact: a degree F day
+   is 5/9 of a degree C day. Two misprints in the source, "Four eaves" and "Tenth leaves", are read as
+   four and ten leaves. The University of Kentucky's AGR-202 (Lee 2011) reprints six of these rows from the
+   same source and labels 1135 as VT; the original calls it sixteen leaves with the tip of the tassel
+   emerging, and this app follows the original. The authors add that "different maturity classes require
+   different GDD accumulations to reach these stages", so this is one example hybrid, not a rule. */
+const CORN_STAGES = [
+  { id: 'leaf2', f: 200, label: 'Two leaves fully emerged' },
+  { id: 'leaf4', f: 345, label: 'Four leaves fully emerged' },
+  { id: 'leaf6', f: 475, label: 'Six leaves fully emerged (growing point above soil)' },
+  { id: 'leaf8', f: 610, label: 'Eight leaves fully emerged (tassel beginning to develop)' },
+  { id: 'leaf10', f: 740, label: 'Ten leaves fully emerged' },
+  { id: 'leaf12', f: 870, label: 'Twelve leaves fully emerged (ear formation)' },
+  { id: 'leaf14', f: 1000, label: 'Fourteen leaves fully emerged (silks developing on ear)' },
+  { id: 'leaf16', f: 1135, label: 'Sixteen leaves fully emerged (tip of tassel emerging)' },
+  { id: 'silk', f: 1400, label: 'Silks emerging/pollen shedding (plant at full height)' },
+  { id: 'blister', f: 1660, label: 'Kernels in blister stage' },
+  { id: 'dough', f: 1925, label: 'Kernels in dough stage' },
+  { id: 'denting', f: 2190, label: 'Kernels denting' },
+  { id: 'dented', f: 2450, label: 'Kernels dented' },
+  { id: 'maturity', f: 2700, label: 'Physiological maturity' }
+];
+const CORN_EXAMPLE_HYBRID_F = 2700;       // NCH-40 Table 3
+const CORN_KENTUCKY_MATURITY_F = [2700, 3100];   // AGR-202: "Most hybrids in Kentucky"
+const gddFtoC = f => f * 5 / 9;           // exact for the 50/86 F and 10/30 C methods
+function cornStageLadder() { return CORN_STAGES.map(s => ({ id: s.id, label: s.label, gddF: s.f, gddC: gddFtoC(s.f) })); }
+/* The last stage of the example hybrid that a total has reached, and the next one. It is the example
+   hybrid's stage, not the farmer's own: see the CORN_STAGE_LADDER declaration. */
+function cornStagePosition(gddC) {
+  if (!isNum(gddC)) return { error: 'need_gdd' };
+  const L = cornStageLadder(); let reached = null, next = null;
+  for (let i = 0; i < L.length; i++) { if (gddC >= L[i].gddC) reached = L[i]; else { next = L[i]; break; } }
+  return { reached: reached, next: next, maturityC: gddFtoC(CORN_EXAMPLE_HYBRID_F), kentuckyC: CORN_KENTUCKY_MATURITY_F.map(gddFtoC), sources: ['NEILD1987', 'LEE2011'] };
 }
 
 /* =====================================================================
@@ -1679,7 +1717,9 @@ const REFS = {
   HUTTON: { cls: 'extension', cite: 'IPM Decisions (Horizon 2020) factsheet: Hutton Criteria late blight model (James Hutton Institute).', url: 'https://www.ipmdecisions.net/media/4jkcvxnf/ipm_factsheet-hutton-criteria-late-blight-model_v0001_print.pdf' },
   MCMASTER1997: { cls: 'primary', cite: 'McMaster, G.S., Wilhelm, W.W. (1997). Growing degree-days: one equation, two interpretations. Agric. For. Meteorol. 87:291-300.', url: 'https://digitalcommons.unl.edu/cgi/viewcontent.cgi?article=1086&context=usdaarsfacpub' },
   ORYZA2000: { cls: 'extension', cite: 'IRRI ORYZA2000 crop data file IR72.D92: TBD = 8, TOD = 30, TMD = 42 C.', url: 'https://sites.google.com/a/irri.org/oryza2000/tutorials/model-setup/appendix-5---ir72-d92' },
-  PHILRICE_VARIETIES: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank, rice variety pages (maturity in days).', url: 'https://www.pinoyrice.com/rice-varieties/' }
+  PHILRICE_VARIETIES: { cls: 'extension', cite: 'PhilRice Pinoy Rice Knowledge Bank, rice variety pages (maturity in days).', url: 'https://www.pinoyrice.com/rice-varieties/' },
+  NEILD1987: { cls: 'extension', cite: 'Neild, R.E. (University of Nebraska), Newman, J.E. (Purdue University) (1987). Growing Season Characteristics and Requirements in the Corn Belt. National Corn Handbook NCH-40, Purdue University Cooperative Extension Service, Indiana, United States (the Purdue copy is marked RR 4/90). Calibrated in the United States, for US Corn Belt hybrids. Table 3, growing degree days from planting to each phenology stage of a 2,700 GDD hybrid; base 50 °F (10 °C), ceiling 86 °F (30 °C). The authors note that different maturity classes need different accumulations to reach the same stages.', url: 'https://www.extension.purdue.edu/extmedia/nch/nch-40.html' },
+  LEE2011: { cls: 'extension', cite: 'Lee, C. (2011). Corn Growth Stages and Growing Degree Days: A Quick Reference Guide. AGR-202, University of Kentucky Cooperative Extension Service, Lexington, Kentucky, United States. Written for Kentucky corn. Table 1, what each growth stage means for the crop; and most Kentucky hybrids need about 2,700 to 3,100 GDD (°F) to reach physiological maturity.', url: 'https://publications.mgcafe.uky.edu/sites/publications.ca.uky.edu/files/agr202.pdf' }
 };
 /* Items the app could not verify against a primary source (shown in the Sources module) */
 /* Each entry names the cards whose answers rest on it. The interface renders the entry's own text into
@@ -1713,7 +1753,8 @@ const UNVERIFIED = [
   { id: 'RICE_FORECAST_RAIN_BELOW_SURFACE', cards: ['rice'], text: 'Forecast rain is not used to move the re-flood date. With water standing on the field, a millimetre of rain is a tenth of a centimetre of water before the field\'s own losses, which is exact. With the water below the soil surface, how far the level in the tube rises for a millimetre of rain depends on how much of the soil\'s pore space is empty, and this app has no published figure for that. So the card reports the forecast rain and leaves the tube reading to decide.' },
   { id: 'CLIMATE_TYPE_GRID', cards: ['rice'], text: 'The climate type at your location is read from a grid this app made from the IAAS shapefile: one point every hundredth of a degree, about 1 km apart, each with the type of the polygon it falls in, and your coordinates are rounded to the nearest point. A point at sea, or on land the shapefile leaves out, takes the type of the nearest land, so across a narrow channel the change of type falls midway over the water. That holds up to 75 km out, and farther than that the card gives no type and says the point is at sea or outside the Philippines, which usually means a mistyped coordinate. The 75 km is wide on purpose: the shapefile leaves out some inhabited islands, such as the Turtle Islands of Tawi-Tawi, 40 to 60 km from the nearest land it has, and they take that land\'s type, Type IV, which the map does not itself give them. Places outside the Philippines within 75 km of it, such as parts of northern Sabah, likewise get a Philippine type that says nothing about them. The lines between types are drawn for the whole country from 45 synoptic and 66 climatological stations, and the shapefile and the printed map place them a few kilometres apart in places. So wherever another type lies within 5 km, the card names it, and if the two call for different seasons it leaves the season to you. The 5 km and the 75 km are this app\'s choices, not published figures.' },
   { id: 'CLIMATE_TYPE_VERSIONS', cards: ['rice'], text: 'The IAAS shapefile and the printed Climate Map of the Philippines (August 2014) do not agree everywhere. This app compared them by fitting a scan of the printed map to the shapefile and reading its colours: away from the lines between types and from the map\'s lettering and boundary lines, they agree on 97.5 per cent of the land. Over wider areas they differ in two ways. The printed map shows Type IV where the shapefile shows Type III in parts of Maguindanao, Sultan Kudarat, South Cotabato and Cotabato, of Zamboanga del Norte and Zamboanga Sibugay, and of Bukidnon. It shows Type II where the shapefile shows Type IV along the Agusan side of the boundary with Surigao del Sur and in part of Southern Leyte. The card follows the shapefile, names the printed map\'s type inside those areas, and there suggests no season where the two call for different ones. The outlines of those areas come from this app\'s comparison, not from PAGASA, and which version is current has not yet been confirmed with IAAS.' },
-  { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' }
+  { id: 'CLIMATE_TYPE_SEASON_MONTHS', cards: ['rice'], text: 'DA Administrative Order 25-09 sets the re-flood depth by season but does not say which months make the dry season. The card takes them from the Climate Map legend, by the month of your reading. Type I is dry from November to April and wet the rest of the year. Types II and IV have no dry season. Type III has a dry season of one to three months falling within December to February or March to May, so from June to November the card suggests the wet season, and from December to May, when the legend cannot say which months are dry, it leaves the choice to you. Reading the legend\'s seasons as the Order\'s is this app\'s assumption.' },
+  { id: 'CORN_STAGE_LADDER', cards: ['corn'], text: 'The corn stage ladder was calibrated in the United States, not in the Philippines. It is one example hybrid from the US Corn Belt, rated 2,700 growing degree days in °F to physiological maturity (Neild and Newman 1987, Purdue University), shown here as 1,500 °C·day; the stage notes are from the University of Kentucky (Lee 2011). The conversion is exact, because their 50 and 86 °F limits are this card\'s 10 and 30 °C. The rest is not: the authors say different maturity classes need different accumulations to reach the same stages, most Kentucky hybrids need about 2,700 to 3,100 °F days (1,500 to 1,722 °C·day) to maturity (Lee 2011), and no growing degree rating for a Philippine hybrid was found in print. A stage read off this ladder is the example hybrid\'s stage. Using it for a Philippine hybrid is a design assumption of this app; confirm the stage on the plant.' }
 ];
 
 const API = {
@@ -1744,7 +1785,7 @@ const API = {
   // stress, frost, disease
   STRESS, STRESS_RUN, stressCheck, FROST, BENGUET, PH_ENVELOPE, insidePH, CLIMATE_TYPE, climateType, climateTypeSeason, frostReadingWeight, haversineKm, frostIndicator, frostSeason, frostReadingUsable, DEW, DEW_RICE_LB, BLAST_WET, dewTonight, dewPointNow, RK, DEWPOINT_SETS, dewPointMagnus, dewPointRK, frostPointRK, pvLiquidRK, pvIceRK, lambertWm1, huttonCriteria, leafWetnessReport,
   // timing
-  gdd, GDD_BASE, RICE_VARIETIES, harvestWindow,
+  gdd, GDD_BASE, RICE_VARIETIES, harvestWindow, CORN_STAGES, cornStageLadder, cornStagePosition,
   // units and refs
   mmToM3PerHa, pumpHours, kmhToMs, REFS, UNVERIFIED, round
 };

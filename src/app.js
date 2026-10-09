@@ -2097,6 +2097,44 @@ CARDS.harvest = function (root) {
 };
 
 /* CORN HEAT UNITS */
+/* The stage names of Neild and Newman's (1987) Table 3, and what a stage means for the crop where one of the
+   two sources says so. Notes come from the stage's own parenthesis in Table 3 and from Lee (2011) Table 1.
+   Lee gives the tasseling comment at VT, which Lee places at 1135; this app places it on the sixteen-leaf
+   row at 1135, where Neild and Newman put the tip of the tassel emerging. Stages neither source comments on
+   carry no note. */
+const CORN_STAGE_NAME = {
+  leaf2: { en: 'Two leaves fully emerged', fil: 'Dalawang dahong ganap nang lumabas' },
+  leaf4: { en: 'Four leaves fully emerged', fil: 'Apat na dahong ganap nang lumabas' },
+  leaf6: { en: 'Six leaves fully emerged', fil: 'Anim na dahong ganap nang lumabas' },
+  leaf8: { en: 'Eight leaves fully emerged', fil: 'Walong dahong ganap nang lumabas' },
+  leaf10: { en: 'Ten leaves fully emerged', fil: 'Sampung dahong ganap nang lumabas' },
+  leaf12: { en: 'Twelve leaves fully emerged', fil: 'Labindalawang dahong ganap nang lumabas' },
+  leaf14: { en: 'Fourteen leaves fully emerged', fil: 'Labing-apat na dahong ganap nang lumabas' },
+  leaf16: { en: 'Sixteen leaves fully emerged', fil: 'Labing-anim na dahong ganap nang lumabas' },
+  silk: { en: 'Silks emerging, pollen shedding', fil: 'Lumalabas ang buhok, kumakalat ang polen' },
+  blister: { en: 'Kernels in blister stage', fil: 'Butil sa yugtong blister' },
+  dough: { en: 'Kernels in dough stage', fil: 'Butil sa yugtong dough' },
+  denting: { en: 'Kernels denting', fil: 'Nagsisimulang mag-dent ang butil' },
+  dented: { en: 'Kernels dented', fil: 'Dent na ang butil' },
+  maturity: { en: 'Physiological maturity (black layer)', fil: 'Ganap na gulang (black layer)' }
+};
+const CORN_STAGE_NOTE = {
+  leaf6: { en: 'The growing point is now above the soil (Neild and Newman), and the tassel and ear have begun to develop (Lee).', fil: 'Nasa ibabaw na ng lupa ang growing point (Neild at Newman), at nagsisimula nang mabuo ang tassel at ang bunga (Lee).' },
+  leaf8: { en: 'The tassel is beginning to develop (Neild and Newman).', fil: 'Nagsisimulang mabuo ang tassel (Neild at Newman).' },
+  leaf12: { en: 'The ear is forming. Ear size, kernel size and kernel number are being set, so a shortage of water or nutrients now reduces the yield (Neild and Newman; Lee).', fil: 'Nabubuo ang bunga. Itinatakda ngayon ang laki ng bunga, laki ng butil at bilang ng butil, kaya ang kakulangan ng tubig o sustansiya ngayon ay magpapababa ng ani (Neild at Newman; Lee).' },
+  leaf14: { en: 'Silks are developing on the ear (Neild and Newman).', fil: 'Nabubuo ang buhok sa bunga (Neild at Newman).' },
+  leaf16: { en: 'The tip of the tassel is emerging (Neild and Newman). Losing every leaf at tasseling costs nearly the whole yield (Lee).', fil: 'Lumalabas na ang dulo ng tassel (Neild at Newman). Kapag naubos ang lahat ng dahon sa pagta-tassel, halos buong ani ang mawawala (Lee).' },
+  silk: { en: 'The plant is at full height (Neild and Newman). This is the most sensitive period for stress: pollination is under way, and nitrogen and phosphorus uptake are rapid (Lee).', fil: 'Nasa buong taas na ang halaman (Neild at Newman). Ito ang pinakasensitibong panahon sa stress: nagaganap ang polinasyon, at mabilis ang pagkuha ng nitrogen at phosphorus (Lee).' },
+  maturity: { en: 'The black layer has formed at the base of the kernel, which is then about 30 to 35% moisture (Lee).', fil: 'Nabuo na ang black layer sa puno ng butil, na may mga 30 hanggang 35% na halumigmig (Lee).' }
+};
+/* The whole ladder as a table, the row a total has passed marked. Written in English only, like the other
+   reference tables in this app's "Why" sections, with short stage names so the notes keep some width on a
+   phone; the caption says the leaf counts are leaves fully emerged. */
+const CORN_STAGE_SHORT = { leaf2: '2 leaves', leaf4: '4 leaves', leaf6: '6 leaves', leaf8: '8 leaves', leaf10: '10 leaves', leaf12: '12 leaves', leaf14: '14 leaves', leaf16: '16 leaves', silk: 'Silking, pollen shed', blister: 'Blister', dough: 'Dough', denting: 'Denting', dented: 'Dented', maturity: 'Maturity (black layer)' };
+function cornLadderTable(reachedId) {
+  const rows = A.cornStageLadder().map(x => '<tr><td>' + (x.id === reachedId ? '<strong>' + CORN_STAGE_SHORT[x.id] + ' \u25c0 your total</strong>' : CORN_STAGE_SHORT[x.id]) + '</td><td>' + fmt(x.gddC, 0) + ' (' + x.gddF + ')</td><td>' + (CORN_STAGE_NOTE[x.id] ? CORN_STAGE_NOTE[x.id].en : '') + '</td></tr>').join('');
+  return '<table class="wet ladder"><caption>Calibrated in the United States. Neild and Newman (1987, Purdue University), Table 3: one US Corn Belt hybrid rated 2,700 \u00b0F growing degree days to physiological maturity, counted from planting, converted exactly to \u00b0C\u00b7day (times 5/9; the \u00b0F figure as printed is in brackets). Leaf counts are leaves fully emerged. Notes from Neild and Newman, and from Lee (2011). Hybrids of other maturity need different totals to reach the same stages.</caption><tr><th>Stage</th><th>\u00b0C\u00b7day (\u00b0F)</th><th>What it means</th></tr>' + rows + '</table>';
+}
 CARDS.corn = function (root) {
   const prev = recall('corn');
   const form = el('form', { class: 'card-form', onsubmit: e => { e.preventDefault(); run(); } });
@@ -2111,16 +2149,25 @@ CARDS.corn = function (root) {
     if (inp.tx != null && inp.tn != null && inp.tx < inp.tn) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_minmax) })); return; }
     const L = store.loc, now = new Date(), J = todayJ(now);
     const lines = [[bi({ en: 'Daylight today here', fil: 'Haba ng araw dito ngayon' }), fmt(A.daylight(L.lat, J), 1) + ' hours (FAO-56 Eq. 34)']];
-    let verdict;
+    let verdict, reachedId = null;
     if (inp.plant && inp.tx != null && inp.tn != null) {
       const days = Math.max(0, Math.round((now - new Date(inp.plant + 'T00:00:00')) / 86400000));
       const g = A.gdd(inp.tx, inp.tn, 10, 30, 2) * days;
-      lines.unshift([bi({ en: 'Corn heat units since planting', fil: 'Init na naipon ng mais mula nang itanim' }), fmt(g, 0) + ' °C·day (base 10 °C, cap 30 °C, McMaster and Wilhelm method 2)', 'key']);
+      const pos = A.cornStagePosition(g), lc = x => x.charAt(0).toLowerCase() + x.slice(1);
+      reachedId = pos.reached ? pos.reached.id : null;
+      const at = x => ({ en: lc(CORN_STAGE_NAME[x.id].en) + ' (' + fmt(x.gddC, 0) + ' °C·day)', fil: lc(CORN_STAGE_NAME[x.id].fil) + ' (' + fmt(x.gddC, 0) + ' °C·day)' });
+      const where = !pos.reached ? { en: 'Before ' + at(pos.next).en + '.', fil: 'Bago ang ' + at(pos.next).fil + '.' }
+        : pos.next ? { en: 'Past ' + at(pos.reached).en + '; next is ' + at(pos.next).en + '.', fil: 'Lampas na sa ' + at(pos.reached).fil + '; susunod ang ' + at(pos.next).fil + '.' }
+        : { en: 'Past physiological maturity (' + fmt(pos.maturityC, 0) + ' °C·day). Kentucky hybrids need up to ' + fmt(pos.kentuckyC[1], 0) + ' °C·day, and yours may need more or less.', fil: 'Lampas na sa ganap na gulang (' + fmt(pos.maturityC, 0) + ' °C·day). Hanggang ' + fmt(pos.kentuckyC[1], 0) + ' °C·day ang kailangan ng mga hybrid sa Kentucky, at maaaring mas marami o mas kaunti ang sa inyo.' };
+      lines.unshift([bi({ en: 'Corn heat units since planting', fil: 'Init na naipon ng mais mula nang itanim' }), fmt(g, 0) + ' °C·day (base 10 °C, cap 30 °C, McMaster and Wilhelm method 2)'],
+        [bi({ en: 'Where this total falls, for the example hybrid', fil: 'Kinalalagyan ng kabuuang ito, para sa halimbawang hybrid' }), bi(where)],
+        [bi({ en: 'Calibrated in the United States', fil: 'Isinukat sa Estados Unidos' }), bi({ en: 'These stage figures were measured on a US Corn Belt hybrid (Neild and Newman 1987, Purdue University), not on a Philippine one. Check the stage on your own plants.', fil: 'Sinukat ang mga bilang ng yugtong ito sa isang hybrid sa US Corn Belt (Neild at Newman 1987, Purdue University), hindi sa hybrid sa Pilipinas. Tingnan ang yugto sa sarili ninyong pananim.' })]);
+      if (pos.reached && CORN_STAGE_NOTE[pos.reached.id]) lines.splice(3, 0, [bi({ en: 'What that stage means', fil: 'Ano ang ibig sabihin ng yugtong iyon' }), bi(CORN_STAGE_NOTE[pos.reached.id]), 'key']);
       verdict = { en: fmt(g, 0) + ' °C·day since planting, over ' + days + ' days.', fil: fmt(g, 0) + ' °C·day mula nang itanim, sa loob ng ' + days + ' araw.' };
     } else {
       verdict = { en: 'Enter the planting date and both temperatures to get the heat units.', fil: 'Ilagay ang petsa ng pagtatanim at ang dalawang temperatura para makuha ang init na naipon.' };
     }
-    show(out, result({ card: 'corn', level: 'info', verdict: t(verdict), lines, why: ['Heat units: GDD = (Tmax + Tmin)/2 \u2212 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).'], assumptions: ['Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['A running total only. No heat-unit target for Philippine corn hybrids was found in print, so this card counts the heat the crop has had and does not say what the count means. It cannot give a corn harvest date.', 'Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: ['MCMASTER1997', 'FAO56'] }));
+    show(out, result({ card: 'corn', level: 'info', verdict: t(verdict), lines, why: ['Heat units: GDD = (Tmax + Tmin)/2 \u2212 10 with Tmax and Tmin clamped to 10 and 30 °C (McMaster and Wilhelm 1997, corn values from Cross and Zuber 1972).', cornLadderTable(reachedId)], assumptions: ['Heat units use one typical high and low for the whole period; enter daily values in a later version for a true sum.'], limits: ['The stage figures were calibrated in the United States, on one US Corn Belt hybrid (Neild and Newman 1987, Purdue University; notes from Lee 2011, University of Kentucky). This app found no test of them on Philippine hybrids, so they are not valid as a calendar for a Philippine corn crop.', 'This card cannot give a corn harvest date for your hybrid. Read the stage on the plant itself.', 'Day length is the astronomical value, not a photoperiod threshold for any variety.'], sources: ['MCMASTER1997', 'NEILD1987', 'LEE2011', 'FAO56'] }));
   }
 };
 

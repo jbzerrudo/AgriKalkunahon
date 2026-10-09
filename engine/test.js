@@ -652,13 +652,40 @@ eq('rice base 8 (ORYZA2000 IR72)', A.GDD_BASE.rice.base, 8);
 eq('Rc160 direct seeded 107 days', A.harvestWindow('NSIC Rc160 (Tubigan 14)', 'ds', new Date(Date.UTC(2027, 0, 1))).days, 107);
 eq('Rc238 basis not stated flagged', A.harvestWindow('NSIC Rc238 (Tubigan 21)', 'tp', new Date(Date.UTC(2027, 0, 1))).flag, 'maturity_basis_not_stated_for_method');
 ok('daylight Bangkok 15 April (Ex17)', A.daylight(13.73, 105), 12.31, 0.01, 'h');
+/* Neild and Newman (1987) NCH-40 Table 3, printed in degrees F, read back in degrees C. */
+{ const L = A.cornStageLadder();
+  eq('corn ladder has the 14 printed stages', L.length, 14);
+  eq('it is in order', L.every((s, i) => i === 0 || s.gddC > L[i - 1].gddC), true);
+  eq('two leaves at 200 F as printed', L[0].gddF, 200);
+  ok('which is 111.1 C', L[0].gddC, 111.1, 0.05, 'C day');
+  ok('silks emerging at 1400 F = 777.8 C', L[8].gddC, 777.8, 0.05, 'C day');
+  eq('physiological maturity at 2700 F = 1500 C exactly', L[13].gddC, 1500);
+  eq('sixteen leaves at 1135, not VT as AGR-202 labels it', L[7].id + ' ' + L[7].gddF, 'leaf16 1135'); }
+/* The F to C conversion is exact only because the methods match: one day, both ways. */
+ok('one day at 86/68 F, method 2, is 5/9 of the F figure', A.gdd(30, 20, 10, 30, 2), ((86 + 68) / 2 - 50) * 5 / 9, 1e-9, 'C day');
+eq('a total below two leaves has reached nothing', A.cornStagePosition(50).reached, null);
+eq('and its next stage is two leaves', A.cornStagePosition(50).next.id, 'leaf2');
+eq('800 C day is past silking', A.cornStagePosition(800).reached.id, 'silk');
+eq('and before blister', A.cornStagePosition(800).next.id, 'blister');
+eq('exactly 1500 counts as maturity reached', A.cornStagePosition(1500).reached.id, 'maturity');
+eq('past maturity there is no next stage', A.cornStagePosition(1717).next, null);
+ok('Kentucky range upper end 3100 F = 1722.2 C', A.cornStagePosition(1000).kentuckyC[1], 1722.2, 0.05, 'C day');
+eq('no total, no position', A.cornStagePosition(null).error, 'need_gdd');
+eq('the ladder declaration rides on the corn card', (A.UNVERIFIED.find(u => u.id === 'CORN_STAGE_LADDER') || {}).cards.join(), 'corn');
+eq('NEILD1987 is cited', !!A.REFS.NEILD1987, true);
+eq('LEE2011 is cited', !!A.REFS.LEE2011, true);
+/* Where the ladder was calibrated must stay said in every place it is shown: the sources, and the
+   declaration that rides on the card and on the Sources and limits page. */
+eq('NEILD1987 says it was calibrated in the United States', A.REFS.NEILD1987.cite.indexOf('Calibrated in the United States') >= 0, true);
+eq('LEE2011 says where it was written', A.REFS.LEE2011.cite.indexOf('Kentucky, United States') >= 0, true);
+eq('the ladder declaration opens with the United States', (A.UNVERIFIED.find(u => u.id === 'CORN_STAGE_LADDER') || {}).text.indexOf('The corn stage ladder was calibrated in the United States, not in the Philippines.'), 0);
 
 console.log('\n== REFERENCES ==');
 { const used = new Set();
   const walk = o => { if (Array.isArray(o)) o.forEach(walk); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
   ['FAO56', 'FAO_TM3', 'FAO_TM4', 'IRRI_AWD', 'BOUMAN2007', 'DA_AO25', 'PHILRICE_AWD', 'PALAYCHECK', 'GRDC2025', 'ASABE_D245_ZHONG', 'UAEX_FSA1074', 'QDAF_CTT', 'FAO_FROST', 'HUTTON', 'MCMASTER1997', 'ORYZA2000', 'PHILRICE_VARIETIES', 'SENTELHAS2008', 'LUO2000', 'PAGASA_FWFA', 'PACIFICPESTS_BLAST', 'PAGASA_CLIMATEMAP', 'PAGASA_IAAS_CTYPE']
     .forEach(id => eq('REFS has ' + id, !!A.REFS[id], true));
-  eq('UNVERIFIED list names the twenty-five items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION,PNS_HARVEST_BAND,PNS_ADB_ONE_PERIOD,PNS_LAND_PREP,PNS_RMC_RANGE,PNS_ETO_METHOD,FORECAST_VAPOUR_HELD,WATER_FORECAST_NO_WAIT,RICE_FORECAST_RAIN_BELOW_SURFACE,CLIMATE_TYPE_GRID,CLIMATE_TYPE_VERSIONS,CLIMATE_TYPE_SEASON_MONTHS'); }
+  eq('UNVERIFIED list names the twenty-six items that remain unverified', A.UNVERIFIED.map(u => u.id).join(','), 'D245_STANDARD,SMITH1992,FROST_DEWPOINT,DEW_NEAR_SATURATION,LEAF_WETNESS_DURATION,HARVEST_PM7,AWD_NO_DRY_SEASON,VEGETABLE_TEMPERATURES,TENSIOMETER_DEPTH,PH_ENVELOPE_IS_MARITIME,FROST_READING_WINDOW,BEAUFORT_MIDPOINT,READING_PRECISION,STRESS_NO_ACTION,PNS_HARVEST_BAND,PNS_ADB_ONE_PERIOD,PNS_LAND_PREP,PNS_RMC_RANGE,PNS_ETO_METHOD,FORECAST_VAPOUR_HELD,WATER_FORECAST_NO_WAIT,RICE_FORECAST_RAIN_BELOW_SURFACE,CLIMATE_TYPE_GRID,CLIMATE_TYPE_VERSIONS,CLIMATE_TYPE_SEASON_MONTHS,CORN_STAGE_LADDER'); }
 
 /* ---- great-circle distance (R = 6371 km): fixtures follow from the definition ---- */
 ok('haversine 1 deg of latitude', A.haversineKm(0, 0, 1, 0), 111.195, 0.01, 'km');
