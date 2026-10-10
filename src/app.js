@@ -545,9 +545,14 @@ function show(out, node) {
     });
     node.appendChild(btn);
   }
+  if (EMBED) { if (node.__spec) tellAI(aiResult(node)); return; }
   try { node.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
 }
-const recall = (card) => store.inputs[card] || {};
+/* A card opened by AgriKalkunahon-AI starts empty, apart from the farm's location and what the farmer
+   wrote in the question. Yesterday's wind or yesterday's humidity, left in a box the question did not
+   mention, would otherwise be used in today's answer without anyone having typed it today. */
+let EMBED = false, AI_FRESH = false;
+const recall = (card) => (AI_FRESH ? {} : (store.inputs[card] || {}));
 
 /* ---------- result rendering ---------- */
 /* A reference may carry a second URL (url2), for instance a project's own abstract alongside the
@@ -2348,6 +2353,7 @@ const ICON = {
 };
 function renderHome(main) {
   main.innerHTML = '';
+  if (cameFromAI()) main.appendChild(aiLink());
   main.appendChild(el('p', { class: 'lead' }, bi(T.tagline)));
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
@@ -2359,6 +2365,7 @@ function renderCard(main, id) {
   currentCard = id;
   main.innerHTML = '';
   main.appendChild(el('a', { class: 'back', href: '#/' }, '← ', bi(T.ui.back)));
+  if (cameFromAI()) main.appendChild(aiLink());
   main.appendChild(el('h2', null, bi(T.cards[id])));
   if (AUTHORITY[id]) main.appendChild(el('p', { class: 'warn authority' }, bi(AUTHORITY[id])));
   if (NEEDS[id]) main.appendChild(el('p', { class: 'needs' }, el('strong', null, 'What you need / Ano ang kailangan: '), bi(NEEDS[id])));
@@ -2366,10 +2373,125 @@ function renderCard(main, id) {
   const body = el('div', { class: 'card-body' }); main.appendChild(body);
   CARDS[id](body);
 }
+/* AgriKalkunahon-AI, a separate app on the same site, opens a card here with "?from=ai" after the card's
+   name. The marker is remembered for this tab only, so a "Back to the AI" link stays on every page until
+   the tab is closed, and it is taken out of the address at once so a bookmark or a shared link does not
+   carry it. Without the marker this app looks exactly as it always has. */
+const AI_URL = 'https://jbzerrudo.github.io/AgriKalkunahon-AI/index.html';
+function cameFromAI() { try { return sessionStorage.getItem('fromAI') === '1'; } catch (e) { return false; } }
+function aiLink() { return el('a', { class: 'back toai', href: AI_URL }, '\u2190 ', bi({ en: 'Back to the AI', fil: 'Bumalik sa AI' })); }
 function route() {
-  const main = $('#main'); const id = (location.hash || '#/').replace('#/', '');
-  if (id && CARDS[id]) renderCard(main, id); else renderHome(main);
-  window.scrollTo(0, 0);
+  const main = $('#main');
+  const raw = (location.hash || '#/').replace('#/', '');
+  const q = raw.indexOf('?'), id = q < 0 ? raw : raw.slice(0, q);
+  const params = new URLSearchParams(q < 0 ? '' : raw.slice(q + 1));
+  if (params.get('from') === 'ai') { try { sessionStorage.setItem('fromAI', '1'); } catch (e) {} }
+  if (params.get('embed') === '1') startEmbed();
+  /* Inside AgriKalkunahon-AI the address keeps its parameters: when an update of this app reloads the
+     open pages, the embedded card must come back as the same embedded card. */
+  if (q >= 0 && !EMBED) { try { history.replaceState(null, '', '#/' + id); } catch (e) {} }
+  if (EMBED && params.get('lib') === '1') { main.innerHTML = ''; tellAI(aiLibrary()); return; }
+  if (id && CARDS[id]) {
+    AI_FRESH = EMBED;
+    try { renderCard(main, id); } finally { AI_FRESH = false; }
+    if (EMBED) { foldLocation(main); fillFromAI(main, id, params); }
+  } else renderHome(main);
+  if (!EMBED) window.scrollTo(0, 0);
+}
+
+/* ---------- embedded in AgriKalkunahon-AI ----------
+   AgriKalkunahon-AI, on the same site, shows a card of this app inside its own page and adds advice
+   written by an AI from the card's answer. With "embed=1" after the card's name this app draws the card
+   alone, without its header and menu links, and reports to the page around it: its own height, the
+   boxes it filled in, and every answer, as the text the farmer sees. Messages go only to a page on this
+   same site. Without "embed=1" none of this runs and the app looks exactly as it always has. */
+function tellAI(msg) {
+  if (window.parent === window) return;
+  try { window.parent.postMessage(msg, location.origin); } catch (e) {}
+}
+function startEmbed() {
+  if (EMBED) return;
+  EMBED = true;
+  document.documentElement.classList.add('embed');
+  const report = () => tellAI({ type: 'ak-height', h: Math.ceil(document.documentElement.getBoundingClientRect().height) });
+  try { const ro = new ResizeObserver(report); ro.observe(document.documentElement); ro.observe(document.body); } catch (e) {}
+  document.addEventListener('toggle', report, true);
+  window.addEventListener('load', report);
+  setTimeout(report, 0);
+}
+/* English text of a node as the farmer sees it, with the Filipino half of every pair left out. */
+function enText(n) {
+  if (!n) return '';
+  const c = n.cloneNode(true);
+  c.querySelectorAll('.fil').forEach(f => f.remove());
+  return c.textContent.replace(/\s+/g, ' ').trim();
+}
+function aiResult(node) {
+  const spec = node.__spec || {}, lines = [];
+  lines.push('Calculation: ' + T.cards[currentCard].en);
+  lines.push('Answer: ' + (spec.verdict ? spec.verdict.en : ''));
+  const dts = node.querySelectorAll('dl.nums dt'), dds = node.querySelectorAll('dl.nums dd');
+  if (dts.length) { lines.push('Numbers:'); dts.forEach((dt, i) => lines.push('- ' + enText(dt) + ': ' + enText(dds[i]))); }
+  node.querySelectorAll('details').forEach(d => {
+    const title = enText(d.querySelector('summary'));
+    if (title === T.ui.sources.en) return;
+    const items = Array.prototype.map.call(d.querySelectorAll('li'), li => li.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    if (items.length) { lines.push(title + ':'); items.forEach(x => lines.push('- ' + x)); }
+  });
+  if (AUTHORITY[currentCard]) lines.push('Official guidance: ' + AUTHORITY[currentCard].en);
+  const sources = (spec.sources || []).filter(k => A.REFS[k]).map(k => ({ id: k, cite: A.REFS[k].cite, url: A.REFS[k].url || '' }));
+  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '__BUILD__' };
+}
+/* The eleven calculators' own guidance, for questions that none of them answers. */
+function aiLibrary() {
+  return { type: 'ak-library', build: '__BUILD__', cards: ORDER.filter(id => AUTHORITY[id]).map(id => ({
+    id: id, title: T.cards[id], authority: AUTHORITY[id], needs: NEEDS[id] || null, reading: READING[id] || null,
+    declared: (A.UNVERIFIED || []).filter(u => u.cards && u.cards.indexOf(id) >= 0).map(u => u.text) })) };
+}
+/* The farm's location is set once and rarely changed, and on a phone its boxes run longer than the
+   rest of the card. Inside AgriKalkunahon-AI it is folded under one line saying where the farm is; it
+   stays open while it has never been set, because until then every answer is about Metro Manila. */
+function foldLocation(main) {
+  const loc = main.querySelector('fieldset.loc');
+  if (!loc) return;
+  const L = store.loc, where = fmt(L.lat, 2) + ', ' + fmt(L.lon, 2) + ', ' + fmt(L.elev, 0) + ' m';
+  const d = el('details', { class: 'locfold' }, el('summary', null, bi(L.set
+    ? { en: 'Farm location: ' + where + ' (tap to change)', fil: 'Lokasyon ng bukid: ' + where + ' (pindutin para palitan)' }
+    : { en: 'Farm location not set yet: Metro Manila is used until you set yours. Tap here to set it.', fil: 'Wala pang lokasyon ng bukid: Metro Manila ang ginagamit hangga\'t hindi mo itinatakda ang sa iyo. Pindutin dito para itakda.' })));
+  if (!L.set) d.open = true;
+  loc.parentNode.insertBefore(d, loc);
+  d.appendChild(loc);
+}
+/* Boxes filled from the farmer's question, by their ids. A box is filled only when the value is one
+   the box can hold: a number in a number box, a date in a date box, a listed choice in a list. The
+   farm's location is never changed from a sentence, and a tick box is never ticked from one. */
+const AI_NEVER = ['embed', 'from', 'lib', 'lat', 'lon', 'elev', 'site'];
+function fillFromAI(main, id, params) {
+  const form = main.querySelector('.card-body form');
+  if (!form) return;
+  const filled = [];
+  params.forEach((v, k) => {
+    if (AI_NEVER.indexOf(k) >= 0 || v === '') return;
+    const box = document.getElementById(k);
+    if (!box || !form.contains(box) || !/^(INPUT|SELECT)$/.test(box.tagName) || box.type === 'checkbox' || box.type === 'radio') return;
+    if (box.tagName === 'SELECT' && !Array.prototype.some.call(box.options, o => o.value === v)) return;
+    if (box.type === 'number' && !/^-?\d+(\.\d+)?$/.test(v)) return;
+    if (box.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+    box.value = v;
+    if (box.value !== v) return;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    const row = box.closest('label.row, fieldset.choice');
+    if (row) row.classList.add('fromai');
+    const shown = box.tagName === 'SELECT' ? (box.options[box.selectedIndex].dataset.en || box.options[box.selectedIndex].textContent) : v;
+    filled.push({ id: k, label: row ? enText(row.querySelector('.bi')) : k, value: shown });
+  });
+  tellAI({ type: 'ak-filled', card: id, items: filled });
+  if (!filled.length) return;
+  form.parentNode.insertBefore(el('p', { class: 'ainote' }, bi({
+    en: 'The highlighted boxes were filled in from your question. Check them: the answer is only as right as these numbers.',
+    fil: 'Ang mga naka-highlight na kahon ay pinunan mula sa tanong mo. Suriin ang mga ito: tama lang ang sagot kung tama ang mga bilang na ito.' })), form);
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true }));
 }
 window.addEventListener('hashchange', route);
 route();

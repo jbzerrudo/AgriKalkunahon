@@ -61,6 +61,14 @@ main{max-width:720px;margin:0 auto}
 .tile:nth-child(10),.tile:nth-child(11),.tile:nth-child(12){border-left-color:var(--earth)}
 .foot{color:var(--muted);font-size:13px;margin-top:18px}
 .back{display:inline-block;margin:12px 0 4px;color:var(--green-dark);text-decoration:none;font-weight:600}
+.back + .back.toai{margin-left:18px}   /* shown only when the card was opened from AgriKalkunahon-AI */
+/* Inside AgriKalkunahon-AI: the card alone, without this app's header and menu links */
+html.embed header,html.embed .back,html.embed .foot{display:none}
+html.embed body{padding-bottom:12px}
+.ainote{background:#fff7d6;border:1px solid #e3c25a;border-radius:8px;padding:8px 10px}
+label.row.fromai,fieldset.choice.fromai{background:#fff7d6;box-shadow:0 0 0 2px #e3c25a;border-radius:8px}
+details.locfold{margin:4px 0 10px}
+details.locfold > summary{cursor:pointer;color:var(--green-dark);font-weight:600;padding:6px 0}
 h2{margin:6px 0 12px;font-size:20px;color:var(--green-ink)}
 h3{font-size:16px;color:var(--green-ink);margin:18px 0 6px}
 h4{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--earth)}
