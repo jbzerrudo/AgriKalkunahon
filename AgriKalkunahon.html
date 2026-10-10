@@ -80,6 +80,7 @@ label.row input,label.row select{font:inherit;padding:9px 10px;border:1px solid 
 label.row select{width:100%}
 fieldset.choice{border:1px solid var(--line);border-radius:8px;padding:0 10px 6px;margin:0 0 10px;background:#fff;min-width:0}
 fieldset.choice legend{float:left;width:100%;margin:0;padding:8px 0 4px;color:var(--ink)}
+p.choice-hint{clear:both;margin:0;padding:0 0 6px;font-size:14px;color:var(--muted)}
 label.choice-opt{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer}
 label.choice-opt:first-of-type{border-top:0}
 label.choice-opt input{flex:0 0 auto;width:20px;height:20px;margin:3px 0 0}
@@ -2607,6 +2608,11 @@ function radioRow(id, label, input) {
   const row = el('fieldset', { class: 'choice' }, el('legend', null, bi(label)));
   const name = 'choice_' + id, boxes = [];
   Array.prototype.forEach.call(input.options, (o, i) => {
+    /* A choice with no value ("Choose from what you see") is the instruction for the list, not an
+       answer. In a drop-down it fills the box until something is picked; drawn as one more button it
+       reads as an answer a farmer can give. So it is shown above the buttons as a direction, and no
+       button is set until one is tapped. */
+    if (o.value === '') { row.appendChild(el('p', { class: 'choice-hint' }, bi({ en: o.dataset.en, fil: o.dataset.fil }))); return; }
     const radio = el('input', { type: 'radio', name: name, id: name + '_' + i, value: o.value });
     const opt = el('label', { class: 'choice-opt' }, radio, bi({ en: o.dataset.en, fil: o.dataset.fil }));
     radio.addEventListener('change', () => {
@@ -2664,7 +2670,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '6ede2f5d' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'dab9f1a1' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -4331,7 +4337,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 827 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 6ede2f5d. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build dab9f1a1. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4427,7 +4433,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 6ede2f5d)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build dab9f1a1)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4439,7 +4445,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 6ede2f5d).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 6ede2f5d ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build dab9f1a1).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build dab9f1a1 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4491,7 +4497,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 6ede2f5d.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build dab9f1a1.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
@@ -4573,7 +4579,7 @@ function aiResult(node) {
   });
   if (AUTHORITY[currentCard]) lines.push('Official guidance: ' + AUTHORITY[currentCard].en);
   const sources = (spec.sources || []).filter(k => A.REFS[k]).map(k => ({ id: k, cite: A.REFS[k].cite, url: A.REFS[k].url || '' }));
-  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '6ede2f5d' };
+  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: 'dab9f1a1' };
 }
 /* Everything this app knows, for questions that none of its calculators answers by itself: each
    calculator's own explanations, assumptions and limits, the reasons it can give, the declarations of
@@ -4631,7 +4637,7 @@ function aiLibrary() {
       refs: Object.keys(REFS).filter(k => code.indexOf("'" + k + "'") >= 0) };
   });
   const app = aiUnique(aiSentences(['CARDS.about', 'CARDS.sources', 'locationBlock', 'locationWarnings', 'gpsUncertainty'].map(n => blocks[n] || '').join('\n')));
-  return { type: 'ak-library', build: '6ede2f5d', cards: cards, app: app,
+  return { type: 'ak-library', build: 'dab9f1a1', cards: cards, app: app,
     reasons: Object.keys(CODES).map(k => ({ id: k, text: typeof CODES[k] === 'string' ? CODES[k] : (CODES[k] && CODES[k].en) || '' })).filter(r => r.text),
     unverified: (A.UNVERIFIED || []).map(u => ({ id: u.id, cards: u.cards || [], text: u.text })),
     refs: Object.keys(REFS).map(k => ({ id: k, cls: REFS[k].cls, cite: REFS[k].cite, url: REFS[k].url || '' })) };

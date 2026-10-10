@@ -474,6 +474,11 @@ function radioRow(id, label, input) {
   const row = el('fieldset', { class: 'choice' }, el('legend', null, bi(label)));
   const name = 'choice_' + id, boxes = [];
   Array.prototype.forEach.call(input.options, (o, i) => {
+    /* A choice with no value ("Choose from what you see") is the instruction for the list, not an
+       answer. In a drop-down it fills the box until something is picked; drawn as one more button it
+       reads as an answer a farmer can give. So it is shown above the buttons as a direction, and no
+       button is set until one is tapped. */
+    if (o.value === '') { row.appendChild(el('p', { class: 'choice-hint' }, bi({ en: o.dataset.en, fil: o.dataset.fil }))); return; }
     const radio = el('input', { type: 'radio', name: name, id: name + '_' + i, value: o.value });
     const opt = el('label', { class: 'choice-opt' }, radio, bi({ en: o.dataset.en, fil: o.dataset.fil }));
     radio.addEventListener('change', () => {
