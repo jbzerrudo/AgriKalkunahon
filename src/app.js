@@ -2442,11 +2442,66 @@ function aiResult(node) {
   const sources = (spec.sources || []).filter(k => A.REFS[k]).map(k => ({ id: k, cite: A.REFS[k].cite, url: A.REFS[k].url || '' }));
   return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '__BUILD__' };
 }
-/* The eleven calculators' own guidance, for questions that none of them answers. */
+/* Everything this app knows, for questions that none of its calculators answers by itself: each
+   calculator's own explanations, assumptions and limits, the reasons it can give, the declarations of
+   what could not be verified, the reference list, and the app's general limits. The texts are read from
+   this app's own code as it runs, so they are always the ones the cards show. Only fixed English
+   sentences are taken. A sentence that the card builds around a farmer's own numbers is left out,
+   because without those numbers it would say something false. */
+const AI_SKIP = ['T', 'ICON', 'CODES', 'AUTHORITY', 'NEEDS', 'READING', 'ORDER', 'KEY', 'CARDS', 'NATIVE_SELECTS', 'RADIO_OVER',
+  'LOG_MAX', 'RICE_LOG_MAX', 'RICE_PLOT_DEFAULT', 'AI_URL', 'AI_NEVER', 'AI_SKIP', 'MONTH_NAMES', 'CT_ROMAN',
+  'el', 'bi', 't', 'fmt', 'num', 'show', 'result', 'numInput', 'selectInput', 'dateInput', 'checkInput', 'recall', 'remember',
+  'relabel', 'radioRow', 'optTag', 'save', 'refLinks', 'saveRecord', 'todayJ', 'locationBlock', 'locationWarnings', 'gpsUncertainty'];
+function aiSourceText() {
+  const s = Array.prototype.map.call(document.scripts, x => x.textContent).filter(x => x.indexOf('function aiLibrary') >= 0);
+  return s.length ? s[0] : '';
+}
+/* Every top-level piece of the code by name: a card, a function or a constant, each running up to the
+   next top-level line. Indexed once, so that looking a name up costs nothing. */
+function aiBlocks(src) {
+  const heads = [], re = /\n(?:const ([A-Za-z_][A-Za-z0-9_]*) = |function ([A-Za-z_][A-Za-z0-9_]*)\(|CARDS\.([a-z]+) = function)/g;
+  let m;
+  while ((m = re.exec(src))) heads.push({ at: m.index + 1, name: m[1] || m[2] || ('CARDS.' + m[3]) });
+  const tops = [], tre = /\n(?=[A-Za-z\/])/g;
+  while ((m = tre.exec(src))) tops.push(m.index + 1);
+  const blocks = {};
+  heads.forEach(h => {
+    let lo = 0, hi = tops.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (tops[mid] <= h.at) lo = mid + 1; else hi = mid; }
+    blocks[h.name] = (blocks[h.name] || '') + src.slice(h.at, lo < tops.length ? tops[lo] : src.length);
+  });
+  return blocks;
+}
+function aiSentences(code) {
+  const out = [], re = /(fil\s*:\s*)?'((?:[^'\\\n]|\\.)*)'/g;
+  let m;
+  while ((m = re.exec(code))) {
+    if (m[1]) continue;
+    const s = m[2].replace(/\\u([0-9a-fA-F]{4})/g, (x, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\(.)/g, '$1').replace(/\s+/g, ' ').trim();
+    if (s.length < 50 || s.indexOf(' ') < 0 || !/^[A-Z0-9("']/.test(s) || !/[.)"'?]$/.test(s)) continue;
+    if ((s.match(/\b(ang|ng|sa|mga|ay|kung|hindi|para|nang|lamang|ito|iyon|kaya)\b/gi) || []).length >= 2) continue;   // Filipino half of a pair
+    out.push(s);
+  }
+  return out;
+}
+const aiUnique = list => list.filter((x, i) => list.indexOf(x) === i);
 function aiLibrary() {
-  return { type: 'ak-library', build: '__BUILD__', cards: ORDER.filter(id => AUTHORITY[id]).map(id => ({
-    id: id, title: T.cards[id], authority: AUTHORITY[id], needs: NEEDS[id] || null, reading: READING[id] || null,
-    declared: (A.UNVERIFIED || []).filter(u => u.cards && u.cards.indexOf(id) >= 0).map(u => u.text) })) };
+  const blocks = aiBlocks(aiSourceText()), REFS = A.REFS || {};
+  const cards = ORDER.filter(id => AUTHORITY[id]).map(id => {
+    let code = blocks['CARDS.' + id] || '';
+    /* The constants and helper functions the card calls, one level down: the corn stage notes, the
+       climate-type texts of the rice card, the evapotranspiration limits of the water card. */
+    aiUnique(code.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []).forEach(n => { if (blocks[n] && AI_SKIP.indexOf(n) < 0) code += '\n' + blocks[n]; });
+    return { id: id, title: T.cards[id], authority: AUTHORITY[id], needs: NEEDS[id] || null, reading: READING[id] || null,
+      declared: (A.UNVERIFIED || []).filter(u => u.cards && u.cards.indexOf(id) >= 0).map(u => u.text),
+      texts: aiUnique(aiSentences(code)),
+      refs: Object.keys(REFS).filter(k => code.indexOf("'" + k + "'") >= 0) };
+  });
+  const app = aiUnique(aiSentences(['CARDS.about', 'CARDS.sources', 'locationBlock', 'locationWarnings', 'gpsUncertainty'].map(n => blocks[n] || '').join('\n')));
+  return { type: 'ak-library', build: '__BUILD__', cards: cards, app: app,
+    reasons: Object.keys(CODES).map(k => ({ id: k, text: typeof CODES[k] === 'string' ? CODES[k] : (CODES[k] && CODES[k].en) || '' })).filter(r => r.text),
+    unverified: (A.UNVERIFIED || []).map(u => ({ id: u.id, cards: u.cards || [], text: u.text })),
+    refs: Object.keys(REFS).map(k => ({ id: k, cls: REFS[k].cls, cite: REFS[k].cite, url: REFS[k].url || '' })) };
 }
 /* The farm's location is set once and rarely changed, and on a phone its boxes run longer than the
    rest of the card. Inside AgriKalkunahon-AI it is folded under one line saying where the farm is; it

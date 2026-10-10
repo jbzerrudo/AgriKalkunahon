@@ -2664,7 +2664,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '8f0ff83f' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '6ede2f5d' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -4331,7 +4331,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 827 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 8f0ff83f. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 6ede2f5d. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4427,7 +4427,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build 8f0ff83f)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 6ede2f5d)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4439,7 +4439,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build 8f0ff83f).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 8f0ff83f ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 6ede2f5d).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 6ede2f5d ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4491,7 +4491,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 8f0ff83f.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 6ede2f5d.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
@@ -4573,13 +4573,68 @@ function aiResult(node) {
   });
   if (AUTHORITY[currentCard]) lines.push('Official guidance: ' + AUTHORITY[currentCard].en);
   const sources = (spec.sources || []).filter(k => A.REFS[k]).map(k => ({ id: k, cite: A.REFS[k].cite, url: A.REFS[k].url || '' }));
-  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '8f0ff83f' };
+  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '6ede2f5d' };
 }
-/* The eleven calculators' own guidance, for questions that none of them answers. */
+/* Everything this app knows, for questions that none of its calculators answers by itself: each
+   calculator's own explanations, assumptions and limits, the reasons it can give, the declarations of
+   what could not be verified, the reference list, and the app's general limits. The texts are read from
+   this app's own code as it runs, so they are always the ones the cards show. Only fixed English
+   sentences are taken. A sentence that the card builds around a farmer's own numbers is left out,
+   because without those numbers it would say something false. */
+const AI_SKIP = ['T', 'ICON', 'CODES', 'AUTHORITY', 'NEEDS', 'READING', 'ORDER', 'KEY', 'CARDS', 'NATIVE_SELECTS', 'RADIO_OVER',
+  'LOG_MAX', 'RICE_LOG_MAX', 'RICE_PLOT_DEFAULT', 'AI_URL', 'AI_NEVER', 'AI_SKIP', 'MONTH_NAMES', 'CT_ROMAN',
+  'el', 'bi', 't', 'fmt', 'num', 'show', 'result', 'numInput', 'selectInput', 'dateInput', 'checkInput', 'recall', 'remember',
+  'relabel', 'radioRow', 'optTag', 'save', 'refLinks', 'saveRecord', 'todayJ', 'locationBlock', 'locationWarnings', 'gpsUncertainty'];
+function aiSourceText() {
+  const s = Array.prototype.map.call(document.scripts, x => x.textContent).filter(x => x.indexOf('function aiLibrary') >= 0);
+  return s.length ? s[0] : '';
+}
+/* Every top-level piece of the code by name: a card, a function or a constant, each running up to the
+   next top-level line. Indexed once, so that looking a name up costs nothing. */
+function aiBlocks(src) {
+  const heads = [], re = /\n(?:const ([A-Za-z_][A-Za-z0-9_]*) = |function ([A-Za-z_][A-Za-z0-9_]*)\(|CARDS\.([a-z]+) = function)/g;
+  let m;
+  while ((m = re.exec(src))) heads.push({ at: m.index + 1, name: m[1] || m[2] || ('CARDS.' + m[3]) });
+  const tops = [], tre = /\n(?=[A-Za-z\/])/g;
+  while ((m = tre.exec(src))) tops.push(m.index + 1);
+  const blocks = {};
+  heads.forEach(h => {
+    let lo = 0, hi = tops.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (tops[mid] <= h.at) lo = mid + 1; else hi = mid; }
+    blocks[h.name] = (blocks[h.name] || '') + src.slice(h.at, lo < tops.length ? tops[lo] : src.length);
+  });
+  return blocks;
+}
+function aiSentences(code) {
+  const out = [], re = /(fil\s*:\s*)?'((?:[^'\\\n]|\\.)*)'/g;
+  let m;
+  while ((m = re.exec(code))) {
+    if (m[1]) continue;
+    const s = m[2].replace(/\\u([0-9a-fA-F]{4})/g, (x, h) => String.fromCharCode(parseInt(h, 16))).replace(/\\(.)/g, '$1').replace(/\s+/g, ' ').trim();
+    if (s.length < 50 || s.indexOf(' ') < 0 || !/^[A-Z0-9("']/.test(s) || !/[.)"'?]$/.test(s)) continue;
+    if ((s.match(/\b(ang|ng|sa|mga|ay|kung|hindi|para|nang|lamang|ito|iyon|kaya)\b/gi) || []).length >= 2) continue;   // Filipino half of a pair
+    out.push(s);
+  }
+  return out;
+}
+const aiUnique = list => list.filter((x, i) => list.indexOf(x) === i);
 function aiLibrary() {
-  return { type: 'ak-library', build: '8f0ff83f', cards: ORDER.filter(id => AUTHORITY[id]).map(id => ({
-    id: id, title: T.cards[id], authority: AUTHORITY[id], needs: NEEDS[id] || null, reading: READING[id] || null,
-    declared: (A.UNVERIFIED || []).filter(u => u.cards && u.cards.indexOf(id) >= 0).map(u => u.text) })) };
+  const blocks = aiBlocks(aiSourceText()), REFS = A.REFS || {};
+  const cards = ORDER.filter(id => AUTHORITY[id]).map(id => {
+    let code = blocks['CARDS.' + id] || '';
+    /* The constants and helper functions the card calls, one level down: the corn stage notes, the
+       climate-type texts of the rice card, the evapotranspiration limits of the water card. */
+    aiUnique(code.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []).forEach(n => { if (blocks[n] && AI_SKIP.indexOf(n) < 0) code += '\n' + blocks[n]; });
+    return { id: id, title: T.cards[id], authority: AUTHORITY[id], needs: NEEDS[id] || null, reading: READING[id] || null,
+      declared: (A.UNVERIFIED || []).filter(u => u.cards && u.cards.indexOf(id) >= 0).map(u => u.text),
+      texts: aiUnique(aiSentences(code)),
+      refs: Object.keys(REFS).filter(k => code.indexOf("'" + k + "'") >= 0) };
+  });
+  const app = aiUnique(aiSentences(['CARDS.about', 'CARDS.sources', 'locationBlock', 'locationWarnings', 'gpsUncertainty'].map(n => blocks[n] || '').join('\n')));
+  return { type: 'ak-library', build: '6ede2f5d', cards: cards, app: app,
+    reasons: Object.keys(CODES).map(k => ({ id: k, text: typeof CODES[k] === 'string' ? CODES[k] : (CODES[k] && CODES[k].en) || '' })).filter(r => r.text),
+    unverified: (A.UNVERIFIED || []).map(u => ({ id: u.id, cards: u.cards || [], text: u.text })),
+    refs: Object.keys(REFS).map(k => ({ id: k, cls: REFS[k].cls, cite: REFS[k].cite, url: REFS[k].url || '' })) };
 }
 /* The farm's location is set once and rarely changed, and on a phone its boxes run longer than the
    rest of the card. Inside AgriKalkunahon-AI it is folded under one line saying where the farm is; it
