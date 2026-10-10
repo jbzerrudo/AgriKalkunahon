@@ -2670,7 +2670,7 @@ function saveRecord(node, card) {
   store.log.push({ t: new Date().toISOString(), card: card,
     title: T.cards[card] ? T.cards[card].en : card,
     level: spec.level || '', verdict: spec.verdict ? spec.verdict.en : '',
-    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: 'dab9f1a1' });
+    items: items, lat: L.lat, lon: L.lon, elev: L.elev, build: '239955b5' });
   if (store.log.length > LOG_MAX) store.log.splice(0, store.log.length - LOG_MAX);
   save();
 }
@@ -3717,7 +3717,23 @@ CARDS.spray = function (root) {
   const rainAfter = numInput('sRainH', { en: 'Rain in the forecast: hours from spraying until it starts (optional)', fil: 'Ulan sa forecast: ilang oras mula sa pag-spray bago ito magsimula (opsyonal)' }, prev.rainAfter, 0.5, { optional: true });
   const labelRain = numInput('sLblRain', { en: 'Rain-free period printed on the label, if any (hours)', fil: 'Oras na dapat walang ulan ayon sa label, kung meron (oras)' }, prev.labelRain, 0.5, { optional: true });
   const timeLabel = { now: { en: 'Time now (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras ngayon (24 oras, hal. 15.5 para sa 3:30 ng hapon)' }, forecast: { en: 'Time you plan to spray (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras na balak mag-spray (24 oras, hal. 15.5 para sa 3:30 ng hapon)' } };
-  const syncMode = () => { const fc = mode.input.value === 'forecast'; mist.row.hidden = fc; smoke.row.hidden = fc; timeRow.row.replaceChild(bi(timeLabel[mode.input.value]), timeRow.row.firstChild); };
+  /* With a forecast, the boxes say so, and the wind is asked as the forecast's own number: "what you
+     see" describes the wind now and cannot be seen for a time still to come, so that list is hidden and
+     a choice left in it is not used. */
+  const SPRAY_LABEL = {
+    now: { T: { en: 'Air temperature now (°C)', fil: 'Temperatura ng hangin ngayon (°C)' }, RH: { en: 'Humidity now (%)', fil: 'Halumigmig ngayon (%)' },
+           W: { en: 'or wind in km/h at 2 m', fil: 'o hangin sa km/h sa 2 m' } },
+    forecast: { T: { en: 'Forecast air temperature for the time you plan to spray (°C)', fil: 'Forecast na temperatura ng hangin sa oras na balak mag-spray (°C)' },
+                RH: { en: 'Forecast humidity for that time (%)', fil: 'Forecast na halumigmig sa oras na iyon (%)' },
+                W: { en: 'Forecast wind for that time (km/h)', fil: 'Forecast na hangin sa oras na iyon (km/h)' } } };
+  const syncMode = () => {
+    const k = mode.input.value === 'forecast' ? 'forecast' : 'now', fc = k === 'forecast';
+    mist.row.hidden = fc; smoke.row.hidden = fc; wsel.row.hidden = fc;
+    /* With the list hidden, the box is the only way to give the wind, so it is no longer marked optional. */
+    const opt = wkmh.row.querySelector('.opt'); if (opt) opt.hidden = fc;
+    relabel(Tn.row, SPRAY_LABEL[k].T); relabel(RH.row, SPRAY_LABEL[k].RH); relabel(wkmh.row, SPRAY_LABEL[k].W);
+    timeRow.row.replaceChild(bi(timeLabel[mode.input.value]), timeRow.row.firstChild);
+  };
   mode.input.addEventListener('change', syncMode);
   form.append(mode.row, Tn.row, RH.row, wsel.row, wkmh.row, label.row, mist.row, smoke.row, timeRow.row, rainAfter.row, labelRain.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   syncMode();
@@ -3729,7 +3745,7 @@ CARDS.spray = function (root) {
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L = store.loc, J = todayJ(fieldNow()), st = A.sunTimes(L.lat, L.lon, J, fieldTz());
-    const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel ? parseFloat(inp.wsel) : null);
+    const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel && !fcMode ? parseFloat(inp.wsel) : null);
     const hoursToSunset = st.sunset - inp.hour, hoursAfterSunrise = inp.hour - st.sunrise;
     const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: fcMode ? false : inp.mist, smokeHanging: fcMode ? false : inp.smoke, labelMaxWindKmh: inp.label, rainAfterH: inp.rainAfter, labelRainFreeH: inp.labelRain });
     const level = { good: 'go', caution: 'caution', do_not_spray: 'stop', need_wind: 'info' }[r.code];
@@ -4337,7 +4353,7 @@ CARDS.about = function (root) {
   root.appendChild(el('p', null, 'AgriKalkunahon is an offline decision aid for farmers, extension workers and agriculture students in the Philippines. It answers "what should I do" from readings a farmer can take: the afternoon high, the morning low, a rain gauge, and sometimes a hygrometer. Every result names the published source it derives from and lists the assumptions it made.'));
   root.appendChild(el('p', { class: 'warn' }, 'This app is a decision aid, not a prescription. Its thresholds and formulas are published values that may not match your field, your variety or your season. Decisions that cost money and food remain yours; check them against local advice, especially PAGASA.'));
   root.appendChild(el('p', null, 'Engine tested with 827 numerical assertions against published worked examples (FAO-56 Examples 2 to 37, FAO Training Manual 3, the University of Arkansas EMC table, IRRI and PhilRice examples). Run node engine/test.js in the repository.'));
-  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build dab9f1a1. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
+  root.appendChild(el('p', null, 'Author: Jef Zerrudo (DOST-PAGASA; Wageningen University & Research). Version 0.8.0, build 239955b5. Licence: PolyForm Noncommercial 1.0.0. NOT OFFICIAL. NOT ENDORSED by FAO, IRRI, PhilRice, DA, PAGASA, GRDC or Queensland DAF.'));
   /* Named with his permission, given on 22 September 2026. The NOT ENDORSED line above still covers
      his agency, so the thanks needs no disclaimer of its own. */
   root.appendChild(el('p', null, 'Acknowledgements: The author is grateful to Dr. Marcelino Q. Villafuerte II (DOST-PAGASA) for suggestions that led to two features introduced in version 0.8.0: the use of weather forecasts in the decision cards and the crop water requirement in the rain card.'));
@@ -4433,7 +4449,7 @@ const READING = {
 
 CARDS.feedback = function (root) {
   const MAIL = 'jbzerrudo@pagasa.dost.gov.ph';
-  const subject = encodeURIComponent('AgriKalkunahon feedback (build dab9f1a1)');
+  const subject = encodeURIComponent('AgriKalkunahon feedback (build 239955b5)');
   root.appendChild(el('p', null, bi({
     en: 'If an answer does not match what you see in your field, or a word is wrong, or something will not work on your phone, please write. Corrections from farmers and extension workers are the main way this app improves.',
     fil: 'Kung hindi tugma ang sagot sa nakikita mo sa bukid, o mali ang salita, o may hindi gumagana sa smartphone mo, sumulat po kayo. Ang mga pagwawasto mula sa mga magsasaka at extension worker ang pangunahing paraan ng pagpapabuti ng app na ito.'
@@ -4445,7 +4461,7 @@ CARDS.feedback = function (root) {
   [{ en: 'Which calculator, and what you typed in.', fil: 'Aling kalkulador, at ano ang inilagay mo.' },
    { en: 'What it answered, and what you expected instead.', fil: 'Ano ang isinagot nito, at ano ang inaasahan mo.' },
    { en: 'Your town or province, and the crop.', fil: 'Ang bayan o lalawigan mo, at ang pananim.' },
-   { en: 'The build shown at the bottom of the main menu (this copy is build dab9f1a1).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build dab9f1a1 ang kopyang ito).' }
+   { en: 'The build shown at the bottom of the main menu (this copy is build 239955b5).', fil: 'Ang build na nasa ibaba ng pangunahing menu (build 239955b5 ang kopyang ito).' }
   ].forEach(x => ul.appendChild(el('li', null, bi(x))));
   root.appendChild(ul);
   root.appendChild(el('p', { class: 'warn' }, bi({
@@ -4497,7 +4513,7 @@ function renderHome(main) {
   const grid = el('div', { class: 'grid' });
   ORDER.forEach(id => { grid.appendChild(el('a', { class: 'tile', href: '#/' + id }, el('span', { class: 'ico' }, el('img', { src: ICON[id], alt: '', width: 44, height: 44, decoding: 'async' })), bi(T.cards[id]))); });
   main.appendChild(grid);
-  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build dab9f1a1.'));
+  main.appendChild(el('p', { class: 'foot' }, 'Offline. Every answer shows its source. Decision aid, not a prescription. Build 239955b5.'));
 }
 let currentCard = null;
 function renderCard(main, id) {
@@ -4579,7 +4595,7 @@ function aiResult(node) {
   });
   if (AUTHORITY[currentCard]) lines.push('Official guidance: ' + AUTHORITY[currentCard].en);
   const sources = (spec.sources || []).filter(k => A.REFS[k]).map(k => ({ id: k, cite: A.REFS[k].cite, url: A.REFS[k].url || '' }));
-  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: 'dab9f1a1' };
+  return { type: 'ak-result', card: currentCard, level: spec.level || 'info', verdict: spec.verdict || null, text: lines.join('\n'), sources: sources, build: '239955b5' };
 }
 /* Everything this app knows, for questions that none of its calculators answers by itself: each
    calculator's own explanations, assumptions and limits, the reasons it can give, the declarations of
@@ -4637,7 +4653,7 @@ function aiLibrary() {
       refs: Object.keys(REFS).filter(k => code.indexOf("'" + k + "'") >= 0) };
   });
   const app = aiUnique(aiSentences(['CARDS.about', 'CARDS.sources', 'locationBlock', 'locationWarnings', 'gpsUncertainty'].map(n => blocks[n] || '').join('\n')));
-  return { type: 'ak-library', build: 'dab9f1a1', cards: cards, app: app,
+  return { type: 'ak-library', build: '239955b5', cards: cards, app: app,
     reasons: Object.keys(CODES).map(k => ({ id: k, text: typeof CODES[k] === 'string' ? CODES[k] : (CODES[k] && CODES[k].en) || '' })).filter(r => r.text),
     unverified: (A.UNVERIFIED || []).map(u => ({ id: u.id, cards: u.cards || [], text: u.text })),
     refs: Object.keys(REFS).map(k => ({ id: k, cls: REFS[k].cls, cite: REFS[k].cite, url: REFS[k].url || '' })) };

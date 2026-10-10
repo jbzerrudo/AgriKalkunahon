@@ -1583,7 +1583,23 @@ CARDS.spray = function (root) {
   const rainAfter = numInput('sRainH', { en: 'Rain in the forecast: hours from spraying until it starts (optional)', fil: 'Ulan sa forecast: ilang oras mula sa pag-spray bago ito magsimula (opsyonal)' }, prev.rainAfter, 0.5, { optional: true });
   const labelRain = numInput('sLblRain', { en: 'Rain-free period printed on the label, if any (hours)', fil: 'Oras na dapat walang ulan ayon sa label, kung meron (oras)' }, prev.labelRain, 0.5, { optional: true });
   const timeLabel = { now: { en: 'Time now (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras ngayon (24 oras, hal. 15.5 para sa 3:30 ng hapon)' }, forecast: { en: 'Time you plan to spray (24 h clock, e.g. 15.5 for 3:30 pm)', fil: 'Oras na balak mag-spray (24 oras, hal. 15.5 para sa 3:30 ng hapon)' } };
-  const syncMode = () => { const fc = mode.input.value === 'forecast'; mist.row.hidden = fc; smoke.row.hidden = fc; timeRow.row.replaceChild(bi(timeLabel[mode.input.value]), timeRow.row.firstChild); };
+  /* With a forecast, the boxes say so, and the wind is asked as the forecast's own number: "what you
+     see" describes the wind now and cannot be seen for a time still to come, so that list is hidden and
+     a choice left in it is not used. */
+  const SPRAY_LABEL = {
+    now: { T: { en: 'Air temperature now (°C)', fil: 'Temperatura ng hangin ngayon (°C)' }, RH: { en: 'Humidity now (%)', fil: 'Halumigmig ngayon (%)' },
+           W: { en: 'or wind in km/h at 2 m', fil: 'o hangin sa km/h sa 2 m' } },
+    forecast: { T: { en: 'Forecast air temperature for the time you plan to spray (°C)', fil: 'Forecast na temperatura ng hangin sa oras na balak mag-spray (°C)' },
+                RH: { en: 'Forecast humidity for that time (%)', fil: 'Forecast na halumigmig sa oras na iyon (%)' },
+                W: { en: 'Forecast wind for that time (km/h)', fil: 'Forecast na hangin sa oras na iyon (km/h)' } } };
+  const syncMode = () => {
+    const k = mode.input.value === 'forecast' ? 'forecast' : 'now', fc = k === 'forecast';
+    mist.row.hidden = fc; smoke.row.hidden = fc; wsel.row.hidden = fc;
+    /* With the list hidden, the box is the only way to give the wind, so it is no longer marked optional. */
+    const opt = wkmh.row.querySelector('.opt'); if (opt) opt.hidden = fc;
+    relabel(Tn.row, SPRAY_LABEL[k].T); relabel(RH.row, SPRAY_LABEL[k].RH); relabel(wkmh.row, SPRAY_LABEL[k].W);
+    timeRow.row.replaceChild(bi(timeLabel[mode.input.value]), timeRow.row.firstChild);
+  };
   mode.input.addEventListener('change', syncMode);
   form.append(mode.row, Tn.row, RH.row, wsel.row, wkmh.row, label.row, mist.row, smoke.row, timeRow.row, rainAfter.row, labelRain.row, el('button', { type: 'submit', class: 'btn primary' }, bi(T.ui.compute)));
   syncMode();
@@ -1595,7 +1611,7 @@ CARDS.spray = function (root) {
     if (inp.T == null || inp.RH == null) return;
     if (badRH(inp.RH)) { show(out, result({ level: 'info', verdict: t(T.verdicts.bad_rh) })); return; }
     const L = store.loc, J = todayJ(fieldNow()), st = A.sunTimes(L.lat, L.lon, J, fieldTz());
-    const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel ? parseFloat(inp.wsel) : null);
+    const wind = inp.wkmh != null ? inp.wkmh : (inp.wsel && !fcMode ? parseFloat(inp.wsel) : null);
     const hoursToSunset = st.sunset - inp.hour, hoursAfterSunrise = inp.hour - st.sunrise;
     const r = A.sprayWindow({ T: inp.T, RH: inp.RH, P: A.pressure(L.elev), windKmh: wind, hoursToSunset: hoursToSunset, hoursAfterSunrise: hoursAfterSunrise, isNight: inp.hour < st.sunrise || inp.hour > st.sunset, mistFogDew: fcMode ? false : inp.mist, smokeHanging: fcMode ? false : inp.smoke, labelMaxWindKmh: inp.label, rainAfterH: inp.rainAfter, labelRainFreeH: inp.labelRain });
     const level = { good: 'go', caution: 'caution', do_not_spray: 'stop', need_wind: 'info' }[r.code];
